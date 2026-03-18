@@ -369,7 +369,7 @@ export default function LoginPage() {
                   onChange={handleChange}
                   onFocus={() => setFocused("username")}
                   onBlur={() => setFocused("")}
-                  placeholder="mrxd"
+                  placeholder="abc"
                   style={{ ...inputBase("username"), paddingLeft: 34 }}
                 />
               </div>
@@ -519,19 +519,24 @@ export default function LoginPage() {
               onClick={handleSubmit}
               disabled={loading}
             >
-              {
-                loading ? "Đang xử lý..." : ( <> Đăng nhập
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg> </> )
-              }
+              {loading ? (
+                "Đang xử lý..."
+              ) : (
+                <>
+                  {" "}
+                  Đăng nhập
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>{" "}
+                </>
+              )}
             </button>
 
             {/* Divider */}
@@ -969,7 +974,7 @@ export default function LoginPage() {
                 margin: "0 0 4px",
               }}
             >
-              Bảo mật & Tin cậy
+              Bảo mật & Mượt mà
             </p>
             <p
               style={{
@@ -979,9 +984,9 @@ export default function LoginPage() {
                 lineHeight: 1.5,
               }}
             >
-              Đăng nhập an toàn với
+              Ưu tiên bảo mật và trải nghiệm
               <br />
-              mã hóa đầu cuối
+              mượt mà, nhanh chóng
             </p>
           </div>
           <div
@@ -994,8 +999,8 @@ export default function LoginPage() {
             }}
           >
             {[
-              { v: "256-bit", l: "Mã hóa" },
-              { v: "99.9%", l: "Uptime" },
+              { v: "Mã hóa", l: "Dữ liệu" },
+              { v: "<50ms", l: "Độ trễ" },
             ].map((s) => (
               <div key={s.l} style={{ textAlign: "center" }}>
                 <div

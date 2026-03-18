@@ -367,7 +367,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   onFocus={() => setFocused("firstName")}
                   onBlur={() => setFocused("")}
-                  placeholder="Phùng"
+                  placeholder="Nguyễn"
                   style={inputBase("firstName")}
                 />
                 {errors.firstName && (
@@ -407,7 +407,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   onFocus={() => setFocused("lastName")}
                   onBlur={() => setFocused("")}
-                  placeholder="Thanh Độ"
+                  placeholder="Văn A"
                   style={inputBase("lastName")}
                 />
                 {errors.lastName && (
@@ -469,7 +469,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   onFocus={() => setFocused("username")}
                   onBlur={() => setFocused("")}
-                  placeholder="mrxd"
+                  placeholder="abc"
                   style={{ ...inputBase("username"), paddingLeft: 34 }}
                 />
               </div>
@@ -532,7 +532,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   onFocus={() => setFocused("email")}
                   onBlur={() => setFocused("")}
-                  placeholder="siu@example.com"
+                  placeholder="email@example.com"
                   style={{ ...inputBase("email"), paddingLeft: 34 }}
                 />
               </div>
@@ -1039,7 +1039,7 @@ export default function RegisterPage() {
             >
               Nhắn tin, chia sẻ và kết nối
               <br />
-              với bạn bè toàn thế giới
+              với bạn bè mọi lúc, mọi nơi
             </p>
           </div>
           <div

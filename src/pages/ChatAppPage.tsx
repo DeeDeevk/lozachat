@@ -1,14 +1,30 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Send, Paperclip, Smile, Phone, Video,
-  MoreHorizontal, ChevronDown, Check, CheckCheck,
-  Image, Mic, X, Bell, Settings, LogOut, Users,
-  MessageSquare, Hash, Star, Archive, Trash2, Edit3,
+  Search,
+  Send,
+  Paperclip,
+  Smile,
+  Phone,
+  Video,
+  Check,
+  CheckCheck,
+  Image,
+  Mic,
+  X,
+  Bell,
+  Menu,
+  MessageSquare,
+  Star,
+  Archive,
+  Trash2,
+  ArrowLeft,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
-import { useAuthStore } from "@/stores/useAuthStore";
 
-// ── Auth store (chỉ lấy userProfile) ──────────────────────────────────────────
+import { useAuthStore } from "@/stores/useAuthStore";
+import SideNav from "@/components/SideNav";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Message {
@@ -36,149 +52,390 @@ interface Conversation {
 // ── Fake data ──────────────────────────────────────────────────────────────────
 const FAKE_CONVERSATIONS: Conversation[] = [
   {
-    id: "1", name: "Nguyễn Minh Tuấn", avatar: "MT", avatarColor: "#3b82f6",
-    lastMessage: "Oke bro, tối gặp nhé!", time: "10:42", unread: 3, online: true, pinned: true,
+    id: "1",
+    name: "Nguyễn Minh Tuấn",
+    avatar: "MT",
+    avatarColor: "#3b82f6",
+    lastMessage: "Oke bro, tối gặp nhé!",
+    time: "10:42",
+    unread: 3,
+    online: true,
+    pinned: true,
     messages: [
-      { id:"m1", senderId:"them", text:"Bro ơi hôm nay có rảnh không?", time:"10:30", status:"read", type:"text" },
-      { id:"m2", senderId:"me",   text:"Chiều mình bận họp, tối thì ok", time:"10:35", status:"read", type:"text" },
-      { id:"m3", senderId:"them", text:"Tối đi ăn lẩu không? Team mình kêu hết rồi 🔥", time:"10:40", status:"read", type:"text" },
-      { id:"m4", senderId:"me",   text:"Oke bro, tối gặp nhé!", time:"10:42", status:"delivered", type:"text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Bro ơi hôm nay có rảnh không?",
+        time: "10:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Chiều mình bận họp, tối thì ok",
+        time: "10:35",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "Tối đi ăn lẩu không? Team mình kêu hết rồi 🔥",
+        time: "10:40",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "me",
+        text: "Oke bro, tối gặp nhé!",
+        time: "10:42",
+        status: "delivered",
+        type: "text",
+      },
     ],
   },
   {
-    id: "2", name: "Trần Thị Hương", avatar: "TH", avatarColor: "#10b981",
-    lastMessage: "Bạn đã gửi file design mới chưa?", time: "09:15", unread: 1, online: true,
+    id: "2",
+    name: "Trần Thị Hương",
+    avatar: "TH",
+    avatarColor: "#10b981",
+    lastMessage: "Bạn đã gửi file design mới chưa?",
+    time: "09:15",
+    unread: 1,
+    online: true,
     messages: [
-      { id:"m1", senderId:"them", text:"Hey, design sprint tuần này bắt đầu từ thứ 2 nha", time:"09:00", status:"read", type:"text" },
-      { id:"m2", senderId:"me",   text:"Ok mình sẽ chuẩn bị wireframe trước", time:"09:05", status:"read", type:"text" },
-      { id:"m3", senderId:"them", text:"Bạn đã gửi file design mới chưa?", time:"09:15", status:"read", type:"text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Hey, design sprint tuần này bắt đầu từ thứ 2 nha",
+        time: "09:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Ok mình sẽ chuẩn bị wireframe trước",
+        time: "09:05",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "Bạn đã gửi file design mới chưa?",
+        time: "09:15",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
-    id: "3", name: "Team Loza Dev 🚀", avatar: "TL", avatarColor: "#8b5cf6",
-    lastMessage: "Lê Bảo: Pushed hotfix lên prod rồi!", time: "Hôm qua", unread: 12, online: false,
+    id: "3",
+    name: "Team Loza Dev 🚀",
+    avatar: "TL",
+    avatarColor: "#8b5cf6",
+    lastMessage: "Lê Bảo: Pushed hotfix lên prod rồi!",
+    time: "Hôm qua",
+    unread: 12,
+    online: false,
     messages: [
-      { id:"m1", senderId:"them", text:"CI/CD pipeline fail rồi anh ơi 😭", time:"Yesterday 18:00", status:"read", type:"text" },
-      { id:"m2", senderId:"me",   text:"Mình check thử, lỗi ở bước build Docker", time:"Yesterday 18:10", status:"read", type:"text" },
-      { id:"m3", senderId:"them2", text:"Fix rồi, do thiếu env variable thôi", time:"Yesterday 18:30", status:"read", type:"text" },
-      { id:"m4", senderId:"them",  text:"Lê Bảo: Pushed hotfix lên prod rồi!", time:"Yesterday 19:00", status:"read", type:"text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "CI/CD pipeline fail rồi anh ơi 😭",
+        time: "Yesterday 18:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Mình check thử, lỗi ở bước build Docker",
+        time: "Yesterday 18:10",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them2",
+        text: "Fix rồi, do thiếu env variable thôi",
+        time: "Yesterday 18:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "them",
+        text: "Lê Bảo: Pushed hotfix lên prod rồi!",
+        time: "Yesterday 19:00",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
-    id: "4", name: "Phạm Quốc Huy", avatar: "PH", avatarColor: "#f59e0b",
-    lastMessage: "Tks bro 🙏", time: "Hôm qua", unread: 0, online: false,
+    id: "4",
+    name: "Phạm Quốc Huy",
+    avatar: "PH",
+    avatarColor: "#f59e0b",
+    lastMessage: "Tks bro 🙏",
+    time: "Hôm qua",
+    unread: 0,
+    online: false,
     messages: [
-      { id:"m1", senderId:"me",   text:"Bro review PR của mình được không?", time:"Yesterday 14:00", status:"read", type:"text" },
-      { id:"m2", senderId:"them", text:"Để tao xem... ok lgtm, merge đi", time:"Yesterday 14:30", status:"read", type:"text" },
-      { id:"m3", senderId:"me",   text:"Cảm ơn bro nhiều!", time:"Yesterday 14:32", status:"read", type:"text" },
-      { id:"m4", senderId:"them", text:"Tks bro 🙏", time:"Yesterday 14:33", status:"read", type:"text" },
+      {
+        id: "m1",
+        senderId: "me",
+        text: "Bro review PR của mình được không?",
+        time: "Yesterday 14:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "them",
+        text: "Để tao xem... ok lgtm, merge đi",
+        time: "Yesterday 14:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "me",
+        text: "Cảm ơn bro nhiều!",
+        time: "Yesterday 14:32",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "them",
+        text: "Tks bro 🙏",
+        time: "Yesterday 14:33",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
-    id: "5", name: "Lê Ngọc Anh", avatar: "NA", avatarColor: "#ef4444",
-    lastMessage: "Ảnh: [Hình ảnh]", time: "T2", unread: 0, online: true,
+    id: "5",
+    name: "Lê Ngọc Anh",
+    avatar: "NA",
+    avatarColor: "#ef4444",
+    lastMessage: "Ảnh: [Hình ảnh]",
+    time: "T2",
+    unread: 0,
+    online: true,
     messages: [
-      { id:"m1", senderId:"them", text:"Cuối tuần đi cà phê không?", time:"Monday 11:00", status:"read", type:"text" },
-      { id:"m2", senderId:"me",   text:"Được nha, quán nào?", time:"Monday 11:05", status:"read", type:"text" },
-      { id:"m3", senderId:"them", text:"[Hình ảnh]", time:"Monday 11:10", status:"read", type:"image" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Cuối tuần đi cà phê không?",
+        time: "Monday 11:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Được nha, quán nào?",
+        time: "Monday 11:05",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "[Hình ảnh]",
+        time: "Monday 11:10",
+        status: "read",
+        type: "image",
+      },
     ],
   },
   {
-    id: "6", name: "Võ Thanh Long", avatar: "VL", avatarColor: "#06b6d4",
-    lastMessage: "Meeting lúc 3h chiều nha", time: "T2", unread: 0, online: false,
+    id: "6",
+    name: "Võ Thanh Long",
+    avatar: "VL",
+    avatarColor: "#06b6d4",
+    lastMessage: "Meeting lúc 3h chiều nha",
+    time: "T2",
+    unread: 0,
+    online: false,
     messages: [
-      { id:"m1", senderId:"them", text:"Meeting lúc 3h chiều nha", time:"Monday 09:00", status:"read", type:"text" },
-      { id:"m2", senderId:"me",   text:"Ok, mình sẽ có mặt", time:"Monday 09:01", status:"read", type:"text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Meeting lúc 3h chiều nha",
+        time: "Monday 09:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Ok, mình sẽ có mặt",
+        time: "Monday 09:01",
+        status: "read",
+        type: "text",
+      },
     ],
   },
 ];
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 const getInitials = (name: string) =>
-  name?.split(" ").slice(-2).map(w => w[0]).join("").toUpperCase() || "U";
+  name
+    ?.split(" ")
+    .slice(-2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
 
 const randomColor = (str: string) => {
-  const colors = ["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#ec4899"];
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
   let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < str.length; i++)
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const navigate = useNavigate();
-  const userProfile = useAuthStore(s => s.userProfile);
+  const userProfile = useAuthStore((s) => s.userProfile);
 
   const myId = "me";
   const myName = userProfile?.displayName || "Bạn";
-  const myInitials = getInitials(myName);
-  const myColor = randomColor(myName);
 
-  const [conversations, setConversations] = useState<Conversation[]>(FAKE_CONVERSATIONS);
-  const [activeId, setActiveId] = useState<string>("1");
+  const [conversations, setConversations] =
+    useState<Conversation[]>(FAKE_CONVERSATIONS);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showEmojiHint, setShowEmojiHint] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chats"|"groups">("chats");
-  const [showSidebar, setShowSidebar] = useState(true);   // mobile: ẩn/hiện sidebar
-  const [showProfile, setShowProfile] = useState(false);  // mobile: ẩn/hiện panel phải
+  const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
+  // Mobile: conversation list overlay
+  const [showSidebar, setShowSidebar] = useState(
+    () => window.innerWidth >= 768,
+  );
+  // Right info panel toggle
+  const [showRightPanel, setShowRightPanel] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeConv = conversations.find(c => c.id === activeId)!;
+  const activeConv = activeId
+    ? (conversations.find((c) => c.id === activeId) ?? null)
+    : null;
 
-  const filteredConvs = conversations.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConvs = conversations.filter((c) => {
+    const matchesSearch = c.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    if (activeTab === "group") return matchesSearch && c.name.includes("Team");
+    if (activeTab === "direct")
+      return matchesSearch && !c.name.includes("Team");
+    return matchesSearch;
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeId, conversations]);
 
+  // Hide right panel on small screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 900) setShowRightPanel(false);
+    };
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const sendMessage = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !activeId) return;
     const newMsg: Message = {
       id: `m${Date.now()}`,
       senderId: myId,
       text: inputText.trim(),
-      time: new Date().toLocaleTimeString("vi-VN", { hour:"2-digit", minute:"2-digit" }),
+      time: new Date().toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       status: "sent",
       type: "text",
     };
-    setConversations(prev => prev.map(c =>
-      c.id === activeId
-        ? { ...c, messages: [...c.messages, newMsg], lastMessage: newMsg.text, time: newMsg.time, unread: 0 }
-        : c
-    ));
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeId
+          ? {
+              ...c,
+              messages: [...c.messages, newMsg],
+              lastMessage: newMsg.text,
+              time: newMsg.time,
+              unread: 0,
+            }
+          : c,
+      ),
+    );
     setInputText("");
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
   const markRead = (id: string) => {
-    setConversations(prev => prev.map(c => c.id === id ? { ...c, unread: 0 } : c));
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
+    );
   };
 
   const selectConversation = (id: string) => {
     setActiveId(id);
     markRead(id);
-    // mobile: ẩn sidebar, hiện chat
     if (window.innerWidth < 768) setShowSidebar(false);
   };
 
-  const emojis = ["😂","❤️","👍","😍","🔥","😭","🙏","💯","😊","🤣","😅","👀"];
+  const emojis = [
+    "😂",
+    "❤️",
+    "👍",
+    "😍",
+    "🔥",
+    "😭",
+    "🙏",
+    "💯",
+    "😊",
+    "🤣",
+    "😅",
+    "👀",
+  ];
 
   return (
-    <div style={{
-      display: "flex", height: "100vh", overflow: "hidden",
-      background: "#060d1f",
-      fontFamily: "'Segoe UI', system-ui, sans-serif",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+        background: "#060d1f",
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+      }}
+    >
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; }
@@ -186,19 +443,33 @@ export default function ChatPage() {
         ::-webkit-scrollbar-thumb { background: rgba(99,130,186,.25); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(99,130,186,.45); }
 
-        @keyframes fadeUp   { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
-        @keyframes fadeIn   { from{opacity:0;} to{opacity:1;} }
-        @keyframes pulse    { 0%,100%{opacity:.6;transform:scale(1);} 50%{opacity:1;transform:scale(1.4);} }
-        @keyframes slideIn  { from{opacity:0;transform:translateX(-10px);} to{opacity:1;transform:translateX(0);} }
-        @keyframes popIn    { from{opacity:0;transform:scale(.9) translateY(4px);} to{opacity:1;transform:scale(1) translateY(0);} }
-        @keyframes typingDot{ 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
-        @keyframes spin     { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+        @keyframes fadeUp    { from{opacity:0;transform:translateY(8px);}  to{opacity:1;transform:translateY(0);} }
+        @keyframes pulse     { 0%,100%{opacity:.6;transform:scale(1);}     50%{opacity:1;transform:scale(1.4);} }
+        @keyframes popIn     { from{opacity:0;transform:scale(.9) translateY(4px);} to{opacity:1;transform:scale(1) translateY(0);} }
+        @keyframes typingDot { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-4px);opacity:1;} }
+        @keyframes wdot      { 0%,100%{opacity:.2;transform:scale(1);}     50%{opacity:.6;transform:scale(1.5);} }
+        @keyframes wfloat    { 0%,100%{transform:translateY(0);}           50%{transform:translateY(-14px);} }
+        @keyframes wfadein   { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes wshine    { 0%{background-position:-200% center;} 100%{background-position:200% center;} }
+        @keyframes slidePanel{ from{opacity:0;transform:translateX(20px);} to{opacity:1;transform:translateX(0);} }
+
+        .w-fade-1 { animation: wfadein .5s .1s  cubic-bezier(.22,1,.36,1) both; }
+        .w-fade-2 { animation: wfadein .5s .25s cubic-bezier(.22,1,.36,1) both; }
+        .w-fade-3 { animation: wfadein .5s .4s  cubic-bezier(.22,1,.36,1) both; }
+        .w-fade-4 { animation: wfadein .5s .55s cubic-bezier(.22,1,.36,1) both; }
+        .w-float  { animation: wfloat 4s ease-in-out infinite; }
+        .w-shine {
+          background: linear-gradient(90deg,#60a5fa,#ffffff,#a78bfa,#60a5fa);
+          background-size: 200% auto;
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+          background-clip: text; animation: wshine 4s linear infinite;
+        }
 
         .conv-item {
-          display: flex; align-items: center; gap: 12; padding: 12px 16px;
-          cursor: pointer; border-radius: 14px; transition: all .18s; position: relative;
+          display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+          cursor: pointer; border-radius: 12px; transition: all .18s; position: relative;
         }
-        .conv-item:hover { background: rgba(59,130,246,.08); }
+        .conv-item:hover  { background: rgba(59,130,246,.08); }
         .conv-item.active { background: rgba(59,130,246,.14); }
         .conv-item.active::before {
           content: ""; position: absolute; left: 0; top: 20%; bottom: 20%;
@@ -214,20 +485,37 @@ export default function ChatPage() {
           animation: popIn .2s cubic-bezier(.22,1,.36,1) both;
         }
         .msg-bubble-them {
-          background: rgba(22,32,56,.95);
-          border: 1px solid rgba(255,255,255,.07);
+          background: rgba(22,32,56,.95); border: 1px solid rgba(255,255,255,.07);
           color: #e2e8f0; border-radius: 18px 18px 18px 4px;
           padding: 10px 14px; max-width: 68%; font-size: 14px; line-height: 1.55;
           animation: popIn .2s cubic-bezier(.22,1,.36,1) both;
         }
 
+        button svg { display: block; stroke: currentColor; fill: none; pointer-events: none; flex-shrink: 0; }
+
         .icon-btn {
           display: flex; align-items: center; justify-content: center;
           width: 36px; height: 36px; border-radius: 10px; border: none;
-          background: transparent; color: #64748b; cursor: pointer; transition: all .18s;
-          flex-shrink: 0;
+          background: transparent; color: #94a3b8; cursor: pointer;
+          transition: all .18s; flex-shrink: 0;
         }
         .icon-btn:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
+
+        /* Panel toggle button — highlighted when active */
+        .panel-toggle-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 36px; height: 36px; border-radius: 10px; border: none;
+          cursor: pointer; transition: all .18s; flex-shrink: 0;
+        }
+        .panel-toggle-btn.panel-on {
+          background: rgba(59,130,246,.2);
+          color: #60a5fa;
+        }
+        .panel-toggle-btn.panel-off {
+          background: transparent;
+          color: #94a3b8;
+        }
+        .panel-toggle-btn:hover { background: rgba(59,130,246,.15); color: #93c5fd; }
 
         .search-input {
           background: rgba(15,23,42,.9); border: 1px solid rgba(255,255,255,.07);
@@ -250,13 +538,18 @@ export default function ChatPage() {
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0; transition: all .2s;
         }
-        .send-btn.active { background: linear-gradient(135deg,#2563eb,#3b82f6); color: white; box-shadow: 0 4px 14px rgba(37,99,235,.4); }
-        .send-btn.inactive { background: rgba(30,41,59,.8); color: #475569; cursor: not-allowed; }
+        .send-btn.active {
+          background: linear-gradient(135deg,#2563eb,#3b82f6); color: white;
+          box-shadow: 0 4px 14px rgba(37,99,235,.4); cursor: pointer;
+        }
+        .send-btn.active svg { stroke: white; }
+        .send-btn.inactive { background: rgba(30,41,59,.6); color: #64748b; cursor: not-allowed; }
+        .send-btn.inactive svg { stroke: #64748b; }
         .send-btn.active:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(37,99,235,.5); }
 
         .tab-btn {
-          flex: 1; padding: 8px 0; border: none; background: transparent;
-          color: #64748b; font-size: 13px; font-weight: 600; cursor: pointer;
+          flex: 1; padding: 7px 0; border: none; background: transparent;
+          color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer;
           border-radius: 10px; transition: all .2s;
         }
         .tab-btn.active { background: rgba(59,130,246,.15); color: #60a5fa; }
@@ -264,126 +557,218 @@ export default function ChatPage() {
         .emoji-btn { font-size: 20px; cursor: pointer; padding: 4px; border-radius: 8px; transition: transform .15s; }
         .emoji-btn:hover { transform: scale(1.25); }
 
-        .user-menu-item {
-          display: flex; align-items: center; gap: 10; padding: 10px 14px;
-          color: #cbd5e1; font-size: 13px; cursor: pointer; border-radius: 10px;
-          transition: background .15s; border: none; background: transparent; width: 100%;
-          font-family: inherit;
-        }
-        .user-menu-item:hover { background: rgba(255,255,255,.07); }
-        .user-menu-item.danger { color: #f87171; }
-        .user-menu-item.danger:hover { background: rgba(239,68,68,.1); }
-
         .online-dot {
           width: 9px; height: 9px; border-radius: 50%; background: #10b981;
-          border: 2px solid #060d1f;
-          animation: pulse 2.5s ease-in-out infinite;
+          border: 2px solid #060d1f; animation: pulse 2.5s ease-in-out infinite;
         }
 
-        /* ── Responsive ── */
-        .sidebar       { width: 300px; flex-shrink: 0; }
-        .profile-panel { width: 260px; flex-shrink: 0; }
-
-        @media (max-width: 1024px) {
-          .profile-panel { display: none !important; }
+        /* Right info panel */
+        .right-panel {
+          display: flex; flex-direction: column;
+          background: rgba(8,14,28,.97);
+          border-left: 1px solid rgba(255,255,255,.05);
+          flex-shrink: 0; overflow: hidden;
+          transition: width .3s cubic-bezier(.22,1,.36,1), opacity .3s;
         }
+        .right-panel.visible { width: 300px; opacity: 1; overflow-y: auto; }
+        .right-panel.hidden  { width: 0; opacity: 0; border-left: none; }
+
+        /* Chat left sidebar */
+        .chat-sidebar {
+          width: 340px;
+          flex-shrink: 0;
+          /* always visible on desktop ≥768px */
+        }
+
+        @media (max-width: 1100px) {
+          .right-panel.visible { width: 260px; }
+          .chat-sidebar { width: 270px; }
+        }
+
+        /* Hide right panel at ≤900px */
+        @media (max-width: 900px) {
+          .right-panel { width: 0 !important; opacity: 0 !important; border-left: none !important; overflow: hidden !important; }
+        }
+
+        /* Mobile: sidebar is fixed overlay starting right after sidenav */
         @media (max-width: 767px) {
-          .sidebar { 
-            position: fixed; top: 0; left: 0; bottom: 0; z-index: 40;
-            width: 100vw !important; max-width: 320px;
-            transform: translateX(-100%); transition: transform .28s cubic-bezier(.22,1,.36,1);
-            box-shadow: 4px 0 32px rgba(0,0,0,.5);
+          .chat-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 38;
+            /* full translate so it hides behind sidenav completely */
+            width: calc(100vw - 56px) !important;
+            max-width: 300px !important;
+            transform: translateX(-100%);
+            transition: transform .28s cubic-bezier(.22,1,.36,1);
+            box-shadow: 4px 0 32px rgba(0,0,0,.6);
+            visibility: hidden;
           }
-          .sidebar.open { transform: translateX(0); }
-          .back-btn     { display: flex !important; }
-          .header-menu-btn { display: flex !important; }
+          .chat-sidebar.open {
+            transform: translateX(56px);
+            visibility: visible;
+          }
+
+          .back-btn      { display: flex !important; }
+          .hamburger-btn { display: flex !important; }
         }
-        .back-btn     { display: none; }
-        .header-menu-btn { display: none; }
+
+        .back-btn      { display: none !important; }
+        .hamburger-btn { display: none !important; }
 
         @media (max-width: 767px) {
+          .back-btn      { display: flex !important; }
+          .hamburger-btn { display: flex !important; }
           .mobile-overlay { display: block !important; }
         }
+
+        .profile-section { padding: 16px; border-bottom: 1px solid rgba(255,255,255,.04); }
+        .profile-action-btn {
+          display: flex; flex-direction: column; align-items: center; gap: 5px;
+          background: rgba(20,30,50,.9); border: 1px solid rgba(255,255,255,.07);
+          border-radius: 12px; padding: 10px 14px; cursor: pointer;
+          color: #94a3b8; font-size: 10px; font-weight: 500;
+          transition: all .2s; font-family: inherit;
+        }
+        .profile-action-btn svg { stroke: currentColor; }
+        .profile-action-btn:hover { background: rgba(59,130,246,.15); color: #60a5fa; }
+
+        .danger-btn {
+          display: flex; align-items: center; gap: 8px; width: 100%;
+          padding: 9px 10px; border-radius: 10px; border: none; background: transparent;
+          font-size: 12px; cursor: pointer; font-family: inherit; transition: background .18s;
+        }
+        .danger-btn svg { stroke: currentColor; flex-shrink: 0; }
+        .danger-btn:hover { background: rgba(255,255,255,.05); }
+
+        .sidebar-title { color: white; font-weight: 700; font-size: 17px; }
       `}</style>
 
-      {/* Mobile overlay backdrop */}
-      {!showSidebar ? null : (
-        <div
-          onClick={() => setShowSidebar(false)}
-          style={{
-            display: "none",
-            position: "fixed", inset: 0, zIndex: 39,
-            background: "rgba(0,0,0,.55)", backdropFilter: "blur(2px)",
-          }}
-          className="mobile-overlay"
-        />
-      )}
+      {/* ── SideNav ── */}
+      <SideNav onNewMessage={() => setShowSidebar(true)} />
+
+      {/* Mobile overlay */}
+      <div
+        onClick={() => setShowSidebar(false)}
+        style={{
+          display: "none",
+          position: "fixed",
+          inset: 0,
+          zIndex: 37,
+          background: "rgba(0,0,0,.6)",
+          backdropFilter: "blur(2px)",
+          opacity: showSidebar ? 1 : 0,
+          pointerEvents: showSidebar ? "auto" : "none",
+          transition: "opacity .25s",
+        }}
+        className="mobile-overlay"
+      />
 
       {/* ══════════════════════════════════════════
-          LEFT SIDEBAR
+          LEFT SIDEBAR (Conversation list)
       ══════════════════════════════════════════ */}
-      <div className={`sidebar ${showSidebar ? "open" : ""}`} style={{
-        display: "flex", flexDirection: "column",
-        background: "rgba(8,14,28,.97)",
-        borderRight: "1px solid rgba(255,255,255,.05)",
-      }}>
-
-        {/* Top bar */}
-        <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            {/* Logo */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: "linear-gradient(135deg,#2563eb,#3b82f6)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 4px 12px rgba(37,99,235,.4)",
-              }}>
-                <MessageSquare size={16} color="white" fill="white"/>
-              </div>
-              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.3px" }}>Loza</span>
-            </div>
-
+      <div
+        className={`chat-sidebar ${showSidebar ? "open" : ""}`}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          background: "rgba(8,14,28,.97)",
+          borderRight: "1px solid rgba(255,255,255,.05)",
+        }}
+      >
+        <div
+          style={{
+            padding: "14px 14px 10px",
+            borderBottom: "1px solid rgba(255,255,255,.04)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <span className="sidebar-title">Tin nhắn</span>
             <div style={{ display: "flex", gap: 2 }}>
-              <button className="icon-btn"><Bell size={16}/></button>
-              <button className="icon-btn"><Edit3 size={16}/></button>
-              {/* Close sidebar button — mobile only */}
-              <button className="icon-btn back-btn" style={{ display:"none" }}
-                onClick={() => setShowSidebar(false)}>
-                <X size={16}/>
+              <button className="icon-btn" aria-label="Thông báo">
+                <Bell size={16} />
+              </button>
+              <button
+                className="icon-btn back-btn"
+                onClick={() => setShowSidebar(false)}
+                aria-label="Đóng"
+              >
+                <X size={18} />
               </button>
             </div>
           </div>
-
-          {/* Search */}
           <div style={{ position: "relative" }}>
-            <Search size={14} style={{ position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"#475569",pointerEvents:"none" }}/>
+            <Search
+              size={14}
+              style={{
+                position: "absolute",
+                left: 11,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#475569",
+                pointerEvents: "none",
+              }}
+            />
             <input
               className="search-input"
-              placeholder="Tìm kiếm cuộc trò chuyện..."
+              placeholder="Tìm kiếm..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, padding: "10px 12px 6px" }}>
-          <button className={`tab-btn ${activeTab === "chats" ? "active" : ""}`}
-            onClick={() => setActiveTab("chats")}>
-            Tin nhắn
+        <div style={{ display: "flex", gap: 4, padding: "8px 10px 4px" }}>
+          <button
+            className={`tab-btn ${activeTab === "all" ? "active" : ""}`}
+            onClick={() => setActiveTab("all")}
+          >
+            Tất cả
           </button>
-          <button className={`tab-btn ${activeTab === "groups" ? "active" : ""}`}
-            onClick={() => setActiveTab("groups")}>
-            Nhóm
+          <button
+            className={`tab-btn ${activeTab === "direct" ? "active" : ""}`}
+            onClick={() => setActiveTab("direct")}
+          >
+            Đoạn chat
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "group" ? "active" : ""}`}
+            onClick={() => setActiveTab("group")}
+          >
+            Nhóm chat
           </button>
         </div>
 
-        {/* Pinned label */}
-        {filteredConvs.some(c => c.pinned) && (
-          <div style={{ padding: "8px 16px 4px", display: "flex", alignItems: "center", gap: 6 }}>
-            <Star size={10} color="#64748b"/>
-            <span style={{ color: "#475569", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        {/* Pinned */}
+        {filteredConvs.some((c) => c.pinned) && (
+          <div
+            style={{
+              padding: "8px 16px 4px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Star size={10} color="#64748b" />
+            <span
+              style={{
+                color: "#475569",
+                fontSize: 11,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
               Đã ghim
             </span>
           </div>
@@ -391,57 +776,109 @@ export default function ChatPage() {
 
         {/* Conversation list */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-          {filteredConvs.map(conv => (
+          {filteredConvs.map((conv) => (
             <div
               key={conv.id}
               className={`conv-item ${conv.id === activeId ? "active" : ""}`}
-              style={{ gap: 12 }}
               onClick={() => selectConversation(conv.id)}
             >
-              {/* Avatar */}
               <div style={{ position: "relative", flexShrink: 0 }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 14,
-                  background: conv.avatarColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 700, color: "white",
-                  boxShadow: conv.id === activeId ? `0 4px 12px ${conv.avatarColor}55` : "none",
-                }}>
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    background: conv.avatarColor,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "white",
+                    boxShadow:
+                      conv.id === activeId
+                        ? `0 4px 12px ${conv.avatarColor}55`
+                        : "none",
+                  }}
+                >
                   {conv.avatar}
                 </div>
                 {conv.online && (
-                  <div className="online-dot" style={{ position: "absolute", bottom: -1, right: -1 }}/>
+                  <div
+                    className="online-dot"
+                    style={{ position: "absolute", bottom: -1, right: -1 }}
+                  />
                 )}
               </div>
-
-              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                  <span style={{
-                    fontWeight: conv.unread > 0 ? 700 : 500,
-                    fontSize: 14, color: conv.unread > 0 ? "white" : "#cbd5e1",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 3,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: conv.unread > 0 ? 700 : 500,
+                      fontSize: 14,
+                      color: conv.unread > 0 ? "white" : "#cbd5e1",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {conv.name}
                   </span>
-                  <span style={{ color: "#475569", fontSize: 11, flexShrink: 0, marginLeft: 4 }}>{conv.time}</span>
+                  <span
+                    style={{
+                      color: "#475569",
+                      fontSize: 11,
+                      flexShrink: 0,
+                      marginLeft: 4,
+                    }}
+                  >
+                    {conv.time}
+                  </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{
-                    color: conv.unread > 0 ? "#94a3b8" : "#475569",
-                    fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    flex: 1,
-                  }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: conv.unread > 0 ? "#94a3b8" : "#475569",
+                      fontSize: 12,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                    }}
+                  >
                     {conv.lastMessage}
                   </span>
                   {conv.unread > 0 && (
-                    <div style={{
-                      minWidth: 18, height: 18, borderRadius: 9,
-                      background: "linear-gradient(135deg,#2563eb,#3b82f6)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 10, fontWeight: 700, color: "white",
-                      padding: "0 5px", marginLeft: 6, flexShrink: 0,
-                    }}>
+                    <div
+                      style={{
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        background: "linear-gradient(135deg,#2563eb,#3b82f6)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: "white",
+                        padding: "0 5px",
+                        marginLeft: 6,
+                        flexShrink: 0,
+                      }}
+                    >
                       {conv.unread > 9 ? "9+" : conv.unread}
                     </div>
                   )}
@@ -449,356 +886,702 @@ export default function ChatPage() {
               </div>
             </div>
           ))}
-
           {filteredConvs.length === 0 && (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: "#475569" }}>
-              <Search size={28} style={{ marginBottom: 8, opacity: .4 }}/>
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                color: "#475569",
+              }}
+            >
+              <Search size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
               <p style={{ fontSize: 13 }}>Không tìm thấy cuộc trò chuyện</p>
             </div>
           )}
         </div>
-
-        {/* ── User profile bottom ── */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,.05)", padding: "12px 12px" }}>
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
-                borderRadius: 12, cursor: "pointer", transition: "background .18s",
-                background: showUserMenu ? "rgba(59,130,246,.1)" : "transparent",
-              }}
-              onClick={() => setShowUserMenu(v => !v)}
-              onMouseEnter={e => { if (!showUserMenu) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)"; }}
-              onMouseLeave={e => { if (!showUserMenu) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
-            >
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 11,
-                  background: myColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 700, color: "white",
-                }}>
-                  {myInitials}
-                </div>
-                <div className="online-dot" style={{ position: "absolute", bottom: -1, right: -1 }}/>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "white", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {myName}
-                </div>
-                <div style={{ fontSize: 11, color: "#10b981" }}>● Đang hoạt động</div>
-              </div>
-              <ChevronDown size={14} color="#64748b" style={{ transform: showUserMenu ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s" }}/>
-            </div>
-
-            {/* User dropdown */}
-            {showUserMenu && (
-              <div style={{
-                position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0,
-                background: "rgba(10,16,32,.98)", border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 14, padding: 6, zIndex: 50,
-                boxShadow: "0 -16px 48px rgba(0,0,0,.6)",
-                animation: "popIn .2s cubic-bezier(.22,1,.36,1)",
-              }}>
-                <button className="user-menu-item"><Settings size={14}/> Cài đặt</button>
-                <button className="user-menu-item"><Archive size={14}/> Tin nhắn đã lưu</button>
-                <div style={{ height: 1, background: "rgba(255,255,255,.06)", margin: "4px 6px" }}/>
-                <button className="user-menu-item danger" onClick={() => navigate("/signin")}>
-                  <LogOut size={14}/> Đăng xuất
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* ══════════════════════════════════════════
-          MAIN CHAT AREA
+          CENTER: CHAT or WELCOME
       ══════════════════════════════════════════ */}
-      {activeConv ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minWidth: 0,
+          position: "relative",
+        }}
+      >
+        {activeConv ? (
+          <>
+            {/* Chat header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                background: "rgba(8,14,28,.97)",
+                borderBottom: "1px solid rgba(255,255,255,.05)",
+                flexShrink: 0,
+              }}
+            >
+              {/* Back button — mobile only */}
+              <button
+                className="back-btn icon-btn"
+                onClick={() => setShowSidebar(true)}
+                aria-label="Mở danh sách"
+                style={{ marginLeft: -4 }}
+              >
+                <ArrowLeft size={20} />
+              </button>
 
-          {/* Chat header */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 12,
-            padding: "12px 20px",
-            background: "rgba(8,14,28,.97)",
-            borderBottom: "1px solid rgba(255,255,255,.05)",
-            flexShrink: 0,
-          }}>
-            {/* Back button (mobile only) */}
-            <button className="back-btn icon-btn" onClick={() => setShowSidebar(true)} style={{ marginLeft: -4 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M15 18l-6-6 6-6"/>
-              </svg>
-            </button>
-
-            {/* Avatar + name */}
-            <div style={{ position: "relative", flexShrink: 0 }}>
-              <div style={{
-                width: 42, height: 42, borderRadius: 13,
-                background: activeConv.avatarColor,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 700, color: "white",
-                boxShadow: `0 4px 14px ${activeConv.avatarColor}44`,
-              }}>
-                {activeConv.avatar}
-              </div>
-              {activeConv.online && (
-                <div className="online-dot" style={{ position: "absolute", bottom: -1, right: -1 }}/>
-              )}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "white" }}>{activeConv.name}</div>
-              <div style={{ fontSize: 12, color: activeConv.online ? "#10b981" : "#475569" }}>
-                {activeConv.online ? "● Đang hoạt động" : "Offline"}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", gap: 4 }}>
-              <button className="icon-btn"><Phone size={17}/></button>
-              <button className="icon-btn"><Video size={17}/></button>
-              <button className="icon-btn"><Search size={17}/></button>
-              <button className="icon-btn"><MoreHorizontal size={17}/></button>
-            </div>
-          </div>
-
-          {/* Messages area */}
-          <div style={{
-            flex: 1, overflowY: "auto", padding: "24px 20px",
-            display: "flex", flexDirection: "column", gap: 6,
-            background: "linear-gradient(180deg, #060d1f 0%, #080f1e 100%)",
-          }}>
-            {/* Date separator */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0 16px" }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,.05)" }}/>
-              <span style={{ color: "#475569", fontSize: 11, fontWeight: 500, background: "#060d1f", padding: "0 12px" }}>
-                Hôm nay
-              </span>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,.05)" }}/>
-            </div>
-
-            {activeConv.messages.map((msg, i) => {
-              const isMe = msg.senderId === myId;
-              const showAvatar = !isMe && (i === 0 || activeConv.messages[i-1]?.senderId !== msg.senderId);
-              return (
-                <div key={msg.id}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <div
                   style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 13,
+                    background: activeConv.avatarColor,
                     display: "flex",
-                    justifyContent: isMe ? "flex-end" : "flex-start",
-                    alignItems: "flex-end", gap: 8,
-                    marginTop: (i > 0 && activeConv.messages[i-1]?.senderId !== msg.senderId) ? 12 : 2,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "white",
+                    boxShadow: `0 4px 14px ${activeConv.avatarColor}44`,
                   }}
                 >
-                  {/* Their avatar */}
-                  {!isMe && (
-                    <div style={{ width: 28, flexShrink: 0 }}>
-                      {showAvatar && (
-                        <div style={{
-                          width: 28, height: 28, borderRadius: 9,
-                          background: activeConv.avatarColor,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 10, fontWeight: 700, color: "white",
-                        }}>
-                          {activeConv.avatar}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 2, maxWidth: "70%" }}>
-                    <div className={isMe ? "msg-bubble-me" : "msg-bubble-them"}>
-                      {msg.text}
-                    </div>
-                    {/* Time + status */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px" }}>
-                      <span style={{ color: "#475569", fontSize: 10 }}>{msg.time}</span>
-                      {isMe && (
-                        msg.status === "read"      ? <CheckCheck size={12} color="#3b82f6"/> :
-                        msg.status === "delivered" ? <CheckCheck size={12} color="#64748b"/> :
-                        <Check size={12} color="#64748b"/>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Typing indicator */}
-            {activeConv.online && (
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 8 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: 9, background: activeConv.avatarColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 700, color: "white", flexShrink: 0,
-                }}>
-                  {activeConv.avatar}
-                </div>
-                <div className="msg-bubble-them" style={{ padding: "10px 16px", display: "flex", gap: 5 }}>
-                  {[0, 0.2, 0.4].map((d, i) => (
-                    <div key={i} style={{
-                      width: 6, height: 6, borderRadius: "50%", background: "#60a5fa",
-                      animation: `typingDot .8s ${d}s ease-in-out infinite`,
-                    }}/>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef}/>
-          </div>
-
-          {/* Input area */}
-          <div style={{
-            padding: "12px 16px",
-            background: "rgba(8,14,28,.97)",
-            borderTop: "1px solid rgba(255,255,255,.05)",
-            flexShrink: 0,
-          }}>
-            {/* Emoji picker */}
-            {showEmojiHint && (
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: 4, padding: "10px 14px",
-                background: "rgba(15,23,42,.95)", border: "1px solid rgba(255,255,255,.07)",
-                borderRadius: 14, marginBottom: 10,
-                animation: "popIn .2s cubic-bezier(.22,1,.36,1)",
-              }}>
-                {emojis.map(e => (
-                  <span key={e} className="emoji-btn"
-                    onClick={() => { setInputText(t => t + e); setShowEmojiHint(false); inputRef.current?.focus(); }}>
-                    {e}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "rgba(15,23,42,.9)",
-              border: "1px solid rgba(255,255,255,.07)",
-              borderRadius: 16, padding: "8px 8px 8px 14px",
-              transition: "border-color .2s",
-            }}>
-              <button className="icon-btn" style={{ width:30, height:30, borderRadius:8 }}>
-                <Paperclip size={16}/>
-              </button>
-              <button className="icon-btn" style={{ width:30, height:30, borderRadius:8 }}>
-                <Image size={16}/>
-              </button>
-
-              <input
-                ref={inputRef}
-                className="msg-input"
-                placeholder="Nhập tin nhắn..."
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
-
-              <button className="icon-btn" style={{ width:30, height:30, borderRadius:8 }}
-                onClick={() => setShowEmojiHint(v => !v)}>
-                <Smile size={16}/>
-              </button>
-              <button className="icon-btn" style={{ width:30, height:30, borderRadius:8 }}>
-                <Mic size={16}/>
-              </button>
-
-              <button
-                className={`send-btn ${inputText.trim() ? "active" : "inactive"}`}
-                onClick={sendMessage}
-                disabled={!inputText.trim()}
-              >
-                <Send size={16}/>
-              </button>
-            </div>
-
-            <p style={{ textAlign: "center", color: "#334155", fontSize: 10, marginTop: 8 }}>
-              Nhấn Enter để gửi • Shift+Enter để xuống dòng
-            </p>
-          </div>
-        </div>
-      ) : (
-        /* Empty state */
-        <div style={{
-          flex: 1, display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          background: "linear-gradient(180deg,#060d1f,#080f1e)",
-          color: "#475569",
-        }}>
-          <div style={{
-            width: 80, height: 80, borderRadius: 24, marginBottom: 20,
-            background: "rgba(37,99,235,.1)", border: "1px solid rgba(59,130,246,.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <MessageSquare size={36} color="#3b82f6" strokeWidth={1.5}/>
-          </div>
-          <h3 style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-            Chọn cuộc trò chuyện
-          </h3>
-          <p style={{ fontSize: 13, textAlign: "center", maxWidth: 260, lineHeight: 1.6 }}>
-            Chọn một cuộc trò chuyện bên trái hoặc bắt đầu chat mới
-          </p>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════
-          RIGHT: PROFILE PANEL
-      ══════════════════════════════════════════ */}
-      <div className="profile-panel" style={{
-        display: "flex", flexDirection: "column",
-        background: "rgba(8,14,28,.97)",
-        borderLeft: "1px solid rgba(255,255,255,.05)",
-        overflowY: "auto",
-      }}>
-        {activeConv && (
-          <>
-            {/* Profile header */}
-            <div style={{
-              padding: "28px 20px 20px", textAlign: "center",
-              borderBottom: "1px solid rgba(255,255,255,.04)",
-            }}>
-              <div style={{ position: "relative", display: "inline-block", marginBottom: 14 }}>
-                <div style={{
-                  width: 68, height: 68, borderRadius: 20,
-                  background: activeConv.avatarColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22, fontWeight: 800, color: "white",
-                  boxShadow: `0 8px 24px ${activeConv.avatarColor}55`,
-                  margin: "0 auto",
-                }}>
                   {activeConv.avatar}
                 </div>
                 {activeConv.online && (
-                  <div style={{
-                    position: "absolute", bottom: -2, right: -2,
-                    width: 16, height: 16, borderRadius: "50%", background: "#10b981",
-                    border: "2.5px solid #080e1d",
-                  }}/>
+                  <div
+                    className="online-dot"
+                    style={{ position: "absolute", bottom: -1, right: -1 }}
+                  />
                 )}
               </div>
-              <h3 style={{ fontWeight: 700, fontSize: 15, color: "white", marginBottom: 4 }}>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "white" }}>
+                  {activeConv.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: activeConv.online ? "#10b981" : "#475569",
+                  }}
+                >
+                  {activeConv.online ? "● Đang hoạt động" : "Offline"}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button className="icon-btn" aria-label="Gọi điện">
+                  <Phone size={17} />
+                </button>
+                <button className="icon-btn" aria-label="Video call">
+                  <Video size={17} />
+                </button>
+                <button className="icon-btn" aria-label="Tìm kiếm">
+                  <Search size={17} />
+                </button>
+                {/* Panel toggle — replaces MoreHorizontal */}
+                <button
+                  className={`panel-toggle-btn ${showRightPanel ? "panel-on" : "panel-off"}`}
+                  onClick={() => setShowRightPanel((v) => !v)}
+                  aria-label="Bật/tắt thông tin"
+                  title={showRightPanel ? "Ẩn thông tin" : "Hiện thông tin"}
+                >
+                  {showRightPanel ? (
+                    <PanelRightClose size={17} />
+                  ) : (
+                    <PanelRightOpen size={17} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "24px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                background: "linear-gradient(180deg,#060d1f 0%,#080f1e 100%)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  margin: "8px 0 16px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: "rgba(255,255,255,.05)",
+                  }}
+                />
+                <span
+                  style={{
+                    color: "#475569",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    background: "#060d1f",
+                    padding: "0 12px",
+                  }}
+                >
+                  Hôm nay
+                </span>
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: "rgba(255,255,255,.05)",
+                  }}
+                />
+              </div>
+
+              {activeConv.messages.map((msg, i) => {
+                const isMe = msg.senderId === myId;
+                const showAvatar =
+                  !isMe &&
+                  (i === 0 ||
+                    activeConv.messages[i - 1]?.senderId !== msg.senderId);
+                return (
+                  <div
+                    key={msg.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: isMe ? "flex-end" : "flex-start",
+                      alignItems: "flex-end",
+                      gap: 8,
+                      marginTop:
+                        i > 0 &&
+                        activeConv.messages[i - 1]?.senderId !== msg.senderId
+                          ? 12
+                          : 2,
+                    }}
+                  >
+                    {!isMe && (
+                      <div style={{ width: 28, flexShrink: 0 }}>
+                        {showAvatar && (
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 9,
+                              background: activeConv.avatarColor,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: "white",
+                            }}
+                          >
+                            {activeConv.avatar}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: isMe ? "flex-end" : "flex-start",
+                        gap: 2,
+                        maxWidth: "70%",
+                      }}
+                    >
+                      <div
+                        className={isMe ? "msg-bubble-me" : "msg-bubble-them"}
+                      >
+                        {msg.text}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "0 4px",
+                        }}
+                      >
+                        <span style={{ color: "#475569", fontSize: 10 }}>
+                          {msg.time}
+                        </span>
+                        {isMe &&
+                          (msg.status === "read" ? (
+                            <CheckCheck size={12} color="#3b82f6" />
+                          ) : msg.status === "delivered" ? (
+                            <CheckCheck size={12} color="#64748b" />
+                          ) : (
+                            <Check size={12} color="#64748b" />
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {activeConv.online && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 9,
+                      background: activeConv.avatarColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "white",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {activeConv.avatar}
+                  </div>
+                  <div
+                    className="msg-bubble-them"
+                    style={{ padding: "10px 16px", display: "flex", gap: 5 }}
+                  >
+                    {[0, 0.2, 0.4].map((d, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#60a5fa",
+                          animation: `typingDot .8s ${d}s ease-in-out infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input area */}
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "rgba(8,14,28,.97)",
+                borderTop: "1px solid rgba(255,255,255,.05)",
+                flexShrink: 0,
+              }}
+            >
+              {showEmojiHint && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    padding: "10px 14px",
+                    background: "rgba(15,23,42,.95)",
+                    border: "1px solid rgba(255,255,255,.07)",
+                    borderRadius: 14,
+                    marginBottom: 10,
+                    animation: "popIn .2s cubic-bezier(.22,1,.36,1)",
+                  }}
+                >
+                  {emojis.map((e) => (
+                    <span
+                      key={e}
+                      className="emoji-btn"
+                      onClick={() => {
+                        setInputText((t) => t + e);
+                        setShowEmojiHint(false);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {e}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "rgba(15,23,42,.9)",
+                  border: "1px solid rgba(255,255,255,.07)",
+                  borderRadius: 16,
+                  padding: "8px 8px 8px 14px",
+                }}
+              >
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Đính kèm file"
+                >
+                  <Paperclip size={16} />
+                </button>
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Gửi hình ảnh"
+                >
+                  <Image size={16} />
+                </button>
+                <input
+                  ref={inputRef}
+                  className="msg-input"
+                  placeholder="Nhập tin nhắn..."
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  onClick={() => setShowEmojiHint((v) => !v)}
+                  aria-label="Emoji"
+                >
+                  <Smile size={16} />
+                </button>
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Ghi âm"
+                >
+                  <Mic size={16} />
+                </button>
+                <button
+                  className={`send-btn ${inputText.trim() ? "active" : "inactive"}`}
+                  onClick={sendMessage}
+                  aria-label="Gửi tin nhắn"
+                >
+                  <Send size={16} />
+                </button>
+              </div>
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#334155",
+                  fontSize: 10,
+                  marginTop: 8,
+                }}
+              >
+                Nhấn Enter để gửi • Shift+Enter để xuống dòng
+              </p>
+            </div>
+          </>
+        ) : (
+          /* ── WELCOME SCREEN ── */
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background:
+                "linear-gradient(160deg,#060d1f 0%,#080f1e 60%,#060d1f 100%)",
+              position: "relative",
+              overflow: "hidden",
+              padding: "40px 24px",
+            }}
+          >
+            <button
+              className="hamburger-btn icon-btn"
+              onClick={() => setShowSidebar(true)}
+              aria-label="Mở menu"
+              style={{ position: "absolute", top: 14, left: 14, zIndex: 10 }}
+            >
+              <Menu size={20} />
+            </button>
+
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                background:
+                  "radial-gradient(ellipse at 30% 40%,rgba(37,99,235,.1) 0%,transparent 55%), radial-gradient(ellipse at 75% 65%,rgba(99,102,241,.07) 0%,transparent 50%)",
+              }}
+            />
+
+            {[
+              { s: 4, c: "#3b82f6", t: "12%", l: "8%" },
+              { s: 3, c: "#818cf8", t: "25%", r: "12%" },
+              { s: 5, c: "#2563eb", t: "72%", l: "6%" },
+              { s: 3, c: "#60a5fa", t: "85%", r: "8%" },
+              { s: 4, c: "#6366f1", t: "45%", r: "3%" },
+              { s: 3, c: "#3b82f6", t: "60%", l: "3%" },
+            ].map((p, i) => (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  borderRadius: "50%",
+                  width: p.s,
+                  height: p.s,
+                  background: p.c,
+                  top: p.t,
+                  left: p.l,
+                  right: p.r,
+                  opacity: 0.4,
+                  animation: `wdot 3s ${i * 0.4}s ease-in-out infinite`,
+                }}
+              />
+            ))}
+
+            <div
+              className="w-float w-fade-1"
+              style={{ marginBottom: 36, position: "relative", zIndex: 2 }}
+            >
+              <img
+                src="/public/miku.png"
+                alt="Cute cartoon girl waving hello"
+                style={{
+                  width: 440,
+                  height: 200,
+                  objectFit: "contain",
+                  filter: "drop-shadow(0 10px 30px rgba(99,102,241,0.4))",
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                textAlign: "center",
+                position: "relative",
+                zIndex: 2,
+                maxWidth: 520,
+              }}
+            >
+              <p
+                className="w-fade-2"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  color: "#3b82f6",
+                  marginBottom: 10,
+                }}
+              >
+                ✦ Chào mừng đến với
+              </p>
+              <h1
+                className="w-fade-2 w-shine"
+                style={{
+                  fontSize: "3rem",
+                  fontWeight: 800,
+                  letterSpacing: "-1px",
+                  lineHeight: 1.08,
+                  marginBottom: 12,
+                }}
+              >
+                Loza
+              </h1>
+              <h2
+                className="w-fade-3"
+                style={{
+                  fontSize: "1.15rem",
+                  fontWeight: 600,
+                  color: "#e2e8f0",
+                  marginBottom: 10,
+                  lineHeight: 1.4,
+                }}
+              >
+                Chào {myName} 👋, sẵn sàng chưa?
+              </h2>
+              <p
+                className="w-fade-3"
+                style={{
+                  fontSize: 14,
+                  color: "#64748b",
+                  lineHeight: 1.8,
+                  marginBottom: 28,
+                }}
+              >
+                Kết nối và tận hưởng những cuộc trò chuyện thú vị.
+                <br />
+                Mỗi tin nhắn là một cầu nối — hãy bắt đầu ngay hôm nay.
+              </p>
+              <div
+                className="w-fade-4"
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  marginBottom: 28,
+                }}
+              >
+                {[
+                  { icon: "🔒", text: "Mã hóa đầu cuối" },
+                  { icon: "⚡", text: "Siêu nhanh" },
+                  { icon: "🌍", text: "Đa nền tảng" },
+                ].map((f) => (
+                  <div
+                    key={f.text}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(15,23,42,.9)",
+                      border: "1px solid rgba(255,255,255,.07)",
+                      borderRadius: 100,
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      color: "#94a3b8",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span>{f.icon}</span>
+                    {f.text}
+                  </div>
+                ))}
+              </div>
+              <div
+                className="w-fade-4"
+                style={{ display: "flex", gap: 10, justifyContent: "center" }}
+              >
+                <button
+                  onClick={() => {
+                    if (conversations.length > 0)
+                      selectConversation(conversations[0].id);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "linear-gradient(135deg,#2563eb,#3b82f6)",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "11px 24px",
+                    color: "white",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 18px rgba(37,99,235,.4)",
+                    transition: "all .2s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.transform =
+                      "translateY(-2px)";
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                      "0 8px 24px rgba(37,99,235,.5)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.transform =
+                      "translateY(0)";
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                      "0 4px 18px rgba(37,99,235,.4)";
+                  }}
+                >
+                  <MessageSquare size={15} />
+                  Bắt đầu trò chuyện
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════
+          RIGHT INFO PANEL — toggled by PanelRightOpen/Close button
+      ══════════════════════════════════════════ */}
+      <div
+        className={`right-panel ${activeConv && showRightPanel ? "visible" : "hidden"}`}
+      >
+        {activeConv && showRightPanel && (
+          <>
+            <div
+              className="profile-section"
+              style={{ padding: "28px 20px 20px", textAlign: "center" }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  marginBottom: 14,
+                }}
+              >
+                <div
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 22,
+                    background: activeConv.avatarColor,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: "white",
+                    margin: "0 auto",
+                    boxShadow: `0 8px 28px ${activeConv.avatarColor}55`,
+                  }}
+                >
+                  {activeConv.avatar}
+                </div>
+                {activeConv.online && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: -2,
+                      right: -2,
+                      width: 17,
+                      height: 17,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      border: "2.5px solid #080e1d",
+                    }}
+                  />
+                )}
+              </div>
+              <h3
+                style={{
+                  fontWeight: 700,
+                  fontSize: 15,
+                  color: "white",
+                  marginBottom: 4,
+                }}
+              >
                 {activeConv.name}
               </h3>
-              <p style={{ color: activeConv.online ? "#10b981" : "#475569", fontSize: 12 }}>
+              <p
+                style={{
+                  color: activeConv.online ? "#10b981" : "#475569",
+                  fontSize: 12,
+                  marginBottom: 16,
+                }}
+              >
                 {activeConv.online ? "● Đang hoạt động" : "Offline"}
               </p>
-
-              {/* Quick actions */}
-              <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 16 }}>
+              <div
+                style={{ display: "flex", justifyContent: "center", gap: 10 }}
+              >
                 {[
-                  { icon: <Phone size={16}/>, label: "Gọi" },
-                  { icon: <Video size={16}/>, label: "Video" },
-                  { icon: <Search size={16}/>, label: "Tìm" },
-                ].map(a => (
-                  <button key={a.label} style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
-                    background: "rgba(20,30,50,.9)", border: "1px solid rgba(255,255,255,.07)",
-                    borderRadius: 12, padding: "10px 14px", cursor: "pointer",
-                    color: "#94a3b8", fontSize: 10, fontWeight: 500,
-                    transition: "all .2s",
-                  }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,.15)"; (e.currentTarget as HTMLButtonElement).style.color = "#60a5fa"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(20,30,50,.9)"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
+                  { icon: <Phone size={16} />, label: "Gọi" },
+                  { icon: <Video size={16} />, label: "Video" },
+                  { icon: <Search size={16} />, label: "Tìm" },
+                ].map((a) => (
+                  <button key={a.label} className="profile-action-btn">
                     {a.icon}
                     {a.label}
                   </button>
@@ -806,70 +1589,156 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Info section */}
-            <div style={{ padding: "16px 16px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
-              <p style={{ color: "#475569", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+            <div className="profile-section">
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 12,
+                }}
+              >
                 Thông tin
               </p>
               {[
-                { label: "Tên đăng nhập", value: `@${activeConv.name.split(" ").pop()?.toLowerCase()}` },
+                {
+                  label: "Tên đăng nhập",
+                  value: `@${activeConv.name.split(" ").pop()?.toLowerCase()}`,
+                },
                 { label: "Tham gia", value: "01/2024" },
-                { label: "Tin nhắn chung", value: `${activeConv.messages.length} tin` },
-              ].map(row => (
-                <div key={row.label} style={{ display:"flex", justifyContent:"space-between", marginBottom: 10 }}>
-                  <span style={{ color:"#64748b", fontSize:12 }}>{row.label}</span>
-                  <span style={{ color:"#cbd5e1", fontSize:12, fontWeight:500 }}>{row.value}</span>
+                {
+                  label: "Tin nhắn chung",
+                  value: `${activeConv.messages.length} tin`,
+                },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                  }}
+                >
+                  <span style={{ color: "#64748b", fontSize: 12 }}>
+                    {row.label}
+                  </span>
+                  <span
+                    style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 500 }}
+                  >
+                    {row.value}
+                  </span>
                 </div>
               ))}
             </div>
 
-            {/* Shared media */}
-            <div style={{ padding: "16px 16px" }}>
-              <p style={{ color:"#475569", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:12 }}>
+            <div className="profile-section" style={{ borderBottom: "none" }}>
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 12,
+                }}
+              >
                 File & Media
               </p>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
-                {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4"].map((c,i) => (
-                  <div key={i} style={{
-                    aspectRatio:"1",borderRadius:10,
-                    background:`linear-gradient(135deg,${c}33,${c}66)`,
-                    border:`1px solid ${c}30`,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    cursor:"pointer",transition:"transform .18s",
-                  }}
-                    onMouseEnter={e=>((e.currentTarget as HTMLDivElement).style.transform="scale(1.06)")}
-                    onMouseLeave={e=>((e.currentTarget as HTMLDivElement).style.transform="scale(1)")}>
-                    <Image size={16} color={c}/>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3,1fr)",
+                  gap: 6,
+                }}
+              >
+                {[
+                  "#3b82f6",
+                  "#10b981",
+                  "#8b5cf6",
+                  "#f59e0b",
+                  "#ef4444",
+                  "#06b6d4",
+                ].map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      aspectRatio: "1",
+                      borderRadius: 10,
+                      background: `linear-gradient(135deg,${c}33,${c}66)`,
+                      border: `1px solid ${c}30`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      transition: "transform .18s",
+                    }}
+                    onMouseEnter={(e) =>
+                      ((e.currentTarget as HTMLDivElement).style.transform =
+                        "scale(1.06)")
+                    }
+                    onMouseLeave={(e) =>
+                      ((e.currentTarget as HTMLDivElement).style.transform =
+                        "scale(1)")
+                    }
+                  >
+                    <Image size={16} color={c} />
                   </div>
                 ))}
               </div>
-              <button style={{
-                width:"100%",marginTop:12,padding:"8px 0",borderRadius:10,
-                background:"rgba(20,30,50,.9)",border:"1px solid rgba(255,255,255,.07)",
-                color:"#64748b",fontSize:12,cursor:"pointer",transition:"all .2s",
-              }}
-                onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.color="#60a5fa";}}
-                onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.color="#64748b";}}>
+              <button
+                style={{
+                  width: "100%",
+                  marginTop: 12,
+                  padding: "8px 0",
+                  borderRadius: 10,
+                  background: "rgba(20,30,50,.9)",
+                  border: "1px solid rgba(255,255,255,.07)",
+                  color: "#64748b",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  transition: "all .2s",
+                  fontFamily: "inherit",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#60a5fa";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#64748b";
+                }}
+              >
                 Xem tất cả →
               </button>
             </div>
 
-            {/* Danger zone */}
-            <div style={{ padding: "4px 16px 16px", marginTop:"auto" }}>
+            <div style={{ padding: "8px 16px 16px", marginTop: "auto" }}>
               {[
-                { icon:<Bell size={13}/>, label:"Tắt thông báo", color:"#94a3b8" },
-                { icon:<Archive size={13}/>, label:"Lưu trữ", color:"#94a3b8" },
-                { icon:<Trash2 size={13}/>, label:"Xóa cuộc trò chuyện", color:"#f87171" },
-              ].map(item => (
-                <button key={item.label} style={{
-                  display:"flex",alignItems:"center",gap:8,width:"100%",
-                  padding:"9px 10px",borderRadius:10,border:"none",background:"transparent",
-                  color:item.color,fontSize:12,cursor:"pointer",
-                  fontFamily:"inherit",transition:"background .18s",
-                }}
-                  onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background="rgba(255,255,255,.05)";}}
-                  onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background="transparent";}}>
-                  {item.icon}{item.label}
+                {
+                  icon: <Bell size={13} />,
+                  label: "Tắt thông báo",
+                  color: "#94a3b8",
+                },
+                {
+                  icon: <Archive size={13} />,
+                  label: "Lưu trữ",
+                  color: "#94a3b8",
+                },
+                {
+                  icon: <Trash2 size={13} />,
+                  label: "Xóa cuộc trò chuyện",
+                  color: "#f87171",
+                },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  className="danger-btn"
+                  style={{ color: item.color }}
+                >
+                  {item.icon}
+                  {item.label}
                 </button>
               ))}
             </div>
