@@ -374,7 +374,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
           <button className="sidenav-item" onClick={onNewMessage} aria-label="Soạn tin nhắn mới">
             <Edit3 size={20} />
-            <span className="sidenav-tooltip">Soạn tin nhắn</span>
+            <span className="sidenav-tooltip">Tùy chỉnh</span>
           </button>
 
           <button className="sidenav-item" aria-label="Trợ giúp">
