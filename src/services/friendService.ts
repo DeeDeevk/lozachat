@@ -38,14 +38,35 @@ export const friendService = {
     }
   },
 
-   async getFriendStatus(targetId: string): Promise<string> {
+  async getFriendStatus(targetId: string): Promise<string> {
     const res = await api.get(`/friends/status/${targetId}`);
     const { isFriends, hasSentRequest, hasReceivedRequest } = res.data;
- 
-    if (isFriends)          return "friend";
-    if (hasSentRequest)     return "sent";
+
+    if (isFriends) return "friend";
+    if (hasSentRequest) return "sent";
     if (hasReceivedRequest) return "received";
     return "none";
   },
-   
+
+  async getFriendList() {
+    const res = await api.get("/friends");
+    return res.data.friends;
+  },
+  
+  async cancelRequest(requestId: string) {
+    try {
+      await api.post(`/friends/request/${requestId}/cancel`);
+    } catch (error) {
+      console.error("Lỗi khi huỷ yêu cầu kết bạn", error);
+    }
+  },
+
+  async unfriend(targetId: string) {
+  try {
+    const res = await api.delete(`/friends/${targetId}`);
+    return res.data.message;
+  } catch (error) {
+    console.error("Lỗi khi huỷ kết bạn", error);
+  }
+}
 };

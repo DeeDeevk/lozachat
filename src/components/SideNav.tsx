@@ -96,7 +96,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          border-bottom: 1px solid rgba(255,255,255,.04);
+          border-bottom: 1x solid rgba(255,255,255,.04);
           margin-bottom: 6px;
         }
 

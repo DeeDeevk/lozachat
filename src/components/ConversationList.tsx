@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Star, X, UserSearch, UsersRound } from "lucide-react";
+import { Search, Star, UserSearch, UsersRound } from "lucide-react";
 import SearchUserModal from "./SearchUserModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export default function ConversationList({
 
         .cl-search-input {
           background: rgba(15,23,42,.9);
-          border: 1px solid rgba(255,255,255,.07);
+          border: 2px solid rgba(255,255,255,.07);
           border-radius: 12px;
           padding: 9px 14px 9px 36px;
           color: white; font-size: 13px; outline: none; width: 100%;
@@ -140,7 +140,7 @@ export default function ConversationList({
           animation: cl-pulse 2.5s ease-in-out infinite;
         }
 
-        .cl-sidebar-title { color: white; font-weight: 700; font-size: 17px; }
+        .cl-sidebar-title { color: white; font-weight: 700; font-size: 18px; }
       `}</style>
 
       <div
@@ -149,14 +149,14 @@ export default function ConversationList({
           display: "flex",
           flexDirection: "column",
           background: "rgba(8,14,28,.97)",
-          borderRight: "1px solid rgba(255,255,255,.05)",
+          borderRight: "2px solid rgba(255,255,255,.05)",
         }}
       >
         {/* ── Header ── */}
         <div
           style={{
             padding: "14px 14px 10px",
-            borderBottom: "1px solid rgba(255,255,255,.04)",
+            borderBottom: "2px solid rgba(255,255,255,.04)",
           }}
         >
           <div
@@ -184,14 +184,7 @@ export default function ConversationList({
               >
                 <UsersRound size={16} />
               </button>
-              {/* Close — mobile only */}
-              <button
-                className="cl-icon-btn cl-back-btn"
-                onClick={onClose}
-                aria-label="Đóng"
-              >
-                <X size={18} />
-              </button>
+             
             </div>
           </div>
 
