@@ -1,8 +1,9 @@
-import type { User, FriendRequest } from "../types/user";
+import type { User, FriendRequest, Friend } from "../types/user";
 import { friendService } from "@/services/friendService";
 import { create } from "zustand";
 
 interface FriendState {
+  friends: Friend[];
   loading: boolean;
   receivedList: FriendRequest[];
   sentList: FriendRequest[];
@@ -13,9 +14,13 @@ interface FriendState {
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriendStatus: (targetId: string) => Promise<string | null>;
+  getFriends: () => Promise<void>;
+  cancelRequest: (requestId: string) => Promise<void>;
+  unfriend: (targetId: string) => Promise<void>;
 }
 
 export const useFriendStore = create<FriendState>((set, get) => ({
+  friends: [],
   loading: false,
   receivedList: [],
   sentList: [],
@@ -103,4 +108,48 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       set({ loading: false });
     }
   },
+  getFriends: async () => {
+    try {
+      set({ loading: true });
+      const friends = await friendService.getFriendList();
+      set({ friends: friends });
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách bạn bè", error);
+      set({ friends: [] });
+    } finally {
+      set({ loading: false });
+    }
+  },
+  cancelRequest: async (requestId) => {
+  try {
+    set({ loading: true });
+
+    await friendService.cancelRequest(requestId);
+
+    set((state) => ({
+      sentList: state.sentList.filter((r) => r._id !== requestId),
+    }));
+  } catch (error) {
+    console.error("Lỗi khi huỷ yêu cầu", error);
+  } finally {
+    set({ loading: false });
+  }
+},
+unfriend: async (targetId) => {
+  try {
+    set({ loading: true });
+
+    await friendService.unfriend(targetId);
+
+    // 👇 xóa khỏi danh sách bạn
+    set((state) => ({
+      friends: state.friends.filter((f) => f._id !== targetId),
+      friendStatus: "none",
+    }));
+  } catch (error) {
+    console.error("Lỗi khi huỷ kết bạn", error);
+  } finally {
+    set({ loading: false });
+  }
+},
 }));

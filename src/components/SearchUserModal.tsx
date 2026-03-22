@@ -22,6 +22,7 @@ interface SearchUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStartChat?: (user: User) => void;
+  onRequestSent?: () => void; // ← callback reload data sau khi gửi lời mời
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export default function SearchUserModal({
   isOpen,
   onClose,
   onStartChat,
+  onRequestSent,
 }: SearchUserModalProps) {
   const currentUser = useAuthStore((s) => s.userProfile);
   const { loading, searchByUserName, addFriend, getFriendStatus } = useFriendStore();
@@ -99,14 +101,12 @@ export default function SearchUserModal({
     setRequestStatus("none");
     setIntroMessage("Chào bạn ~ Có thể kết bạn được không?");
 
-    // 1. Tìm user theo username
     const user = await searchByUserName(q);
     if (!user) {
       setNotFound(true);
       return;
     }
 
-    // 2. Kiểm tra chính mình
     if (
       user._id === currentUser?._id ||
       user.username === currentUser?.username
@@ -116,8 +116,6 @@ export default function SearchUserModal({
       return;
     }
 
-    // 3. Lấy trạng thái quan hệ từ API qua store
-    // friendStatus trả về: "friend" | "sent" | "received" | null
     const status = await getFriendStatus(user._id);
 
     if (status === "friend")        setRequestStatus("friend");
@@ -138,6 +136,8 @@ export default function SearchUserModal({
       toast.success("Đã gửi lời mời kết bạn!", {
         description: `Yêu cầu đã được gửi đến ${result.displayName || result.username}`,
       });
+      // ← Reload danh sách lời mời gửi ở FriendsPage
+      onRequestSent?.();
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
@@ -234,7 +234,6 @@ export default function SearchUserModal({
         .su-search-btn svg { display:block; stroke:currentColor; fill:none; }
         .su-spinner { animation:suSpin .7s linear infinite; }
 
-        /* ── Intro message textarea ── */
         .su-intro-wrap { display:flex; flex-direction:column; gap:6px; }
         .su-intro-label {
           font-size:11px; font-weight:600; color:#64748b;
@@ -251,7 +250,6 @@ export default function SearchUserModal({
         .su-intro-textarea::placeholder { color:#334155; }
         .su-intro-count { font-size:10px; color:#475569; text-align:right; }
 
-        /* ── Result card ── */
         .su-result-card {
           background:rgba(15,23,42,.7); border:1px solid rgba(255,255,255,.07);
           border-radius:14px; padding:14px;
@@ -276,7 +274,6 @@ export default function SearchUserModal({
         .su-detail-btn:hover { background:rgba(99,102,246,.22); color:#a5b4fc; transform:scale(1.08); }
         .su-detail-btn svg { display:block; stroke:currentColor; fill:none; }
 
-        /* ── Detail panel ── */
         .su-detail-panel {
           background:rgba(99,102,246,.06); border:1px solid rgba(99,102,246,.15);
           border-radius:10px; padding:12px 14px; margin-bottom:14px;
@@ -286,7 +283,6 @@ export default function SearchUserModal({
         .su-detail-label { font-size:11px; color:#475569; font-weight:500; }
         .su-detail-value { font-size:12px; color:#cbd5e1; font-weight:600; }
 
-        /* ── Status banners ── */
         .su-status-banner {
           display:flex; align-items:flex-start; gap:10px;
           padding:12px 14px; border-radius:11px; margin-bottom:14px;
@@ -298,7 +294,6 @@ export default function SearchUserModal({
         .su-status-banner.received { background:rgba(99,102,246,.08); border:1px solid rgba(99,102,246,.2); color:#a5b4fc; }
         .su-status-banner.friend   { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2); color:#6ee7b7; }
 
-        /* ── Self state ── */
         .su-self-state {
           display:flex; flex-direction:column; align-items:center; gap:10px;
           padding:24px 0 8px; animation:suFadeUp .22s cubic-bezier(.22,1,.36,1);
@@ -307,7 +302,6 @@ export default function SearchUserModal({
         .su-self-text { font-size:14px; font-weight:600; color:#94a3b8; }
         .su-self-sub  { font-size:12px; color:#475569; text-align:center; }
 
-        /* ── Action buttons ── */
         .su-actions { display:flex; gap:8px; }
         .su-btn {
           flex:1; padding:10px 0; border-radius:11px; border:none;
@@ -329,7 +323,6 @@ export default function SearchUserModal({
           color:#10b981; cursor:default;
         }
 
-        /* ── Not found ── */
         .su-notfound {
           display:flex; flex-direction:column; align-items:center;
           padding:28px 0 12px; gap:8px;
@@ -343,7 +336,6 @@ export default function SearchUserModal({
         .su-notfound-sub   { font-size:12px; color:#475569; text-align:center; }
       `}</style>
 
-      {/* Backdrop */}
       <div className="su-backdrop" onClick={handleBackdrop}>
         <div className="su-modal">
           {/* Header */}
@@ -361,7 +353,6 @@ export default function SearchUserModal({
 
           {/* Body */}
           <div className="su-body">
-
             {/* Input */}
             <div>
               <div className="su-label">Tên người dùng</div>
@@ -397,22 +388,17 @@ export default function SearchUserModal({
               </div>
             </div>
 
-            {/* ── Chính mình ── */}
+            {/* Chính mình */}
             {isSelf && (
               <div className="su-self-state">
                 <span className="su-self-emoji">🤡</span>
-                <div className="su-self-text">Người này là chính bạn</div>
-                <div className="su-self-sub">
-                  Bạn không thể kết bạn với chính mình đâu nha 😄
-                </div>
+                <div className="su-self-text">Bạn đang tìm ai vậy. Người này là chính bạn 😄</div>
               </div>
             )}
 
-            {/* ── Result card ── */}
+            {/* Result card */}
             {result && !isSelf && (
               <div className="su-result-card">
-
-                {/* User row */}
                 <div className="su-user-row">
                   {result.avatarUrl ? (
                     <img
@@ -433,22 +419,19 @@ export default function SearchUserModal({
                     </div>
                   )}
                   <div className="su-user-info">
-                    <div className="su-user-name">
-                      {result.displayName || result.username}
-                    </div>
+                    <div className="su-user-name">{result.displayName || result.username}</div>
                     <div className="su-user-username">@{result.username}</div>
                   </div>
                   <button
                     className="su-detail-btn"
                     onClick={() => setShowDetail((v) => !v)}
-                    aria-label="Xem thông tin chi tiết"
+                    aria-label="Xem thông tin"
                     title="Thông tin chi tiết"
                   >
                     <Info size={15} />
                   </button>
                 </div>
 
-                {/* Detail panel */}
                 {showDetail && (
                   <div className="su-detail-panel">
                     <div className="su-detail-row">
@@ -468,7 +451,6 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {/* ── Banner: đã là bạn bè ── */}
                 {requestStatus === "friend" && (
                   <div className="su-status-banner friend">
                     <UserCheck size={15} />
@@ -476,29 +458,20 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {/* ── Banner: mình đã gửi → chờ phản hồi ── */}
                 {requestStatus === "sent" && (
                   <div className="su-status-banner sent">
                     <Clock size={15} />
-                    <span>
-                      Bạn đã gửi yêu cầu kết bạn đến người này. Vui lòng chờ
-                      phản hồi từ người dùng.
-                    </span>
+                    <span>Bạn đã gửi yêu cầu kết bạn đến người này. Vui lòng chờ phản hồi.</span>
                   </div>
                 )}
 
-                {/* ── Banner: họ đã gửi cho mình → cần phản hồi ── */}
                 {requestStatus === "received" && (
                   <div className="su-status-banner received">
                     <Bell size={15} />
-                    <span>
-                      Bạn đã được yêu cầu kết bạn từ người này. Vui lòng phản
-                      hồi yêu cầu từ người dùng.
-                    </span>
+                    <span>Bạn đã được yêu cầu kết bạn từ người này. Vui lòng phản hồi.</span>
                   </div>
                 )}
 
-                {/* ── Intro message (chỉ khi status = none và chưa gửi) ── */}
                 {requestStatus === "none" && !reqSent && (
                   <div className="su-intro-wrap">
                     <div className="su-intro-label">Giới thiệu</div>
@@ -513,7 +486,6 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {/* ── Actions: chưa có quan hệ ── */}
                 {requestStatus === "none" && (
                   <div className="su-actions">
                     <button
@@ -545,7 +517,6 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {/* ── Actions: đã là bạn / pending request → chỉ nhắn tin ── */}
                 {(requestStatus === "friend" ||
                   requestStatus === "sent" ||
                   requestStatus === "received") && (
@@ -559,23 +530,18 @@ export default function SearchUserModal({
                     </button>
                   </div>
                 )}
-
               </div>
             )}
 
-            {/* Not found */}
             {notFound && (
               <div className="su-notfound">
                 <div className="su-notfound-icon">
                   <UserRoundSearch size={26} color="#334155" />
                 </div>
                 <div className="su-notfound-title">Không tìm thấy người dùng</div>
-                <div className="su-notfound-sub">
-                  Vui lòng kiểm tra lại username và thử lại
-                </div>
+                <div className="su-notfound-sub">Vui lòng kiểm tra lại username và thử lại</div>
               </div>
             )}
-
           </div>
         </div>
       </div>
