@@ -59,4 +59,19 @@ export const postService = {
     const { data } = await axiosInstance.post(`/posts/${postId}/react`, { type });
     return data;
   },
+  //comment
+  addComment: async (postId: string, content: string): Promise<Comment> => {
+    const { data } = await axiosInstance.post(`/posts/${postId}/comments`, { content });
+    return data;
+  },
+
+  getComments: async (postId: string, page = 1): Promise<{ comments: Comment[]; pagination: any }> => {
+    const { data } = await axiosInstance.get(`/posts/${postId}/comments`, { params: { page } });
+    return data;
+  },
+
+  deleteComment: async (postId: string, commentId: string): Promise<void> => {
+    await axiosInstance.delete(`/posts/${postId}/comments/${commentId}`);
+  },
+
 };

@@ -15,6 +15,12 @@ interface PostStore {
   updatePost: (id: string, content: string, newImages?: File[], removeImages?: string[]) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
+  
+  //comment
+  addComment: (postId: string, content: string) => Promise<void>;
+  deleteComment: (postId: string, commentId: string) => Promise<void>;
+  getCommentsForPost: (postId: string) => Promise<Comment[]>;
+  
 }
 
 export const usePostStore = create<PostStore>((set, get) => ({
@@ -90,6 +96,51 @@ export const usePostStore = create<PostStore>((set, get) => ({
       }));
     } catch {
       toast.error("Không thể thả reaction");
+    }
+  },
+  //comment
+  addComment: async (postId, content) => {
+    try {
+      const newComment = await postService.addComment(postId, content);
+      
+      set((state) => ({
+        posts: state.posts.map((p) =>
+          p._id === postId
+            ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+            : p
+        ),
+      }));
+
+      toast.success("Đã bình luận 👍");
+      return newComment;
+    } catch {
+      toast.error("Bình luận thất bại");
+      throw new Error("Add comment failed");
+    }
+  },
+
+  deleteComment: async (postId, commentId) => {
+    try {
+      await postService.deleteComment(postId, commentId);
+      set((state) => ({
+        posts: state.posts.map((p) =>
+          p._id === postId
+            ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 0) - 1) }
+            : p
+        ),
+      }));
+      toast.success("Đã xóa bình luận");
+    } catch {
+      toast.error("Không thể xóa bình luận");
+    }
+  },
+    getCommentsForPost: async (postId) => {
+    try {
+      const res = await postService.getComments(postId);
+      // Bạn có thể lưu vào store nếu muốn, tạm thời return để component dùng
+      return res.comments;
+    } catch {
+      return [];
     }
   },
 }));

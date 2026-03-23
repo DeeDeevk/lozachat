@@ -19,6 +19,9 @@ export interface Post {
   content: string;
   images: string[];
   reactions: Reaction[];
+  //comment
+  commentsCount: number;
+  //
   visibility: Visibility;
   createdAt: string;
   updatedAt: string;
@@ -54,3 +57,12 @@ export const REACTION_LABEL: Record<ReactionType, string> = {
   sad: "Buồn",
   angry: "Phẫn nộ",
 };
+
+//comment
+export interface Comment {
+  _id: string;
+  author: Author;           
+  content: string;
+  createdAt: string;
+}
+export const COMMENT_PLACEHOLDER = "Viết bình luận...";
