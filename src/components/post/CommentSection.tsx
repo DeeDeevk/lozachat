@@ -1,9 +1,32 @@
 import { useState, useEffect } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
 import { usePostStore } from "../../stores/usePostStore";
 import type { Comment } from "../../types/post";
+import { CommentItem } from "./CommentItem";
 import toast from "react-hot-toast";
+
+type CommentWithReplies = Comment & { replies: CommentWithReplies[] };
+
+function buildTree(flat: Comment[]): CommentWithReplies[] {
+  const map = new Map<string, CommentWithReplies>();
+  const roots: CommentWithReplies[] = [];
+
+  flat.forEach((c) => map.set(c._id, { ...c, replies: [] }));
+
+  flat.forEach((c) => {
+    const parentId =
+      typeof c.parentId === "object" && c.parentId !== null
+        ? (c.parentId as any)._id
+        : c.parentId;
+
+    if (parentId && map.has(parentId)) {
+      map.get(parentId)!.replies.push(map.get(c._id)!);
+    } else {
+      roots.push(map.get(c._id)!);
+    }
+  });
+
+  return roots;
+}
 
 interface Props {
   postId: string;
@@ -16,27 +39,28 @@ export const CommentSection = ({
   postId,
   commentsCount,
   currentUserId,
-  isInDetail = false,
 }: Props) => {
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [tree, setTree] = useState<CommentWithReplies[]>([]);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   const { addComment, deleteComment, getCommentsForPost } = usePostStore();
 
   const loadComments = async () => {
+    setFetching(true);
     try {
       const data = await getCommentsForPost(postId);
-      setComments(data);
+      setTree(buildTree(data));
     } catch {
-      setComments([]);
+      setTree([]);
+    } finally {
+      setFetching(false);
     }
   };
 
   useEffect(() => {
-    if (isInDetail || commentsCount > 0) {
-      loadComments();
-    }
+    loadComments();
   }, [postId]);
 
   const handlePostComment = async () => {
@@ -46,7 +70,6 @@ export const CommentSection = ({
       await addComment(postId, content);
       setContent("");
       await loadComments();
-      toast.success("Bình luận đã được đăng");
     } catch {
       toast.error("Không thể đăng bình luận");
     } finally {
@@ -55,31 +78,28 @@ export const CommentSection = ({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm("Xóa bình luận này thật chứ?")) return;
     try {
       await deleteComment(postId, commentId);
-      setComments((prev) => prev.filter((c) => c._id !== commentId));
-      toast.success("Đã xóa bình luận");
+      await loadComments();
     } catch {
       toast.error("Không thể xóa");
     }
   };
 
   return (
-    <div className="px-4 pb-4 mt-3 bg-white/95 rounded-2xl border border-gray-200 shadow-sm">
-      
-      {/* INPUT */}
-      <div className="flex gap-3 mt-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-          {currentUserId ? "U" : "👤"}
+    <div className="mt-3 bg-[#0d1b2e] border border-white/[0.07] rounded-2xl p-5">
+      {/* Input area */}
+      <div className="flex gap-3 items-start">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5] flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+          U
         </div>
-
         <div className="flex-1">
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Viết bình luận của bạn..."
-            className="w-full bg-white text-black border border-gray-300 rounded-2xl px-4 py-3 text-sm resize-y min-h-[48px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--loza-accent)]"
+            rows={2}
+            className="w-full bg-[#0a1422] text-[#e8eaf0] border border-white/[0.08] focus:border-[#3b6ef5]/60 rounded-xl px-4 py-3 text-sm resize-none placeholder:text-[#3a4a60] outline-none transition-colors leading-relaxed"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -87,66 +107,57 @@ export const CommentSection = ({
               }
             }}
           />
-
-          <button
-            onClick={handlePostComment}
-            disabled={!content.trim() || loading}
-            className="mt-2 px-5 py-2 bg-[var(--loza-accent)] hover:opacity-90 text-white rounded-xl font-medium disabled:opacity-50 transition"
-          >
-            {loading ? "Đang gửi..." : "Gửi"}
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handlePostComment}
+              disabled={!content.trim() || loading}
+              className="px-5 py-2 rounded-xl text-sm font-semibold
+    bg-[#131f35] text-[#3b8aff] border border-white/[0.06]
+    hover:bg-[#1a2a45] hover:text-[#5b9fff]
+    disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {loading ? "Đang gửi..." : "Gửi"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* LIST COMMENT */}
-      <div className="mt-6 space-y-3">
-        {comments.length === 0 ? (
-          <p className="text-center text-sm text-gray-500 py-6">
-            Chưa có bình luận nào. Hãy là người đầu tiên 💬
+      {/* Divider */}
+      <div className="my-5 border-t border-white/[0.06]" />
+
+      {/* Comment list */}
+      {fetching ? (
+        <div className="py-8 text-center text-[#4a5a70] text-sm animate-pulse">
+          Đang tải bình luận...
+        </div>
+      ) : tree.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-2xl mb-2">💬</p>
+          <p className="text-[#4a5a70] text-sm">
+            Chưa có bình luận nào. Hãy là người đầu tiên!
           </p>
-        ) : (
-          comments.map((c) => (
-            <div
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tree.map((c) => (
+            <CommentItem
               key={c._id}
-              className="flex gap-3 group bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition"
-            >
-              <div className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0" />
+              comment={c}
+              postId={postId}
+              currentUserId={currentUserId}
+              onDelete={handleDelete}
+              onReplySuccess={loadComments}
+            />
+          ))}
+        </div>
+      )}
 
-              <div className="flex-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-gray-900 text-sm">
-                    {c.author.displayName}
-                  </span>
-
-                  <span className="text-xs text-gray-500">
-                    {formatDistanceToNow(new Date(c.createdAt), {
-                      addSuffix: true,
-                      locale: vi,
-                    })}
-                  </span>
-                </div>
-
-                <p className="mt-1 text-[15px] leading-relaxed text-gray-800">
-                  {c.content}
-                </p>
-
-                {c.author._id === currentUserId && (
-                  <button
-                    onClick={() => handleDelete(c._id)}
-                    className="text-xs text-red-500 hover:underline mt-1 opacity-0 group-hover:opacity-100 transition"
-                  >
-                    Xóa
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* LOAD MORE */}
-      {commentsCount > comments.length && (
-        <button className="text-sm text-blue-600 mt-4 hover:underline">
+      {/* Load more */}
+      {commentsCount > tree.length && tree.length > 0 && (
+        <button
+          onClick={loadComments}
+          className="mt-4 w-full py-2.5 text-sm text-[#3b6ef5] hover:text-[#5080ff] bg-[#3b6ef5]/5 hover:bg-[#3b6ef5]/10 border border-[#3b6ef5]/15 rounded-xl font-medium transition-colors"
+        >
           Xem thêm bình luận
         </button>
       )}

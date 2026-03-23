@@ -359,6 +359,7 @@ export const PostCard = ({
             commentsCount={post.commentsCount || 0}
             currentUserId={currentUserId}
             onReact={onReact}
+            showComments={showComments}  
             onCommentClick={() => setShowComments(!showComments)} // thêm state showComments
           />
           {showComments && (

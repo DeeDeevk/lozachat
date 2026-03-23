@@ -2,6 +2,7 @@ import axiosInstance from "../lib/axios";
 import type { Post, PostsResponse, Visibility } from "../types/post";
 import type { ReactionType } from "../types/post";
 
+
 export const postService = {
   getPosts: async (page = 1, limit = 10): Promise<PostsResponse> => {
     const { data } = await axiosInstance.get("/posts", { params: { page, limit } });
@@ -60,10 +61,14 @@ export const postService = {
     return data;
   },
   //comment
-  addComment: async (postId: string, content: string): Promise<Comment> => {
-    const { data } = await axiosInstance.post(`/posts/${postId}/comments`, { content });
-    return data;
-  },
+addComment: async (postId: string, content: string, parentId?: string) => {
+  const payload = {
+    content,
+    ...(parentId !== undefined && { parentId }), 
+  };
+  const res = await axiosInstance.post(`/posts/${postId}/comments`, payload);
+  return res.data;
+},
 
   getComments: async (postId: string, page = 1): Promise<{ comments: Comment[]; pagination: any }> => {
     const { data } = await axiosInstance.get(`/posts/${postId}/comments`, { params: { page } });

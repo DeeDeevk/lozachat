@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
 import type { ReactionType } from "../../types/post";
-import { usePostStore } from "../../stores/usePostStore";
 
-const REACTION_TYPES: ReactionType[] = ["like", "love", "haha", "wow", "sad", "angry"];
+const REACTION_TYPES: ReactionType[] = [
+  "like",
+  "love",
+  "haha",
+  "wow",
+  "sad",
+  "angry",
+];
 
 interface Props {
   postId: string;
@@ -11,7 +17,8 @@ interface Props {
   commentsCount: number;
   currentUserId: string;
   onReact: (postId: string, type: ReactionType) => void;
-  onCommentClick: () => void;  
+  onCommentClick: () => void;
+  showComments?: boolean; // thêm prop này để biết đang mở/đóng
 }
 
 export const PostActions = ({
@@ -21,62 +28,158 @@ export const PostActions = ({
   currentUserId,
   onReact,
   onCommentClick,
+  showComments = false,
 }: Props) => {
   const [showPicker, setShowPicker] = useState(false);
-  const reactToPost = usePostStore((s) => s.reactToPost);
 
   const myReaction = reactions.find((r) => r.userId === currentUserId);
   const totalReactions = reactions.length;
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--loza-border)]">
-      {/* Reaction */}
-      <div className="relative">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => onReact(postId, myReaction?.type === "like" ? "like" : "like")}
-            onMouseEnter={() => setShowPicker(true)}
-            onMouseLeave={() => setTimeout(() => setShowPicker(false), 200)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all"
-            style={{
-              background: myReaction ? "color-mix(in srgb, var(--loza-accent) 15%, transparent)" : "transparent",
-              color: myReaction ? "var(--loza-accent-light)" : "var(--loza-muted)",
-            }}
-          >
-            <span className="text-xl">{myReaction ? REACTION_EMOJI[myReaction.type] : "👍"}</span>
-            <span>{myReaction ? REACTION_LABEL[myReaction.type] : "Thích"}</span>
-          </button>
+    <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06]">
+      {/* Left: action buttons */}
+      <div className="relative flex items-center gap-2">
+        {/* ── Nút Thích ── */}
+        <button
+  onClick={() => onReact(postId, "like")}
+  onMouseEnter={() => setShowPicker(true)}
+  onMouseLeave={() => setTimeout(() => setShowPicker(false), 300)}
+  className={`
+    flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
+    border backdrop-blur-md transition-all duration-200 select-none
 
-          {/* Picker */}
-          {showPicker && (
-            <div className="absolute bottom-full left-0 mb-2 flex gap-1 bg-[var(--loza-bg-elevated)] border border-[var(--loza-border-bright)] rounded-2xl p-2 shadow-xl z-50">
-              {REACTION_TYPES.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => { onReact(postId, type); setShowPicker(false); }}
-                  className="text-3xl hover:scale-125 transition-transform p-2"
-                >
-                  {REACTION_EMOJI[type]}
-                </button>
-              ))}
-            </div>
-          )}
+    ${
+      myReaction
+        ? `
+          bg-[color:var(--loza-accent)/15]
+          border-[color:var(--loza-accent)/40]
+          text-[color:var(--loza-accent-light)]
+          shadow-[0_0_12px_var(--loza-accent-glow)]
+        `
+        : `
+          bg-transparent
+          border-[color:var(--loza-border)]
+          text-[color:var(--loza-sub)]
+          hover:bg-[color:var(--loza-bg-hover)]
+          hover:border-[color:var(--loza-accent)]
+          hover:text-[color:var(--loza-text)]
+        `
+    }
+  `}
+>
+  <span className="text-base leading-none">
+    {myReaction ? REACTION_EMOJI[myReaction.type] : "👍"}
+  </span>
+  <span>{myReaction ? REACTION_LABEL[myReaction.type] : "Thích"}</span>
+</button>
 
-          {/* Comment Button */}
-          <button
-            onClick={onCommentClick}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[var(--loza-muted)] hover:text-[var(--loza-text)] transition-colors"
-          >
-            💬 <span>Bình luận</span>
-            {commentsCount > 0 && <span className="text-xs bg-[var(--loza-bg-hover)] px-1.5 py-0.5 rounded-full">{commentsCount}</span>}
-          </button>
-        </div>
+{/* Reaction picker */}
+{showPicker && (
+  <div
+    onMouseEnter={() => setShowPicker(true)}
+    onMouseLeave={() => setShowPicker(false)}
+    className="
+      absolute bottom-full left-0 mb-2 flex gap-1 p-2 z-50
+      rounded-2xl backdrop-blur-xl
+
+      bg-[color:var(--loza-bg-elevated)/70]
+      border border-[color:var(--loza-border)]
+      shadow-[0_10px_30px_rgba(0,0,0,0.4)]
+    "
+  >
+    {REACTION_TYPES.map((type) => (
+      <button
+        key={type}
+        title={REACTION_LABEL[type]}
+        onClick={() => {
+          onReact(postId, type);
+          setShowPicker(false);
+        }}
+        className="
+          text-2xl p-1.5 rounded-xl
+          transition-all duration-150
+          hover:scale-125 active:scale-110
+          hover:bg-[color:var(--loza-bg-hover)]
+        "
+      >
+        {REACTION_EMOJI[type]}
+      </button>
+    ))}
+  </div>
+)}
+
+{/* ── Nút Bình luận ── */}
+<button
+  onClick={onCommentClick}
+  className={`
+    flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
+    border backdrop-blur-md transition-all duration-200 select-none
+
+    ${
+      showComments
+        ? `
+          bg-[color:var(--loza-accent)/15]
+          border-[color:var(--loza-accent)/40]
+          text-[color:var(--loza-accent-light)]
+        `
+        : `
+          bg-transparent
+          border-[color:var(--loza-border)]
+          text-[color:var(--loza-sub)]
+          hover:bg-[color:var(--loza-bg-hover)]
+          hover:border-[color:var(--loza-accent)]
+          hover:text-[color:var(--loza-text)]
+        `
+    }
+  `}
+>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+
+  <span>Bình luận</span>
+
+  {commentsCount > 0 && (
+    <span
+      className={`
+        px-1.5 py-0.5 rounded-full text-[11px] font-bold min-w-[18px]
+        text-center leading-none
+        ${
+          showComments
+            ? "bg-[color:var(--loza-accent)/25] text-[color:var(--loza-accent-light)]"
+            : "bg-[color:var(--loza-bg-hover)] text-[color:var(--loza-sub)]"
+        }
+      `}
+    >
+      {commentsCount}
+    </span>
+  )}
+</button>
       </div>
 
-      {/* Số reaction */}
+      {/* Right: tổng reaction */}
       {totalReactions > 0 && (
-        <div className="text-xs flex items-center gap-1 text-[var(--loza-muted)]">
-          <span>❤️👍😂</span>
+        <div className="flex items-center gap-1.5 text-xs text-[#4a5a70]">
+          <div className="flex -space-x-1">
+            {/* Hiện top 3 emoji reaction unique */}
+            {[...new Set(reactions.map((r) => r.type))]
+              .slice(0, 3)
+              .map((type) => (
+                <span key={type} className="text-sm">
+                  {REACTION_EMOJI[type as ReactionType]}
+                </span>
+              ))}
+          </div>
           <span>{totalReactions}</span>
         </div>
       )}

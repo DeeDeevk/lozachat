@@ -17,7 +17,7 @@ interface PostStore {
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
   
   //comment
-  addComment: (postId: string, content: string) => Promise<void>;
+  addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
   deleteComment: (postId: string, commentId: string) => Promise<void>;
   getCommentsForPost: (postId: string) => Promise<Comment[]>;
   
@@ -99,25 +99,25 @@ export const usePostStore = create<PostStore>((set, get) => ({
     }
   },
   //comment
-  addComment: async (postId, content) => {
-    try {
-      const newComment = await postService.addComment(postId, content);
-      
+  addComment: async (postId, content, parentId) => {
+  try {
+    const newComment = await postService.addComment(postId, content, parentId); // truyền thêm parentId
+
+    // Cập nhật commentsCount chỉ khi là comment gốc
+    if (!parentId) {
       set((state) => ({
         posts: state.posts.map((p) =>
-          p._id === postId
-            ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
-            : p
+          p._id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p
         ),
       }));
-
-      toast.success("Đã bình luận 👍");
-      return newComment;
-    } catch {
-      toast.error("Bình luận thất bại");
-      throw new Error("Add comment failed");
     }
-  },
+    toast.success(parentId ? "Đã trả lời" : "Đã bình luận 👍");
+    return newComment;
+  } catch {
+    toast.error(parentId ? "Trả lời thất bại" : "Bình luận thất bại");
+    throw new Error("Add comment failed");
+  }
+},
 
   deleteComment: async (postId, commentId) => {
     try {
@@ -137,7 +137,6 @@ export const usePostStore = create<PostStore>((set, get) => ({
     getCommentsForPost: async (postId) => {
     try {
       const res = await postService.getComments(postId);
-      // Bạn có thể lưu vào store nếu muốn, tạm thời return để component dùng
       return res.comments;
     } catch {
       return [];
