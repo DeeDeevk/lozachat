@@ -9,6 +9,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import ProfileModal from "./ProfileModal"
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const getInitials = (name: string) =>
@@ -37,6 +38,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const myColor = randomColor(myName);
 
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [open, setOpen] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isChat = location.pathname === "/chat";
@@ -421,12 +423,14 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                 <div className="avatar-modal-body">
                   <div className="avatar-modal-label">Tài khoản của tôi</div>
 
-                  <button className="avatar-modal-item">
+                  <button className="avatar-modal-item" onClick={() => setOpen(true)}>
                     <div className="avatar-modal-icon" style={{ background: "rgba(59,130,246,.12)" }}>
                       <User size={15} color="#60a5fa" />
                     </div>
                     Thông tin cá nhân
                   </button>
+
+                  {open && <ProfileModal onClose={() => setOpen(false)} />}
 
                   <div className="avatar-modal-divider" />
 
