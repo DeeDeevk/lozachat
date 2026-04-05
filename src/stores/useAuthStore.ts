@@ -37,6 +37,7 @@ interface AuthState {
   refresh: () => Promise<void>;
   clearState: () => void;
   setAccessToken: (accessToken: string) => void;
+  setUserProfile: (user: UserProfile) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -49,6 +50,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAccessToken: (accessToken) => {
     set({ accessToken });
   },
+
+  setUserProfile: (user) =>
+  set(() => ({
+    userProfile: user,
+  })),
 
   signIn: async (data: SignInData) => {
     set({ loading: true, error: null });

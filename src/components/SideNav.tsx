@@ -31,6 +31,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const userProfile = useAuthStore((s) => s.userProfile);
+  const setUserProfile = useAuthStore((s) => s.setUserProfile);
 
   const myName = userProfile?.displayName || "Bạn";
   const myUsername = userProfile?.username || userProfile?.email?.split("@")[0] || "user";
@@ -430,7 +431,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                     Thông tin cá nhân
                   </button>
 
-                  {open && <ProfileModal onClose={() => setOpen(false)} />}
+                  {open && (<ProfileModal 
+                    userProfile={userProfile}
+                    setUserProfile={setUserProfile}
+                    onClose={() => setOpen(false)} 
+                  />)}
 
                   <div className="avatar-modal-divider" />
 

@@ -1,12 +1,35 @@
 import { useState } from "react";
 
-export default function ProfileModal({ onClose }: { onClose: () => void }) {
+interface UserProfile {
+  _id: string;
+  username: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  bio?: string;
+  phone?: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ProfileModalProps {
+  onClose: () => void;
+  userProfile: UserProfile | null;
+  setUserProfile: (user: UserProfile) => void;
+}
+
+export default function ProfileModal({
+  onClose,
+  userProfile,
+  setUserProfile,
+}: ProfileModalProps) {
   const [isEdit, setIsEdit] = useState(false);
 
   const [form, setForm] = useState({
-    gender: "Nam",
-    dob: "04 tháng 02, 2004",
-    phone: "+84 768 558 858",
+    gender: userProfile?.bio,
+    dob: userProfile?.createdAt,
+    phone: userProfile?.phone,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -16,13 +39,18 @@ export default function ProfileModal({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const handleSave = () => {
-    console.log("Dữ liệu mới:", form);
+const handleSave = () => {
+  if (!userProfile) return;
 
-    // TODO: gọi API ở đây nếu cần
+  setUserProfile({
+    ...userProfile,
+    bio: form.gender,        
+    phone: form.phone,   
+    updatedAt: new Date().toISOString(),
+  });
 
-    setIsEdit(false);
-  };
+  setIsEdit(false);
+};
 
   return (
     <>
