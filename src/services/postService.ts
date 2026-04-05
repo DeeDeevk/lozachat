@@ -61,14 +61,37 @@ export const postService = {
     return data;
   },
   //comment
-addComment: async (postId: string, content: string, parentId?: string) => {
-  const payload = {
-    content,
-    ...(parentId !== undefined && { parentId }), 
-  };
-  const res = await axiosInstance.post(`/posts/${postId}/comments`, payload);
-  return res.data;
-},
+addComment: async (
+    postId: string,
+    content: string,
+    parentId: string | null = null,
+    files: File[] = []
+  ): Promise<any> => {
+    const formData = new FormData();
+
+    if (content?.trim()) {
+      formData.append("content", content.trim());
+    }
+    if (parentId) {
+      formData.append("parentId", parentId);
+    }
+    files.forEach((file) => {
+      formData.append("images", file);
+    });
+
+    // Debug log (bạn có thể xóa sau khi test ổn)
+    console.log("🚀 Sending comment with FormData");
+    console.log("   content:", content?.slice(0, 50) || "(chỉ ảnh)");
+    console.log("   parentId:", parentId);
+    console.log("   files:", files.length);
+
+    const { data } = await axiosInstance.post(`/posts/${postId}/comments`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },   // ← quan trọng nhất
+    });
+
+    console.log("✅ addComment success:", data);
+    return data;
+  },
 
   getComments: async (postId: string, page = 1): Promise<{ comments: Comment[]; pagination: any }> => {
     const { data } = await axiosInstance.get(`/posts/${postId}/comments`, { params: { page } });

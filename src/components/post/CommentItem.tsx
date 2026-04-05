@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import type { Comment } from "../../types/post";
@@ -28,17 +28,51 @@ export const CommentItem = ({
   const [replyContent, setReplyContent] = useState("");
   const [loadingReply, setLoadingReply] = useState(false);
 
+  //image
+  const [replyPreviews, setReplyPreviews] = useState<string[]>([]);
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
+
   const { addComment } = usePostStore();
   const isOwner = comment.author._id === currentUserId;
   const indent = Math.min(level, 3) * 20;
   const avatarSize = level === 0 ? "w-9 h-9 text-sm" : "w-7 h-7 text-xs";
 
+  const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+
+    if (replyFiles.length + newFiles.length > 4) {
+      toast.error("Tối đa 4 ảnh mỗi bình luận");
+      return;
+    }
+
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
+
+    setReplyFiles((prev) => [...prev, ...newFiles]);
+    setReplyPreviews((prev) => [...prev, ...newPreviews]);
+    e.target.value = "";
+  };
+
+  const removeReplyImage = (index: number) => {
+    URL.revokeObjectURL(replyPreviews[index]);
+    setReplyPreviews((prev) => prev.filter((_, i) => i !== index));
+    setReplyFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handlePostReply = async () => {
-    if (!replyContent.trim()) return;
+    if (!replyContent.trim() && replyFiles.length === 0) return;
+
     setLoadingReply(true);
     try {
-      await addComment(postId, replyContent, comment._id);
+      await addComment(postId, replyContent.trim(), comment._id, replyFiles);
+
+      // cleanup
+      replyPreviews.forEach((url) => URL.revokeObjectURL(url));
       setReplyContent("");
+      setReplyPreviews([]);
+      setReplyFiles([]);
       setReplying(false);
       onReplySuccess();
     } catch {
@@ -79,106 +113,173 @@ export const CommentItem = ({
               {comment.content}
             </p>
 
+            {/* ─── Hiển thị ảnh của bình luận (nếu có) ───────────────── */}
+            {comment.images && comment.images.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {comment.images.map((imgUrl, idx) => (
+                  <div
+                    key={idx}
+                    className="relative w-36 h-36 md:w-70 md:h-70 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
+                  >
+                    <img
+                      src={imgUrl}
+                      alt={`comment-img-${idx}`}
+                      className="w-full h-full object-cover cursor-pointer hover:brightness-110 transition-all"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Actions */}
-<div className="mt-2.5 flex items-center gap-1">
-  <button
-    onClick={() => setReplying(!replying)}
-    className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
-      bg-white/5 backdrop-blur-sm
-      text-[#3b8aff]
-      border border-white/10
-      hover:bg-white/10 hover:text-[#5b9fff]
-      transition-all"
-  >
-    ↩ Trả lời
-  </button>
+            <div className="mt-2.5 flex items-center gap-1">
+              <button
+                onClick={() => setReplying(!replying)}
+                className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
+                  bg-white/5 backdrop-blur-sm
+                  text-[#3b8aff]
+                  border border-white/10
+                  hover:bg-white/10 hover:text-[#5b9fff]
+                  transition-all"
+              >
+                ↩ Trả lời
+              </button>
 
-  {isOwner && (
-    <button
-      onClick={() => {
-        if (confirm("Xóa bình luận này?")) onDelete(comment._id);
-      }}
-      className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
-        bg-white/5 backdrop-blur-sm
-        text-[#e05a5a]
-        border border-white/10
-        hover:bg-red-500/10 hover:text-[#ff6b6b]
-        transition-all"
-    >
-      Xóa
-    </button>
-  )}
-</div>
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    if (confirm("Xóa bình luận này?")) onDelete(comment._id);
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
+                    bg-white/5 backdrop-blur-sm
+                    text-[#e05a5a]
+                    border border-white/10
+                    hover:bg-red-500/10 hover:text-[#ff6b6b]
+                    transition-all"
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
 
-{/* Reply input buttons */}
-{replying && (
-  <div className="mt-3 bg-white/5 backdrop-blur-md border border-[#3b6ef5]/20 rounded-xl p-3">
-    <div className="flex gap-2.5">
-      <div
-        className="w-7 h-7 rounded-full bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5]
-        flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-      >
-        U
-      </div>
+            {/* Reply input */}
+            {replying && (
+              <div className="mt-3 bg-white/5 backdrop-blur-md border border-[#3b6ef5]/20 rounded-xl p-3">
+                <div className="flex gap-2.5">
+                  <div
+                    className="w-7 h-7 rounded-full bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5]
+                    flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                  >
+                    U
+                  </div>
 
-      <div className="flex-1">
-        <textarea
-          value={replyContent}
-          onChange={(e) => setReplyContent(e.target.value)}
-          autoFocus
-          placeholder={`Trả lời ${comment.author.displayName}...`}
-          className="w-full bg-transparent text-[#e8eaf0] placeholder:text-[#3a4a60]
-            text-sm resize-none min-h-[36px] outline-none leading-relaxed"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handlePostReply();
-            }
-            if (e.key === "Escape") {
-              setReplying(false);
-              setReplyContent("");
-            }
-          }}
-          rows={2}
-        />
+                  <div className="flex-1">
+                    <textarea
+                      value={replyContent}
+                      onChange={(e) => setReplyContent(e.target.value)}
+                      autoFocus
+                      placeholder={`Trả lời ${comment.author.displayName}...`}
+                      className="w-full bg-transparent text-[#e8eaf0] placeholder:text-[#3a4a60]
+                        text-sm resize-none min-h-[36px] outline-none leading-relaxed"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handlePostReply();
+                        }
+                        if (e.key === "Escape") {
+                          setReplying(false);
+                          setReplyContent("");
+                        }
+                      }}
+                      rows={2}
+                    />
 
-        <div className="mt-2 flex gap-2">
-          <button
-            onClick={handlePostReply}
-            disabled={!replyContent.trim() || loadingReply}
-            className="px-4 py-1.5 rounded-xl text-xs font-semibold
-              bg-white/5 backdrop-blur-sm
-              text-[#3b8aff]
-              border border-white/10
-              hover:bg-white/10 hover:text-[#5b9fff]
-              disabled:opacity-40 disabled:cursor-not-allowed
-              transition-all"
-          >
-            {loadingReply ? "Đang gửi..." : "Gửi"}
-          </button>
+                    {/* Reply attach + buttons */}
+                    <div className="mt-2 flex gap-2 items-center">
+                      <button
+                        type="button"
+                        onClick={() => replyFileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold
+                          bg-white/5 border border-white/10 text-[#7a8aa8]
+                          hover:bg-white/10 hover:text-[#e8eaf0] transition-all"
+                      >
+                        📸
+                      </button>
 
-          <button
-            onClick={() => {
-              setReplying(false);
-              setReplyContent("");
-            }}
-            className="px-4 py-1.5 rounded-xl text-xs font-semibold
-              bg-white/5 backdrop-blur-sm
-              text-[#7a8aa8]
-              border border-white/10
-              hover:bg-white/10 hover:text-[#e8eaf0]
-              transition-all"
-          >
-            Huỷ
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                      <button
+                        onClick={handlePostReply}
+                        disabled={(!replyContent.trim() && replyFiles.length === 0) || loadingReply}
+                        className="px-4 py-1.5 rounded-xl text-xs font-semibold
+                          bg-white/5 backdrop-blur-sm
+                          text-[#3b8aff]
+                          border border-white/10
+                          hover:bg-white/10 hover:text-[#5b9fff]
+                          disabled:opacity-40 disabled:cursor-not-allowed
+                          transition-all"
+                      >
+                        {loadingReply ? "Đang gửi..." : "Gửi"}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setReplying(false);
+                          setReplyContent("");
+                          replyPreviews.forEach((url) => URL.revokeObjectURL(url));
+                          setReplyPreviews([]);
+                          setReplyFiles([]);
+                        }}
+                        className="px-4 py-1.5 rounded-xl text-xs font-semibold
+                          bg-white/5 backdrop-blur-sm
+                          text-[#7a8aa8]
+                          border border-white/10
+                          hover:bg-white/10 hover:text-[#e8eaf0]
+                          transition-all"
+                      >
+                        Huỷ
+                      </button>
+                    </div>
+
+                    {/* Reply image previews (smaller size) */}
+                    {replyPreviews.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {replyPreviews.map((preview, index) => (
+                          <div
+                            key={index}
+                            className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
+                          >
+                            <img
+                              src={preview}
+                              alt="preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeReplyImage(index)}
+                              className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-600"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Hidden file input for reply */}
+      <input
+        type="file"
+        ref={replyFileInputRef}
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
+        onChange={handleReplyFileSelect}
+        style={{ display: "none" }}
+      />
 
       {/* Nested replies */}
       {comment.replies && comment.replies.length > 0 && (

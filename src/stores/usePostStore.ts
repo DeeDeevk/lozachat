@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Post } from "../types/post";
 import type { ReactionType } from "../types/post";
+import type { Comment } from "../types/post";
 import { postService } from "../services/postService";
 import toast from "react-hot-toast";
 
@@ -17,7 +18,12 @@ interface PostStore {
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
   
   //comment
-  addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
+  addComment: (
+    postId: string,
+    content: string,
+    parentId?: string | null,
+    files?: File[]
+  ) => Promise<void>;
   deleteComment: (postId: string, commentId: string) => Promise<void>;
   getCommentsForPost: (postId: string) => Promise<Comment[]>;
   
@@ -98,26 +104,28 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.error("Không thể thả reaction");
     }
   },
-  //comment
-  addComment: async (postId, content, parentId) => {
-  try {
-    const newComment = await postService.addComment(postId, content, parentId); // truyền thêm parentId
+  addComment: async (postId, content, parentId = null, files = []) => {
+    try {
+      const newComment = await postService.addComment(postId, content, parentId, files);
 
-    // Cập nhật commentsCount chỉ khi là comment gốc
-    if (!parentId) {
-      set((state) => ({
-        posts: state.posts.map((p) =>
-          p._id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p
-        ),
-      }));
+      // Chỉ tăng commentsCount của Post khi là comment gốc (không phải reply)
+      if (!parentId) {
+        set((state) => ({
+          posts: state.posts.map((p) =>
+            p._id === postId
+              ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+              : p
+          ),
+        }));
+      }
+
+      toast.success(parentId ? "Đã trả lời" : "Đã bình luận 👍");
+      return newComment;
+    } catch {
+      toast.error(parentId ? "Trả lời thất bại" : "Bình luận thất bại");
+      throw new Error("Add comment failed");
     }
-    toast.success(parentId ? "Đã trả lời" : "Đã bình luận 👍");
-    return newComment;
-  } catch {
-    toast.error(parentId ? "Trả lời thất bại" : "Bình luận thất bại");
-    throw new Error("Add comment failed");
-  }
-},
+  },
 
   deleteComment: async (postId, commentId) => {
     try {
@@ -134,7 +142,8 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.error("Không thể xóa bình luận");
     }
   },
-    getCommentsForPost: async (postId) => {
+
+  getCommentsForPost: async (postId) => {
     try {
       const res = await postService.getComments(postId);
       return res.comments;

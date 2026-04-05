@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePostStore } from "../../stores/usePostStore";
 import type { Comment } from "../../types/post";
 import { CommentItem } from "./CommentItem";
@@ -44,6 +44,10 @@ export const CommentSection = ({
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  //image
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { addComment, deleteComment, getCommentsForPost } = usePostStore();
 
@@ -63,12 +67,44 @@ export const CommentSection = ({
     loadComments();
   }, [postId]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+
+    if (selectedFiles.length + newFiles.length > 4) {
+      toast.error("Tối đa 4 ảnh mỗi bình luận");
+      return;
+    }
+
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
+
+    setSelectedFiles((prev) => [...prev, ...newFiles]);
+    setImagePreviews((prev) => [...prev, ...newPreviews]);
+    e.target.value = ""; // reset input
+  };
+
+  const removeImage = (index: number) => {
+    URL.revokeObjectURL(imagePreviews[index]);
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handlePostComment = async () => {
-    if (!content.trim()) return;
+    if (!content.trim() && selectedFiles.length === 0) {
+      toast.error("Bình luận phải có nội dung hoặc ảnh");
+      return;
+    }
+
     setLoading(true);
     try {
-      await addComment(postId, content);
+      await addComment(postId, content.trim(), undefined, selectedFiles);
+      // cleanup
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
       setContent("");
+      setImagePreviews([]);
+      setSelectedFiles([]);
+
       await loadComments();
     } catch {
       toast.error("Không thể đăng bình luận");
@@ -107,20 +143,68 @@ export const CommentSection = ({
               }
             }}
           />
-          <div className="mt-2 flex gap-2">
+          
+          {/* ─── Attach button + Send ───────────────────────────────── */}
+          <div className="mt-2 flex gap-2 items-center">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2 rounded-xl text-sm font-semibold
+                bg-white/5 backdrop-blur-sm border border-white/10
+                text-[#7a8aa8] hover:bg-white/10 hover:text-[#e8eaf0]
+                transition-all flex items-center gap-1"
+            >
+              📸
+            </button>
+
             <button
               onClick={handlePostComment}
-              disabled={!content.trim() || loading}
+              disabled={(!content.trim() && selectedFiles.length === 0) || loading}
               className="px-5 py-2 rounded-xl text-sm font-semibold
-    bg-[#131f35] text-[#3b8aff] border border-white/[0.06]
-    hover:bg-[#1a2a45] hover:text-[#5b9fff]
-    disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                bg-[#131f35] text-[#3b8aff] border border-white/[0.06]
+                hover:bg-[#1a2a45] hover:text-[#5b9fff]
+                disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               {loading ? "Đang gửi..." : "Gửi"}
             </button>
           </div>
+
+          {/* ─── Image previews ─────────────────────────────────────── */}
+          {imagePreviews.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {imagePreviews.map((preview, index) => (
+                <div
+                  key={index}
+                  className="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
+                >
+                  <img
+                    src={preview}
+                    alt="preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute top-1 right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-600 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
+        onChange={handleFileSelect}
+        style={{ display: "none" }}
+      />
 
       {/* Divider */}
       <div className="my-5 border-t border-white/[0.06]" />
