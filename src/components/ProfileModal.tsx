@@ -552,6 +552,11 @@ export default function ProfileModal({
               </div>
 
               <hr className="pm-divider" />
+              {submitError && (
+                <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 8, textAlign: "right" }}>
+                  {submitError}
+                </p>
+              )}
               <button className="pm-btn-primary" onClick={handleSave}>
                 Cập nhật thông tin
               </button>
