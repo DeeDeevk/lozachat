@@ -31,6 +31,7 @@ interface UpdateProfilePayload {
 export default function ProfileModal({ onClose, userProfile, setUserProfile, myColor, myName}: ProfileModalProps) {
   const [isEdit, setIsEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [submitError, setSubmitError] = useState("");
 
   const [form, setForm] = useState({
     displayName: userProfile?.displayName ?? "",
@@ -92,7 +93,11 @@ export default function ProfileModal({ onClose, userProfile, setUserProfile, myC
 
   const handleSave = async () => {
     if (!userProfile) return;
-    if (!validate()) return;
+    if (!validate()) {
+      setSubmitError("Vui lòng kiểm tra lại thông tin đã nhập");
+      return;
+    }
+    setSubmitError("");
     try {
       const payload: UpdateProfilePayload = {};
       if (form.displayName) payload.displayName = form.displayName;
@@ -429,6 +434,12 @@ export default function ProfileModal({ onClose, userProfile, setUserProfile, myC
           </div>
 
           <hr className="pm-divider" />
+
+          {submitError && (
+            <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 8, textAlign: "right" }}>
+              {submitError}
+            </p>
+          )}
 
           <button className="pm-btn-primary" onClick={handleSave}>
             Cập nhật thông tin
