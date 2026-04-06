@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { otpService } from "@/services/otpService";
+import { changePasswordService, otpService } from "@/services/otpService";
 
 interface OtpState {
   loading: boolean;
@@ -10,6 +10,15 @@ interface OtpState {
   sendOTP: (email: string) => Promise<void>;
   verifyOTP: (email: string, otp: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
+}
+
+interface ChangePasswordState {
+  loading: boolean;
+  message: string | null;
+  error: string | null;
+
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  clearState: () => void;
 }
 
 export const useOtpStore = create<OtpState>((set) => ({
@@ -84,4 +93,42 @@ export const useOtpStore = create<OtpState>((set) => ({
       set({ loading: false });
     }
   },
+}));
+
+
+export const useChangePasswordStore = create<ChangePasswordState>((set) => ({
+  loading: false,
+  message: null,
+  error: null,
+
+  // 🔐 Change Password
+  changePassword: async (oldPassword, newPassword) => {
+    try {
+      set({ loading: true, error: null, message: null });
+
+      const msg = await changePasswordService.changePassword(
+        oldPassword,
+        newPassword
+      );
+
+      set({ message: msg, error: null });
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Đổi mật khẩu thất bại";
+
+      console.error("Lỗi change password", error);
+
+      set({ error: msg, message: null });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  clearState: () =>
+    set({
+      message: null,
+      error: null,
+    }),
 }));
