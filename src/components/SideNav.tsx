@@ -9,6 +9,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import ProfileModal from "./ProfileModal"
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const getInitials = (name: string) =>
@@ -43,6 +44,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const userProfile = useAuthStore((s) => s.userProfile);
+  const setUserProfile = useAuthStore((s) => s.setUserProfile);
 
   const myName = userProfile?.displayName || "Bạn";
   const myUsername =
@@ -51,6 +53,8 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const myColor = randomColor(myName);
 
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(userProfile?.avatarUrl ?? null);
+  const [open, setOpen] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isChat = location.pathname === "/chat";
@@ -419,37 +423,35 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
           {/* Avatar + Modal */}
           <div ref={modalRef} style={{ position: "relative" }}>
-            <button
-              className="sidenav-avatar-btn"
-              style={{ background: myColor }}
-              aria-label={`Tài khoản: ${myName}`}
-              onClick={() => setShowAvatarModal((v) => !v)}
-            >
-              {myInitials}
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <div
+                className="sidenav-avatar-btn"
+                style={{ background: userProfile?.avatarUrl ? "transparent" : myColor, overflow: "hidden", cursor: "pointer" }}
+                aria-label={`Tài khoản: ${myName}`}
+                onClick={() => setShowAvatarModal((v) => !v)}
+                role="button"
+              >
+                {userProfile?.avatarUrl
+                  ? <img src={userProfile.avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : myInitials
+                }
+              </div>
               <div className="sidenav-online-dot" />
-            </button>
+            </div>
 
             {showAvatarModal && (
               <div className="avatar-modal">
                 {/* Header */}
                 <div className="avatar-modal-header">
                   <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 13,
-                      background: myColor,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 16,
-                      fontWeight: 800,
-                      color: "white",
-                      flexShrink: 0,
-                      boxShadow: `0 4px 14px ${myColor}55`,
-                    }}
+                    className="sidenav-avatar-btn"
+                    style={{ background: userProfile?.avatarUrl ? "transparent" : myColor, width: 44, height: 44, fontSize: 16, flexShrink: 0, boxShadow: `0 4px 14px ${myColor}55` }}
                   >
-                    {myInitials}
+                    {userProfile?.avatarUrl
+                      ? <img src={userProfile.avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "20%" }} />
+                      : <span>{myInitials}</span>
+                    }
+                    <div className="sidenav-online-dot" style={{ width: 12, height: 12 }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="avatar-modal-name">{myName}</div>
@@ -461,15 +463,20 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                 <div className="avatar-modal-body">
                   <div className="avatar-modal-label">Tài khoản của tôi</div>
 
-                  <button className="avatar-modal-item">
-                    <div
-                      className="avatar-modal-icon"
-                      style={{ background: "rgba(59,130,246,.12)" }}
-                    >
+                  <button className="avatar-modal-item" onClick={() => setOpen(true)}>
+                    <div className="avatar-modal-icon" style={{ background: "rgba(59,130,246,.12)" }}>
                       <User size={15} color="#60a5fa" />
                     </div>
                     Thông tin cá nhân
                   </button>
+
+                  {open && (<ProfileModal 
+                    userProfile={userProfile}
+                    setUserProfile={setUserProfile}
+                    onClose={() => setOpen(false)} 
+                    myColor={myColor}
+                    myName={myName}
+                  />)}
 
                   <div className="avatar-modal-divider" />
 
