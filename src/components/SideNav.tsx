@@ -13,10 +13,23 @@ import ProfileModal from "./ProfileModal"
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const getInitials = (name: string) =>
-  name?.split(" ").slice(-2).map((w) => w[0]).join("").toUpperCase() || "U";
+  name
+    ?.split(" ")
+    .slice(-2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
 
 const randomColor = (str: string) => {
-  const colors = ["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#ec4899"];
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -34,7 +47,8 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const setUserProfile = useAuthStore((s) => s.setUserProfile);
 
   const myName = userProfile?.displayName || "Bạn";
-  const myUsername = userProfile?.username || userProfile?.email?.split("@")[0] || "user";
+  const myUsername =
+    userProfile?.username || userProfile?.email?.split("@")[0] || "user";
   const myInitials = getInitials(myName);
   const myColor = randomColor(myName);
 
@@ -45,12 +59,27 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
   const isChat = location.pathname === "/chat";
   const isFriends = location.pathname === "/friends";
-  const isFeed = location.pathname === "/feed";
+  const isFeed = location.pathname === "/social";
 
   const navItems = [
-    { icon: <MessageSquare size={22} />, label: "Tin nhắn", path: "/chat", active: isChat },
-    { icon: <Users size={22} />, label: "Bạn bè", path: "/friends", active: isFriends },
-    { icon: <Rss size={22} />, label: "Mạng xã hội", path: "/feed", active: isFeed },
+    {
+      icon: <MessageSquare size={22} />,
+      label: "Tin nhắn",
+      path: "/chat",
+      active: isChat,
+    },
+    {
+      icon: <Users size={22} />,
+      label: "Bạn bè",
+      path: "/friends",
+      active: isFriends,
+    },
+    {
+      icon: <Rss size={22} />,
+      label: "Mạng xã hội",
+      path: "/social",
+      active: isFeed,
+    },
   ];
 
   useEffect(() => {
@@ -376,7 +405,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
         <div className="sidenav-bottom">
           <div className="sidenav-divider" />
 
-          <button className="sidenav-item" onClick={onNewMessage} aria-label="Soạn tin nhắn mới">
+          <button
+            className="sidenav-item"
+            onClick={onNewMessage}
+            aria-label="Soạn tin nhắn mới"
+          >
             <Edit3 size={20} />
             <span className="sidenav-tooltip">Tùy chỉnh</span>
           </button>
@@ -447,8 +480,14 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
                   <div className="avatar-modal-divider" />
 
-                  <button className="avatar-modal-item danger" onClick={() => navigate("/signin")}>
-                    <div className="avatar-modal-icon" style={{ background: "rgba(239,68,68,.1)" }}>
+                  <button
+                    className="avatar-modal-item danger"
+                    onClick={() => navigate("/signin")}
+                  >
+                    <div
+                      className="avatar-modal-icon"
+                      style={{ background: "rgba(239,68,68,.1)" }}
+                    >
                       <LogOut size={15} color="#f87171" />
                     </div>
                     Đăng xuất
