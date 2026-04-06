@@ -38,10 +38,38 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     online: true,
     pinned: true,
     messages: [
-      { id: "m1", senderId: "them", text: "Bro ơi hôm nay có rảnh không?", time: "10:30", status: "read", type: "text" },
-      { id: "m2", senderId: "me", text: "Chiều mình bận họp, tối thì ok", time: "10:35", status: "read", type: "text" },
-      { id: "m3", senderId: "them", text: "Tối đi ăn lẩu không? Team mình kêu hết rồi 🔥", time: "10:40", status: "read", type: "text" },
-      { id: "m4", senderId: "me", text: "Oke bro, tối gặp nhé!", time: "10:42", status: "delivered", type: "text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Bro ơi hôm nay có rảnh không?",
+        time: "10:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Chiều mình bận họp, tối thì ok",
+        time: "10:35",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "Tối đi ăn lẩu không? Team mình kêu hết rồi 🔥",
+        time: "10:40",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "me",
+        text: "Oke bro, tối gặp nhé!",
+        time: "10:42",
+        status: "delivered",
+        type: "text",
+      },
     ],
   },
   {
@@ -54,9 +82,30 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     unread: 1,
     online: true,
     messages: [
-      { id: "m1", senderId: "them", text: "Hey, design sprint tuần này bắt đầu từ thứ 2 nha", time: "09:00", status: "read", type: "text" },
-      { id: "m2", senderId: "me", text: "Ok mình sẽ chuẩn bị wireframe trước", time: "09:05", status: "read", type: "text" },
-      { id: "m3", senderId: "them", text: "Bạn đã gửi file design mới chưa?", time: "09:15", status: "read", type: "text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Hey, design sprint tuần này bắt đầu từ thứ 2 nha",
+        time: "09:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Ok mình sẽ chuẩn bị wireframe trước",
+        time: "09:05",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "Bạn đã gửi file design mới chưa?",
+        time: "09:15",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
@@ -69,10 +118,38 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     unread: 12,
     online: false,
     messages: [
-      { id: "m1", senderId: "them", text: "CI/CD pipeline fail rồi anh ơi 😭", time: "Yesterday 18:00", status: "read", type: "text" },
-      { id: "m2", senderId: "me", text: "Mình check thử, lỗi ở bước build Docker", time: "Yesterday 18:10", status: "read", type: "text" },
-      { id: "m3", senderId: "them2", text: "Fix rồi, do thiếu env variable thôi", time: "Yesterday 18:30", status: "read", type: "text" },
-      { id: "m4", senderId: "them", text: "Lê Bảo: Pushed hotfix lên prod rồi!", time: "Yesterday 19:00", status: "read", type: "text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "CI/CD pipeline fail rồi anh ơi 😭",
+        time: "Yesterday 18:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Mình check thử, lỗi ở bước build Docker",
+        time: "Yesterday 18:10",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them2",
+        text: "Fix rồi, do thiếu env variable thôi",
+        time: "Yesterday 18:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "them",
+        text: "Lê Bảo: Pushed hotfix lên prod rồi!",
+        time: "Yesterday 19:00",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
@@ -85,10 +162,38 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     unread: 0,
     online: false,
     messages: [
-      { id: "m1", senderId: "me", text: "Bro review PR của mình được không?", time: "Yesterday 14:00", status: "read", type: "text" },
-      { id: "m2", senderId: "them", text: "Để tao xem... ok lgtm, merge đi", time: "Yesterday 14:30", status: "read", type: "text" },
-      { id: "m3", senderId: "me", text: "Cảm ơn bro nhiều!", time: "Yesterday 14:32", status: "read", type: "text" },
-      { id: "m4", senderId: "them", text: "Tks bro 🙏", time: "Yesterday 14:33", status: "read", type: "text" },
+      {
+        id: "m1",
+        senderId: "me",
+        text: "Bro review PR của mình được không?",
+        time: "Yesterday 14:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "them",
+        text: "Để tao xem... ok lgtm, merge đi",
+        time: "Yesterday 14:30",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "me",
+        text: "Cảm ơn bro nhiều!",
+        time: "Yesterday 14:32",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m4",
+        senderId: "them",
+        text: "Tks bro 🙏",
+        time: "Yesterday 14:33",
+        status: "read",
+        type: "text",
+      },
     ],
   },
   {
@@ -101,9 +206,30 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     unread: 0,
     online: true,
     messages: [
-      { id: "m1", senderId: "them", text: "Cuối tuần đi cà phê không?", time: "Monday 11:00", status: "read", type: "text" },
-      { id: "m2", senderId: "me", text: "Được nha, quán nào?", time: "Monday 11:05", status: "read", type: "text" },
-      { id: "m3", senderId: "them", text: "[Hình ảnh]", time: "Monday 11:10", status: "read", type: "image" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Cuối tuần đi cà phê không?",
+        time: "Monday 11:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Được nha, quán nào?",
+        time: "Monday 11:05",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m3",
+        senderId: "them",
+        text: "[Hình ảnh]",
+        time: "Monday 11:10",
+        status: "read",
+        type: "image",
+      },
     ],
   },
   {
@@ -116,8 +242,22 @@ const FAKE_CONVERSATIONS: Conversation[] = [
     unread: 0,
     online: false,
     messages: [
-      { id: "m1", senderId: "them", text: "Meeting lúc 3h chiều nha", time: "Monday 09:00", status: "read", type: "text" },
-      { id: "m2", senderId: "me", text: "Ok, mình sẽ có mặt", time: "Monday 09:01", status: "read", type: "text" },
+      {
+        id: "m1",
+        senderId: "them",
+        text: "Meeting lúc 3h chiều nha",
+        time: "Monday 09:00",
+        status: "read",
+        type: "text",
+      },
+      {
+        id: "m2",
+        senderId: "me",
+        text: "Ok, mình sẽ có mặt",
+        time: "Monday 09:01",
+        status: "read",
+        type: "text",
+      },
     ],
   },
 ];
@@ -129,7 +269,8 @@ export default function ChatPage() {
   const myId = "me";
   const myName = userProfile?.displayName || "Bạn";
 
-  const [conversations, setConversations] = useState<Conversation[]>(FAKE_CONVERSATIONS);
+  const [conversations, setConversations] =
+    useState<Conversation[]>(FAKE_CONVERSATIONS);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [showEmojiHint, setShowEmojiHint] = useState(false);
@@ -171,14 +312,23 @@ export default function ChatPage() {
       id: `m${Date.now()}`,
       senderId: myId,
       text: inputText.trim(),
-      time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      time: new Date().toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       status: "sent",
       type: "text",
     };
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeId
-          ? ({ ...c, messages: [...c.messages, newMsg], lastMessage: newMsg.text, time: newMsg.time, unread: 0 } as Conversation)
+          ? ({
+              ...c,
+              messages: [...c.messages, newMsg],
+              lastMessage: newMsg.text,
+              time: newMsg.time,
+              unread: 0,
+            } as Conversation)
           : c,
       ),
     );
@@ -194,7 +344,9 @@ export default function ChatPage() {
   };
 
   const markRead = (id: string) => {
-    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)));
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
+    );
   };
 
   const selectConversation = (id: string) => {
@@ -205,7 +357,20 @@ export default function ChatPage() {
   // Back: set activeId null → mobile returns to SideNav + ConvList
   const handleBack = () => setActiveId(null);
 
-  const emojis = ["😂", "❤️", "👍", "😍", "🔥", "😭", "🙏", "💯", "😊", "🤣", "😅", "👀"];
+  const emojis = [
+    "😂",
+    "❤️",
+    "👍",
+    "😍",
+    "🔥",
+    "😭",
+    "🙏",
+    "💯",
+    "😊",
+    "🤣",
+    "😅",
+    "👀",
+  ];
 
   return (
     <div
@@ -383,8 +548,7 @@ export default function ChatPage() {
 
       {/* ── SideNav ──────────────────────────────────────────────────────── */}
       {/* On mobile: hide when chat is open */}
-        <SideNav onNewMessage={() => {}} />
-      
+      <SideNav onNewMessage={() => {}} />
 
       {/* ── ConversationList ─────────────────────────────────────────────── */}
       {/* On mobile: hide when chat is open; always isOpen=true (no overlay mode) */}
@@ -442,37 +606,63 @@ export default function ChatPage() {
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <div
                   style={{
-                    width: 42, height: 42, borderRadius: 13,
+                    width: 42,
+                    height: 42,
+                    borderRadius: 13,
                     background: activeConv.avatarColor,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 13, fontWeight: 700, color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "white",
                     boxShadow: `0 4px 14px ${activeConv.avatarColor}44`,
                   }}
                 >
                   {activeConv.avatar}
                 </div>
                 {activeConv.online && (
-                  <div className="online-dot" style={{ position: "absolute", bottom: -1, right: -1 }} />
+                  <div
+                    className="online-dot"
+                    style={{ position: "absolute", bottom: -1, right: -1 }}
+                  />
                 )}
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "white" }}>{activeConv.name}</div>
-                <div style={{ fontSize: 12, color: activeConv.online ? "#10b981" : "#475569" }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "white" }}>
+                  {activeConv.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: activeConv.online ? "#10b981" : "#475569",
+                  }}
+                >
                   {activeConv.online ? "● Đang hoạt động" : "Offline"}
                 </div>
               </div>
 
               <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                <button className="icon-btn" aria-label="Gọi điện"><Phone size={17} /></button>
-                <button className="icon-btn" aria-label="Video call"><Video size={17} /></button>
-                <button className="icon-btn" aria-label="Tìm kiếm"><Search size={17} /></button>
+                <button className="icon-btn" aria-label="Gọi điện">
+                  <Phone size={17} />
+                </button>
+                <button className="icon-btn" aria-label="Video call">
+                  <Video size={17} />
+                </button>
+                <button className="icon-btn" aria-label="Tìm kiếm">
+                  <Search size={17} />
+                </button>
                 <button
                   className={`panel-toggle-btn ${showRightPanel ? "panel-on" : "panel-off"}`}
                   onClick={() => setShowRightPanel((v) => !v)}
                   aria-label="Bật/tắt thông tin"
                 >
-                  {showRightPanel ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
+                  {showRightPanel ? (
+                    <PanelRightClose size={17} />
+                  ) : (
+                    <PanelRightOpen size={17} />
+                  )}
                 </button>
               </div>
             </div>
@@ -480,22 +670,56 @@ export default function ChatPage() {
             {/* ── Messages ── */}
             <div
               style={{
-                flex: 1, overflowY: "auto", padding: "24px 20px",
-                display: "flex", flexDirection: "column", gap: 6,
+                flex: 1,
+                overflowY: "auto",
+                padding: "24px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
                 background: "linear-gradient(180deg,#060d1f 0%,#080f1e 100%)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0 16px" }}>
-                <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,.05)" }} />
-                <span style={{ color: "#475569", fontSize: 11, fontWeight: 500, background: "#060d1f", padding: "0 12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  margin: "8px 0 16px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: "rgba(255,255,255,.05)",
+                  }}
+                />
+                <span
+                  style={{
+                    color: "#475569",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    background: "#060d1f",
+                    padding: "0 12px",
+                  }}
+                >
                   Hôm nay
                 </span>
-                <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,.05)" }} />
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: "rgba(255,255,255,.05)",
+                  }}
+                />
               </div>
 
               {activeConv.messages.map((msg, i) => {
                 const isMe = msg.senderId === myId;
-                const showAvatar = !isMe && (i === 0 || activeConv.messages[i - 1]?.senderId !== msg.senderId);
+                const showAvatar =
+                  !isMe &&
+                  (i === 0 ||
+                    activeConv.messages[i - 1]?.senderId !== msg.senderId);
                 return (
                   <div
                     key={msg.id}
@@ -504,7 +728,11 @@ export default function ChatPage() {
                       justifyContent: isMe ? "flex-end" : "flex-start",
                       alignItems: "flex-end",
                       gap: 8,
-                      marginTop: i > 0 && activeConv.messages[i - 1]?.senderId !== msg.senderId ? 12 : 2,
+                      marginTop:
+                        i > 0 &&
+                        activeConv.messages[i - 1]?.senderId !== msg.senderId
+                          ? 12
+                          : 2,
                     }}
                   >
                     {!isMe && (
@@ -512,10 +740,16 @@ export default function ChatPage() {
                         {showAvatar && (
                           <div
                             style={{
-                              width: 28, height: 28, borderRadius: 9,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 9,
                               background: activeConv.avatarColor,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 10, fontWeight: 700, color: "white",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: "white",
                             }}
                           >
                             {activeConv.avatar}
@@ -525,21 +759,37 @@ export default function ChatPage() {
                     )}
                     <div
                       style={{
-                        display: "flex", flexDirection: "column",
+                        display: "flex",
+                        flexDirection: "column",
                         alignItems: isMe ? "flex-end" : "flex-start",
-                        gap: 2, maxWidth: "70%",
+                        gap: 2,
+                        maxWidth: "70%",
                       }}
                     >
-                      <div className={isMe ? "msg-bubble-me" : "msg-bubble-them"}>{msg.text}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px" }}>
-                        <span style={{ color: "#475569", fontSize: 10 }}>{msg.time}</span>
-                        {isMe && (
-                          msg.status === "read"
-                            ? <CheckCheck size={12} color="#3b82f6" />
-                            : msg.status === "delivered"
-                            ? <CheckCheck size={12} color="#64748b" />
-                            : <Check size={12} color="#64748b" />
-                        )}
+                      <div
+                        className={isMe ? "msg-bubble-me" : "msg-bubble-them"}
+                      >
+                        {msg.text}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "0 4px",
+                        }}
+                      >
+                        <span style={{ color: "#475569", fontSize: 10 }}>
+                          {msg.time}
+                        </span>
+                        {isMe &&
+                          (msg.status === "read" ? (
+                            <CheckCheck size={12} color="#3b82f6" />
+                          ) : msg.status === "delivered" ? (
+                            <CheckCheck size={12} color="#64748b" />
+                          ) : (
+                            <Check size={12} color="#64748b" />
+                          ))}
                       </div>
                     </div>
                   </div>
@@ -547,23 +797,43 @@ export default function ChatPage() {
               })}
 
               {activeConv.online && (
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
                   <div
                     style={{
-                      width: 28, height: 28, borderRadius: 9,
+                      width: 28,
+                      height: 28,
+                      borderRadius: 9,
                       background: activeConv.avatarColor,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 10, fontWeight: 700, color: "white", flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "white",
+                      flexShrink: 0,
                     }}
                   >
                     {activeConv.avatar}
                   </div>
-                  <div className="msg-bubble-them" style={{ padding: "10px 16px", display: "flex", gap: 5 }}>
+                  <div
+                    className="msg-bubble-them"
+                    style={{ padding: "10px 16px", display: "flex", gap: 5 }}
+                  >
                     {[0, 0.2, 0.4].map((d, idx) => (
                       <div
                         key={idx}
                         style={{
-                          width: 6, height: 6, borderRadius: "50%", background: "#60a5fa",
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#60a5fa",
                           animation: `typingDot .8s ${d}s ease-in-out infinite`,
                         }}
                       />
@@ -586,11 +856,14 @@ export default function ChatPage() {
               {showEmojiHint && (
                 <div
                   style={{
-                    display: "flex", flexWrap: "wrap", gap: 4,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 4,
                     padding: "10px 14px",
                     background: "rgba(15,23,42,.95)",
                     border: "2px solid rgba(255,255,255,.07)",
-                    borderRadius: 14, marginBottom: 10,
+                    borderRadius: 14,
+                    marginBottom: 10,
                     animation: "popIn .2s cubic-bezier(.22,1,.36,1)",
                   }}
                 >
@@ -598,7 +871,11 @@ export default function ChatPage() {
                     <span
                       key={e}
                       className="emoji-btn"
-                      onClick={() => { setInputText((t) => t + e); setShowEmojiHint(false); inputRef.current?.focus(); }}
+                      onClick={() => {
+                        setInputText((t) => t + e);
+                        setShowEmojiHint(false);
+                        inputRef.current?.focus();
+                      }}
                     >
                       {e}
                     </span>
@@ -607,16 +884,27 @@ export default function ChatPage() {
               )}
               <div
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                   background: "rgba(15,23,42,.9)",
                   border: "2px solid rgba(255,255,255,.07)",
-                  borderRadius: 16, padding: "8px 8px 8px 14px",
+                  borderRadius: 16,
+                  padding: "8px 8px 8px 14px",
                 }}
               >
-                <button className="icon-btn" style={{ width: 30, height: 30, borderRadius: 8 }} aria-label="Đính kèm">
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Đính kèm"
+                >
                   <Paperclip size={16} />
                 </button>
-                <button className="icon-btn" style={{ width: 30, height: 30, borderRadius: 8 }} aria-label="Hình ảnh">
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Hình ảnh"
+                >
                   <Image size={16} />
                 </button>
                 <input
@@ -635,7 +923,11 @@ export default function ChatPage() {
                 >
                   <Smile size={16} />
                 </button>
-                <button className="icon-btn" style={{ width: 30, height: 30, borderRadius: 8 }} aria-label="Ghi âm">
+                <button
+                  className="icon-btn"
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  aria-label="Ghi âm"
+                >
                   <Mic size={16} />
                 </button>
                 <button
@@ -646,7 +938,14 @@ export default function ChatPage() {
                   <Send size={16} />
                 </button>
               </div>
-              <p style={{ textAlign: "center", color: "#334155", fontSize: 10, marginTop: 8 }}>
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#334155",
+                  fontSize: 10,
+                  marginTop: 8,
+                }}
+              >
                 Nhấn Enter để gửi • Shift+Enter để xuống dòng
               </p>
             </div>
@@ -655,16 +954,25 @@ export default function ChatPage() {
           /* ── WELCOME SCREEN (desktop only; hidden on mobile via .no-chat) ── */
           <div
             style={{
-              flex: 1, display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              background: "linear-gradient(160deg,#060d1f 0%,#080f1e 60%,#060d1f 100%)",
-              position: "relative", overflow: "hidden", padding: "40px 24px",
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background:
+                "linear-gradient(160deg,#060d1f 0%,#080f1e 60%,#060d1f 100%)",
+              position: "relative",
+              overflow: "hidden",
+              padding: "40px 24px",
             }}
           >
             <div
               style={{
-                position: "absolute", inset: 0, pointerEvents: "none",
-                background: "radial-gradient(ellipse at 30% 40%,rgba(37,99,235,.1) 0%,transparent 55%), radial-gradient(ellipse at 75% 65%,rgba(99,102,241,.07) 0%,transparent 50%)",
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                background:
+                  "radial-gradient(ellipse at 30% 40%,rgba(37,99,235,.1) 0%,transparent 55%), radial-gradient(ellipse at 75% 65%,rgba(99,102,241,.07) 0%,transparent 50%)",
               }}
             />
 
@@ -679,37 +987,104 @@ export default function ChatPage() {
               <div
                 key={i}
                 style={{
-                  position: "absolute", borderRadius: "50%",
-                  width: p.s, height: p.s, background: p.c,
-                  top: p.t, left: p.l, right: p.r, opacity: 0.4,
+                  position: "absolute",
+                  borderRadius: "50%",
+                  width: p.s,
+                  height: p.s,
+                  background: p.c,
+                  top: p.t,
+                  left: p.l,
+                  right: p.r,
+                  opacity: 0.4,
                   animation: `wdot 3s ${i * 0.4}s ease-in-out infinite`,
                 }}
               />
             ))}
 
-            <div className="w-float w-fade-1" style={{ marginBottom: 36, position: "relative", zIndex: 2 }}>
+            <div
+              className="w-float w-fade-1"
+              style={{ marginBottom: 36, position: "relative", zIndex: 2 }}
+            >
               <img
-                src="/miku.png"
+                src="/icon.png"
                 alt="Welcome"
-                style={{ width: 440, height: 200, objectFit: "contain", filter: "drop-shadow(0 10px 30px rgba(99,102,241,0.4))" }}
+                style={{
+                  width: 440,
+                  height: 200,
+                  objectFit: "contain",
+                  filter: "drop-shadow(0 10px 30px rgba(99,102,241,0.4))",
+                }}
               />
             </div>
 
-            <div style={{ textAlign: "center", position: "relative", zIndex: 2, maxWidth: 520 }}>
-              <p className="w-fade-2" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: "#3b82f6", marginBottom: 10 }}>
+            <div
+              style={{
+                textAlign: "center",
+                position: "relative",
+                zIndex: 2,
+                maxWidth: 520,
+              }}
+            >
+              <p
+                className="w-fade-2"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  color: "#3b82f6",
+                  marginBottom: 10,
+                }}
+              >
                 ✦ Chào mừng đến với
               </p>
-              <h1 className="w-fade-2 w-shine" style={{ fontSize: "3rem", fontWeight: 800, letterSpacing: "-1px", lineHeight: 1.08, marginBottom: 12 }}>
+              <h1
+                className="w-fade-2 w-shine"
+                style={{
+                  fontSize: "3rem",
+                  fontWeight: 800,
+                  letterSpacing: "-1px",
+                  lineHeight: 1.08,
+                  marginBottom: 12,
+                }}
+              >
                 Loza
               </h1>
-              <h2 className="w-fade-3" style={{ fontSize: "1.15rem", fontWeight: 600, color: "#e2e8f0", marginBottom: 10, lineHeight: 1.4 }}>
+              <h2
+                className="w-fade-3"
+                style={{
+                  fontSize: "1.15rem",
+                  fontWeight: 600,
+                  color: "#e2e8f0",
+                  marginBottom: 10,
+                  lineHeight: 1.4,
+                }}
+              >
                 Chào {myName} 👋, sẵn sàng chưa?
               </h2>
-              <p className="w-fade-3" style={{ fontSize: 14, color: "#64748b", lineHeight: 1.8, marginBottom: 28 }}>
-                Kết nối và tận hưởng những cuộc trò chuyện thú vị.<br />
+              <p
+                className="w-fade-3"
+                style={{
+                  fontSize: 14,
+                  color: "#64748b",
+                  lineHeight: 1.8,
+                  marginBottom: 28,
+                }}
+              >
+                Kết nối và tận hưởng những cuộc trò chuyện thú vị.
+                <br />
                 Mỗi tin nhắn là một cầu nối — hãy bắt đầu ngay hôm nay.
               </p>
-              <div className="w-fade-4" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 28 }}>
+              <div
+                className="w-fade-4"
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  marginBottom: 28,
+                }}
+              >
                 {[
                   { icon: "🔒", text: "Mã hóa đầu cuối" },
                   { icon: "⚡", text: "Siêu nhanh" },
@@ -718,27 +1093,60 @@ export default function ChatPage() {
                   <div
                     key={f.text}
                     style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      background: "rgba(15,23,42,.9)", border: "2px solid rgba(255,255,255,.07)",
-                      borderRadius: 100, padding: "6px 14px", fontSize: 12, color: "#94a3b8", fontWeight: 500,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(15,23,42,.9)",
+                      border: "2px solid rgba(255,255,255,.07)",
+                      borderRadius: 100,
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      color: "#94a3b8",
+                      fontWeight: 500,
                     }}
                   >
-                    <span>{f.icon}</span>{f.text}
+                    <span>{f.icon}</span>
+                    {f.text}
                   </div>
                 ))}
               </div>
-              <div className="w-fade-4" style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <div
+                className="w-fade-4"
+                style={{ display: "flex", gap: 10, justifyContent: "center" }}
+              >
                 <button
-                  onClick={() => { if (conversations.length > 0) selectConversation(conversations[0].id); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    background: "linear-gradient(135deg,#2563eb,#3b82f6)", border: "none",
-                    borderRadius: 12, padding: "11px 24px", color: "white",
-                    fontWeight: 600, fontSize: 14, cursor: "pointer",
-                    boxShadow: "0 4px 18px rgba(37,99,235,.4)", transition: "all .2s", fontFamily: "inherit",
+                  onClick={() => {
+                    if (conversations.length > 0)
+                      selectConversation(conversations[0].id);
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 24px rgba(37,99,235,.5)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 18px rgba(37,99,235,.4)"; }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "linear-gradient(135deg,#2563eb,#3b82f6)",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "11px 24px",
+                    color: "white",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 18px rgba(37,99,235,.4)",
+                    transition: "all .2s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.transform =
+                      "translateY(-2px)";
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                      "0 8px 24px rgba(37,99,235,.5)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.transform =
+                      "translateY(0)";
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                      "0 4px 18px rgba(37,99,235,.4)";
+                  }}
                 >
                   <MessageSquare size={15} />
                   Bắt đầu trò chuyện
@@ -750,74 +1158,183 @@ export default function ChatPage() {
       </div>
 
       {/* ── Right Info Panel ────────────────────────────────────────────── */}
-      <div className={`right-panel ${activeConv && showRightPanel ? "visible" : "hidden"}`}>
+      <div
+        className={`right-panel ${activeConv && showRightPanel ? "visible" : "hidden"}`}
+      >
         {activeConv && showRightPanel && (
           <>
-            <div className="profile-section" style={{ padding: "28px 20px 20px", textAlign: "center" }}>
-              <div style={{ position: "relative", display: "inline-block", marginBottom: 14 }}>
+            <div
+              className="profile-section"
+              style={{ padding: "28px 20px 20px", textAlign: "center" }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  marginBottom: 14,
+                }}
+              >
                 <div
                   style={{
-                    width: 72, height: 72, borderRadius: 22,
+                    width: 72,
+                    height: 72,
+                    borderRadius: 22,
                     background: activeConv.avatarColor,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 24, fontWeight: 800, color: "white", margin: "0 auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
+                    fontWeight: 800,
+                    color: "white",
+                    margin: "0 auto",
                     boxShadow: `0 8px 28px ${activeConv.avatarColor}55`,
                   }}
                 >
                   {activeConv.avatar}
                 </div>
                 {activeConv.online && (
-                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 17, height: 17, borderRadius: "50%", background: "#10b981", border: "2.5px solid #080e1d" }} />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: -2,
+                      right: -2,
+                      width: 17,
+                      height: 17,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      border: "2.5px solid #080e1d",
+                    }}
+                  />
                 )}
               </div>
-              <h3 style={{ fontWeight: 700, fontSize: 15, color: "white", marginBottom: 4 }}>{activeConv.name}</h3>
-              <p style={{ color: activeConv.online ? "#10b981" : "#475569", fontSize: 12, marginBottom: 16 }}>
+              <h3
+                style={{
+                  fontWeight: 700,
+                  fontSize: 15,
+                  color: "white",
+                  marginBottom: 4,
+                }}
+              >
+                {activeConv.name}
+              </h3>
+              <p
+                style={{
+                  color: activeConv.online ? "#10b981" : "#475569",
+                  fontSize: 12,
+                  marginBottom: 16,
+                }}
+              >
                 {activeConv.online ? "● Đang hoạt động" : "Offline"}
               </p>
-              <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+              <div
+                style={{ display: "flex", justifyContent: "center", gap: 10 }}
+              >
                 {[
                   { icon: <Phone size={16} />, label: "Gọi" },
                   { icon: <Video size={16} />, label: "Video" },
                   { icon: <Search size={16} />, label: "Tìm" },
                 ].map((a) => (
-                  <button key={a.label} className="profile-action-btn">{a.icon}{a.label}</button>
+                  <button key={a.label} className="profile-action-btn">
+                    {a.icon}
+                    {a.label}
+                  </button>
                 ))}
               </div>
             </div>
 
             <div className="profile-section">
-              <p style={{ color: "#475569", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 12,
+                }}
+              >
                 Thông tin
               </p>
               {[
-                { label: "Tên đăng nhập", value: `@${activeConv.name.split(" ").pop()?.toLowerCase()}` },
+                {
+                  label: "Tên đăng nhập",
+                  value: `@${activeConv.name.split(" ").pop()?.toLowerCase()}`,
+                },
                 { label: "Tham gia", value: "01/2024" },
-                { label: "Tin nhắn chung", value: `${activeConv.messages.length} tin` },
+                {
+                  label: "Tin nhắn chung",
+                  value: `${activeConv.messages.length} tin`,
+                },
               ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ color: "#64748b", fontSize: 12 }}>{row.label}</span>
-                  <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 500 }}>{row.value}</span>
+                <div
+                  key={row.label}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                  }}
+                >
+                  <span style={{ color: "#64748b", fontSize: 12 }}>
+                    {row.label}
+                  </span>
+                  <span
+                    style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 500 }}
+                  >
+                    {row.value}
+                  </span>
                 </div>
               ))}
             </div>
 
             <div className="profile-section" style={{ borderBottom: "none" }}>
-              <p style={{ color: "#475569", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+              <p
+                style={{
+                  color: "#475569",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 12,
+                }}
+              >
                 File & Media
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-                {["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4"].map((c, i) => (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3,1fr)",
+                  gap: 6,
+                }}
+              >
+                {[
+                  "#3b82f6",
+                  "#10b981",
+                  "#8b5cf6",
+                  "#f59e0b",
+                  "#ef4444",
+                  "#06b6d4",
+                ].map((c, i) => (
                   <div
                     key={i}
                     style={{
-                      aspectRatio: "1", borderRadius: 10,
+                      aspectRatio: "1",
+                      borderRadius: 10,
                       background: `linear-gradient(135deg,${c}33,${c}66)`,
                       border: `2px solid ${c}30`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      cursor: "pointer", transition: "transform .18s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      transition: "transform .18s",
                     }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.transform = "scale(1.06)")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.transform = "scale(1)")}
+                    onMouseEnter={(e) =>
+                      ((e.currentTarget as HTMLDivElement).style.transform =
+                        "scale(1.06)")
+                    }
+                    onMouseLeave={(e) =>
+                      ((e.currentTarget as HTMLDivElement).style.transform =
+                        "scale(1)")
+                    }
                   >
                     <Image size={16} color={c} />
                   </div>
@@ -825,12 +1342,26 @@ export default function ChatPage() {
               </div>
               <button
                 style={{
-                  width: "100%", marginTop: 12, padding: "8px 0", borderRadius: 10,
-                  background: "rgba(20,30,50,.9)", border: "2px solid rgba(255,255,255,.07)",
-                  color: "#64748b", fontSize: 12, cursor: "pointer", transition: "all .2s", fontFamily: "inherit",
+                  width: "100%",
+                  marginTop: 12,
+                  padding: "8px 0",
+                  borderRadius: 10,
+                  background: "rgba(20,30,50,.9)",
+                  border: "2px solid rgba(255,255,255,.07)",
+                  color: "#64748b",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  transition: "all .2s",
+                  fontFamily: "inherit",
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#60a5fa"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#60a5fa";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#64748b";
+                }}
               >
                 Xem tất cả →
               </button>
@@ -838,12 +1369,29 @@ export default function ChatPage() {
 
             <div style={{ padding: "8px 16px 16px", marginTop: "auto" }}>
               {[
-                { icon: <Bell size={13} />, label: "Tắt thông báo", color: "#94a3b8" },
-                { icon: <Archive size={13} />, label: "Lưu trữ", color: "#94a3b8" },
-                { icon: <Trash2 size={13} />, label: "Xóa cuộc trò chuyện", color: "#f87171" },
+                {
+                  icon: <Bell size={13} />,
+                  label: "Tắt thông báo",
+                  color: "#94a3b8",
+                },
+                {
+                  icon: <Archive size={13} />,
+                  label: "Lưu trữ",
+                  color: "#94a3b8",
+                },
+                {
+                  icon: <Trash2 size={13} />,
+                  label: "Xóa cuộc trò chuyện",
+                  color: "#f87171",
+                },
               ].map((item) => (
-                <button key={item.label} className="danger-btn" style={{ color: item.color }}>
-                  {item.icon}{item.label}
+                <button
+                  key={item.label}
+                  className="danger-btn"
+                  style={{ color: item.color }}
+                >
+                  {item.icon}
+                  {item.label}
                 </button>
               ))}
             </div>
