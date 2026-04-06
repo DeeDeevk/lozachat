@@ -22,3 +22,14 @@ export const otpService = {
     return res.data.message;
   },
 };
+
+export const changePasswordService = {
+  // 🔐 Đổi mật khẩu
+  async changePassword(oldPassword: string, newPassword: string) {
+    const res = await api.post("/users/change-password", {
+      oldPassword,
+      newPassword,
+    });
+    return res.data.message;
+  },
+};
