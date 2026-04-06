@@ -39,6 +39,8 @@ export default function ProfileModal({ onClose, userProfile, setUserProfile, myC
   });
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(userProfile?.avatarUrl ?? null);
+  const [errors, setErrors] = useState<{ phone?: string }>({});
+
 
   const getInitials = (name: string) =>
     name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -77,8 +79,20 @@ export default function ProfileModal({ onClose, userProfile, setUserProfile, myC
       }
   };
 
+  const validate = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    if (form.phone && !/^(0[3|5|7|8|9])+([0-9]{8})$/.test(form.phone)) {
+      newErrors.phone = "Số điện thoại không hợp lệ";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
     if (!userProfile) return;
+    if (!validate()) return;
     try {
       const payload: UpdateProfilePayload = {};
       if (form.displayName) payload.displayName = form.displayName;
