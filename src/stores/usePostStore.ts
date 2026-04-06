@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Post } from "../types/post";
+import type { Post, Visibility } from "../types/post";
 import type { ReactionType } from "../types/post";
 import type { Comment } from "../types/post";
 import { postService } from "../services/postService";
@@ -12,7 +12,7 @@ interface PostStore {
   page: number;
   fetchPosts: (reset?: boolean) => Promise<void>;
   loadMore: () => void;
-  createPost: (content: string, images?: File[]) => Promise<void>;
+  createPost: (content: string, images?: File[], visibility?: Visibility) => Promise<void>;
   updatePost: (id: string, content: string, newImages?: File[], removeImages?: string[]) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
@@ -40,8 +40,20 @@ export const usePostStore = create<PostStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await postService.getPosts(currentPage);
+      
+      let newPosts = res.posts;
+
+      // Logic xoay vòng bài viết khi reload (reset)
+      if (reset && newPosts.length > 0) {
+        // Lấy một điểm cắt ngẫu nhiên hoặc cố định (ví dụ: lấy 5 bài đầu chuyển xuống cuối)
+        const pivot = Math.floor(Math.random() * newPosts.length);
+        const head = newPosts.slice(0, pivot);
+        const tail = newPosts.slice(pivot);
+        newPosts = [...tail, ...head];
+      }
+
       set((state) => ({
-        posts: reset ? res.posts : [...state.posts, ...res.posts],
+        posts: reset ? newPosts : [...state.posts, ...newPosts],
         hasMore: res.pagination.hasMore,
         page: currentPage,
         loading: false,
@@ -50,7 +62,7 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.error("Không thể tải bài viết");
       set({ loading: false });
     }
-  },
+},
 
   loadMore: () => {
     const { loading, hasMore, page } = get();
@@ -60,14 +72,15 @@ export const usePostStore = create<PostStore>((set, get) => ({
     }
   },
 
-  createPost: async (content, images = []) => {
+
+  // Trong implementation của createPost
+  createPost: async (content, images = [], visibility = "public") => {
     try {
-      const post = await postService.createPost(content, images);
+      const post = await postService.createPost(content, images, visibility); // Đã có tham số này trong service của bạn
       set((state) => ({ posts: [post, ...state.posts] }));
       toast.success("Đã đăng bài viết!");
     } catch {
       toast.error("Đăng bài thất bại!");
-      throw new Error("Create post failed");
     }
   },
 

@@ -3,6 +3,8 @@ import { CreatePost } from "../components/post/CreatePost";
 import { PostCard } from "../components/post/PostCard";
 import { useFeedPosts } from "../hook/usePost";
 import { useAuthStore } from "@/stores/useAuthStore";
+import SideNav from "../components/SideNav"; // Import SideNav
+import { Bell, Search as SearchIcon } from "lucide-react";
 
 export const SocialPage = () => {
   const { posts, loading, hasMore, loadMore, deletePost, reactToPost } = useFeedPosts();
@@ -30,287 +32,162 @@ export const SocialPage = () => {
     .split(" ").map((w: string) => w[0]).slice(-2).join("").toUpperCase();
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--loza-bg-base)" }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: "#060d1f" }}>
+      {/* ── SideNav cố định bên trái ── */}
+      <SideNav />
 
-      <header
-        className="sticky top-0 z-40"
-        style={{
-          borderBottom: "1px solid var(--loza-border)",
-          background: "color-mix(in srgb, var(--loza-bg-base) 85%, transparent)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-        }}
-      >
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{
-                background: "var(--loza-accent)",
-                boxShadow: "0 0 12px var(--loza-accent-glow)",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                <path d="M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2z" />
-              </svg>
+      {/* ── Khu vực nội dung chính ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
+        
+        {/* ── Header theo phong cách FriendsPage ── */}
+        <header
+          className="sticky top-0 z-40 px-3 h-16 flex items-center justify-between flex-shrink-0"
+          style={{
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(8, 14, 28, 0.95)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <p className="font-bold text-white tracking-tight text-xl">Bảng tin</p>
+            <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-full px-3 py-1 border border-white/10">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Trực tuyến</span>
             </div>
-            <span className="font-bold text-lg tracking-tight" style={{ color: "var(--loza-text)" }}>
-              Loza
-            </span>
           </div>
-
-          <nav className="hidden md:flex items-center gap-1">
-            {["Bảng tin", "Khám phá", "Bạn bè"].map((item, i) => (
-              <button
-                key={item}
-                className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
-                style={{
-                  background: i === 0
-                    ? "color-mix(in srgb, var(--loza-accent) 15%, transparent)"
-                    : "transparent",
-                  color: i === 0 ? "var(--loza-accent-light)" : "var(--loza-sub)",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (i !== 0) {
-                    e.currentTarget.style.background = "var(--loza-bg-hover)";
-                    e.currentTarget.style.color = "var(--loza-text)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (i !== 0) {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "var(--loza-sub)";
-                  }
-                }}
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <button
-              className="relative w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-              style={{ background: "transparent", border: "none", color: "var(--loza-sub)", cursor: "pointer" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--loza-bg-hover)";
-                e.currentTarget.style.color = "var(--loza-text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "var(--loza-sub)";
-              }}
-            >
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-              </svg>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />
-            </button>
-
-            {currentUser.avatarUrl ? (
-              <img
-                src={currentUser.avatarUrl}
-                className="w-8 h-8 rounded-full object-cover cursor-pointer"
-                style={{
-                  outline: "2px solid color-mix(in srgb, var(--loza-accent) 40%, transparent)",
-                  outlineOffset: "2px",
-                }}
-                alt={currentUser.displayName}
-              />
-            ) : (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer"
-                style={{
-                  background: "var(--loza-accent)",
-                  outline: "2px solid color-mix(in srgb, var(--loza-accent) 35%, transparent)",
-                  outlineOffset: "2px",
-                }}
-              >
-                {initials}
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-5xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-[1fr_288px] gap-6">
-
-        <main className="space-y-4 min-w-0">
-          <CreatePost currentUser={currentUser} />
 
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px" style={{ background: "var(--loza-border)" }} />
-            <span className="text-xs font-medium" style={{ color: "var(--loza-muted)" }}>
-              Bài viết mới nhất
-            </span>
-            <div className="flex-1 h-px" style={{ background: "var(--loza-border)" }} />
-          </div>
-
-          {posts.length === 0 && !loading ? (
-            <div className="loza-card py-16 text-center">
-              <p className="text-4xl mb-3">📭</p>
-              <p className="text-sm" style={{ color: "var(--loza-sub)" }}>Chưa có bài viết nào.</p>
-              <p className="text-xs mt-1" style={{ color: "var(--loza-muted)" }}>Hãy là người đầu tiên chia sẻ!</p>
-            </div>
-          ) : (
-            posts.map((post, i) => (
-              <PostCard
-                key={post._id}
-                post={post}
-                currentUserId={currentUser._id}
-                onDelete={deletePost}
-                onReact={reactToPost}
-                style={{ animationDelay: `${i * 0.06}s` }}
-              />
-            ))
-          )}
-
-          <div ref={loaderRef} className="flex justify-center py-4">
-            {loading && (
-              <div className="flex gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="loza-bounce w-2 h-2 rounded-full"
-                    style={{ background: "var(--loza-accent)", animationDelay: `${i * 0.16}s` }}
-                  />
-                ))}
-              </div>
-            )}
-            {!hasMore && posts.length > 0 && (
-              <p className="text-xs" style={{ color: "var(--loza-muted)" }}>
-                Bạn đã xem hết rồi 🎉
-              </p>
-            )}
-          </div>
-        </main>
-
-        <aside className="hidden md:flex flex-col gap-4">
-          {/* Profile card */}
-          <div className="loza-card p-4">
-            <div className="flex items-center gap-3 mb-4">
-              {currentUser.avatarUrl ? (
-                <img
-                  src={currentUser.avatarUrl}
-                  className="w-12 h-12 rounded-full object-cover"
-                  style={{
-                    outline: "2px solid color-mix(in srgb, var(--loza-accent) 30%, transparent)",
-                    outlineOffset: "2px",
-                  }}
-                  alt={currentUser.displayName}
-                />
-              ) : (
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{
-                    background: "var(--loza-accent)",
-                    outline: "2px solid color-mix(in srgb, var(--loza-accent) 30%, transparent)",
-                    outlineOffset: "2px",
-                  }}
-                >
+             <button className="p-2 rounded-xl bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
+                <SearchIcon size={20} />
+             </button>
+             <button className="p-2 rounded-xl bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-all relative">
+                <Bell size={20} />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-[#080f1c]" />
+             </button>
+             <div className="h-8 w-px bg-white/10 mx-1" />
+             {currentUser.avatarUrl ? (
+                <img src={currentUser.avatarUrl} className="w-9 h-9 rounded-xl object-cover border border-white/20" alt="me" />
+             ) : (
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
                   {initials}
                 </div>
-              )}
-              <div>
-                <p className="font-semibold text-sm" style={{ color: "var(--loza-text)" }}>
-                  {currentUser.displayName}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <div className="loza-online-dot" />
-                  <span className="text-xs" style={{ color: "var(--loza-sub)" }}>Đang hoạt động</span>
+             )}
+          </div>
+        </header>
+
+        {/* ── Layout 2 cột (Main Content & Aside) ── */}
+        <div className="max-w-[1200px] w-full mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
+          
+          {/* Cột chính: Post Feed */}
+          <main className="space-y-6 min-w-0">
+            <CreatePost currentUser={currentUser} />
+
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold text-slate-200 whitespace-nowrap">Mới nhất</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
+            </div>
+
+            <div className="flex flex-col gap-6">
+              {posts.length === 0 && !loading ? (
+                <div className="bg-white/5 border border-white/10 rounded-3xl py-20 text-center">
+                  <p className="text-5xl mb-4">✨</p>
+                  <p className="text-slate-300 font-medium">Bảng tin đang trống</p>
+                  <p className="text-sm text-slate-500 mt-1">Hãy theo dõi thêm bạn bè để thấy bài viết!</p>
                 </div>
+              ) : (
+                posts.map((post, i) => (
+                  <PostCard
+                    key={post._id}
+                    post={post}
+                    currentUserId={currentUser._id}
+                    onDelete={deletePost}
+                    onReact={reactToPost}
+                    style={{ animation: `fp-fadein 0.4s ease-out ${i * 0.05}s both` }}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* Infinite Loader */}
+            <div ref={loaderRef} className="flex justify-center py-10">
+              {loading && (
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+              )}
+              {!hasMore && posts.length > 0 && (
+                <p className="text-sm text-slate-500 font-medium">Bạn đã bắt kịp mọi tin tức 🎉</p>
+              )}
+            </div>
+          </main>
+
+          {/* Cột phải: Widgets (Ẩn trên mobile) */}
+          <aside className="hidden lg:flex flex-col gap-6">
+            {/* Thẻ profile nhanh */}
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-5 backdrop-blur-sm">
+               <div className="flex items-center gap-4 mb-6">
+                  <div className="relative">
+                    {currentUser.avatarUrl ? (
+                       <img src={currentUser.avatarUrl} className="w-14 h-14 rounded-2xl object-cover" alt="me" />
+                    ) : (
+                       <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-xl font-bold text-white uppercase">{initials}</div>
+                    )}
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-4 border-[#0d1425] rounded-full" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-base">{currentUser.displayName}</h4>
+                    <p className="text-slate-500 text-xs">@{currentUser._id.slice(-6)}</p>
+                  </div>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Bài viết", val: posts.filter(p => p.author._id === currentUser._id).length },
+                    { label: "Bạn bè", val: "128" },
+                    { label: "Likes", val: "1.2k" }
+                  ].map(stat => (
+                    <div key={stat.label} className="bg-white/5 rounded-2xl p-2 text-center border border-white/5">
+                      <p className="text-white font-bold text-sm">{stat.val}</p>
+                      <p className="text-[10px] text-slate-500 uppercase font-semibold">{stat.label}</p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+
+            {/* Trending / Xu hướng */}
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+              <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+                <span className="text-indigo-400">#</span> Xu hướng Loza
+              </h3>
+              <div className="space-y-4">
+                {["#ReactJS", "#NodeJS", "#LozaSocial", "#WebDev"].map((tag) => (
+                  <div key={tag} className="group cursor-pointer">
+                    <p className="text-indigo-400 font-bold text-sm group-hover:text-indigo-300 transition-colors">{tag}</p>
+                    <p className="text-slate-500 text-[11px]">1.2k bài viết</p>
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                { label: "Bài viết", value: posts.filter((p) => p.author._id === currentUser._id).length.toString() },
-                { label: "Bạn bè", value: "0" },
-                { label: "Theo dõi", value: "0" },
-              ].map((s) => (
-                <div key={s.label} className="loza-card-elevated py-2 rounded-xl">
-                  <p className="font-bold text-base" style={{ color: "var(--loza-accent)" }}>{s.value}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--loza-muted)" }}>{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Gợi ý kết bạn */}
-          <div className="loza-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--loza-sub)" }}>
-              Gợi ý kết bạn
-            </p>
-            <div className="space-y-3">
-              {[
-                { name: "Nguyễn Hoàng", mutual: 3 },
-                { name: "Trần Phương", mutual: 2 },
-                { name: "Lê Bảo Châu", mutual: 5 },
-              ].map(({ name, mutual }) => {
-                const abbr = name.split(" ").map((w) => w[0]).slice(-2).join("");
-                return (
-                  <div key={name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{
-                          background: "var(--loza-bg-elevated)",
-                          border: "1px solid var(--loza-border)",
-                          color: "var(--loza-sub)",
-                        }}
-                      >{abbr}</div>
-                      <div>
-                        <p className="text-xs font-medium" style={{ color: "var(--loza-text)" }}>{name}</p>
-                        <p className="text-xs" style={{ color: "var(--loza-muted)" }}>{mutual} bạn chung</p>
-                      </div>
-                    </div>
-                    <button
-                      className="text-xs font-semibold transition-all rounded-md"
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--loza-accent)",
-                        padding: "4px 8px",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = "var(--loza-accent-light)";
-                        e.currentTarget.style.background = "var(--loza-bg-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = "var(--loza-accent)";
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >+ Kết bạn</button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Xu hướng */}
-          <div className="loza-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--loza-sub)" }}>
-              Xu hướng
-            </p>
-            <div className="space-y-2.5">
-              {["#LozaChat", "#ReactJS", "#NodeJS", "#MongoDB", "#FullStack"].map((tag, i) => (
-                <div key={tag} className="flex items-center justify-between">
-                  <span
-                    className="text-sm font-medium cursor-pointer transition-colors"
-                    style={{ color: "var(--loza-accent-light)" }}
-                    onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--loza-text)")}
-                    onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--loza-accent-light)")}
-                  >{tag}</span>
-                  <span className="text-xs" style={{ color: "var(--loza-muted)" }}>{14 - i * 2}k bài</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
+          </aside>
+        </div>
       </div>
+      
+      {/* ── CSS Animations (Dùng chung với FriendsPage) ── */}
+      <style>{`
+        @keyframes fp-fadein { 
+          from { opacity: 0; transform: translateY(10px); } 
+          to { opacity: 1; transform: translateY(0); } 
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}</style>
     </div>
   );
 };
