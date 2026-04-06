@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Post } from "../types/post";
 import type { ReactionType } from "../types/post";
+import type { Comment } from "../types/post";
 import { postService } from "../services/postService";
 import toast from "react-hot-toast";
 
@@ -15,6 +16,17 @@ interface PostStore {
   updatePost: (id: string, content: string, newImages?: File[], removeImages?: string[]) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
+  
+  //comment
+  addComment: (
+    postId: string,
+    content: string,
+    parentId?: string | null,
+    files?: File[]
+  ) => Promise<void>;
+  deleteComment: (postId: string, commentId: string) => Promise<void>;
+  getCommentsForPost: (postId: string) => Promise<Comment[]>;
+  
 }
 
 export const usePostStore = create<PostStore>((set, get) => ({
@@ -90,6 +102,53 @@ export const usePostStore = create<PostStore>((set, get) => ({
       }));
     } catch {
       toast.error("Không thể thả reaction");
+    }
+  },
+  addComment: async (postId, content, parentId = null, files = []) => {
+    try {
+      const newComment = await postService.addComment(postId, content, parentId, files);
+
+      // Chỉ tăng commentsCount của Post khi là comment gốc (không phải reply)
+      if (!parentId) {
+        set((state) => ({
+          posts: state.posts.map((p) =>
+            p._id === postId
+              ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+              : p
+          ),
+        }));
+      }
+
+      toast.success(parentId ? "Đã trả lời" : "Đã bình luận 👍");
+      return newComment;
+    } catch {
+      toast.error(parentId ? "Trả lời thất bại" : "Bình luận thất bại");
+      throw new Error("Add comment failed");
+    }
+  },
+
+  deleteComment: async (postId, commentId) => {
+    try {
+      await postService.deleteComment(postId, commentId);
+      set((state) => ({
+        posts: state.posts.map((p) =>
+          p._id === postId
+            ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 0) - 1) }
+            : p
+        ),
+      }));
+      toast.success("Đã xóa bình luận");
+    } catch {
+      toast.error("Không thể xóa bình luận");
+    }
+  },
+
+  getCommentsForPost: async (postId) => {
+    try {
+      const res = await postService.getComments(postId);
+      return res.comments;
+    } catch {
+      return [];
     }
   },
 }));
