@@ -6,6 +6,7 @@ import ChatAppPage from "./pages/ChatAppPage";
 import { Toaster } from "sonner";
 import LandingPage from "./pages/LandingPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import FriendsPage from "./pages/FriendPage";
 function App() {
   return (
     <>
@@ -19,6 +20,7 @@ function App() {
           {/* protected route */}
           <Route element={<ProtectedRoute />}>
             <Route path="/chat" element={<ChatAppPage />} />
+            <Route path="/friends" element={<FriendsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
