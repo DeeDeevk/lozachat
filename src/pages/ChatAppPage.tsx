@@ -68,18 +68,18 @@ export default function ChatPage() {
           type: "text",
         };
 
-        useChatStore.setState((state: any) => ({
-          messages: {
-            ...state.messages,
-            [activeConversationId]: {
-              ...state.messages[activeConversationId],
-              items: [
-                ...(state.messages[activeConversationId]?.items || []),
-                newMsg,
-              ],
-            },
-          },
-        }));
+        // useChatStore.setState((state: any) => ({
+        //   messages: {
+        //     ...state.messages,
+        //     [activeConversationId]: {
+        //       ...state.messages[activeConversationId],
+        //       items: [
+        //         ...(state.messages[activeConversationId]?.items || []),
+        //         newMsg,
+        //       ],
+        //     },
+        //   },
+        // }));
 
         setInput("");
       }
