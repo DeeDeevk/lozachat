@@ -250,9 +250,9 @@ export const PostDetailModal = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {post.author.avatar ? (
+              {post.author.avatarUrl ? (
                 <img
-                  src={post.author.avatar}
+                  src={post.author.avatarUrl}
                   style={{
                     width: "42px",
                     height: "42px",

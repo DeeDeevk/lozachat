@@ -8,7 +8,19 @@ import LandingPage from "./pages/LandingPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import FriendsPage from "./pages/FriendPage";
 import { SocialPage } from "./pages/SocialPage";
+import { useAuthStore } from "./stores/useAuthStore";
+import { useSocketStore } from "./stores/useSocketStore";
+import { useEffect } from "react";
 function App() {
+  const { accessToken } = useAuthStore();
+  const { connectSocket, disconnectSocket } = useSocketStore();
+
+  useEffect(() => {
+    if (accessToken) {
+      connectSocket();
+    }
+    return () => disconnectSocket();
+  }, [accessToken]);
   return (
     <>
       <Toaster position="top-right" richColors />
@@ -22,7 +34,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/chat" element={<ChatAppPage />} />
             <Route path="/friends" element={<FriendsPage />} />
-             <Route path="/social" element={<SocialPage />} />
+            <Route path="/social" element={<SocialPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
