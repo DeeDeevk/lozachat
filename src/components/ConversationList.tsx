@@ -205,7 +205,7 @@ export default function ConversationList({
                 )}
               </div>
 
-              {/* STATUS BADGE (Chấm xanh) */}
+              {/* Chấm xanh */}
               {isOnline ? (
                 <div
                   style={{
@@ -228,9 +228,9 @@ export default function ConversationList({
                     right: -2,
                     width: 14,
                     height: 14,
-                    backgroundColor: "#1e1f20", // Màu xanh lá (Emerald 500)
+                    backgroundColor: "#646464",
                     borderRadius: "50%",
-                    border: "3px solid #0f172a", // Màu nền của sidebar để tạo hiệu ứng tách biệt
+                    border: "3px solid #0f172a", 
                   }}
                   title="Đang hoạt động"
                 />
