@@ -4,7 +4,7 @@ export type Visibility = "public" | "friends" | "private";
 export interface Author {
   _id: string;
   displayName: string;
-  avatar?: string;
+  avatarUrl?: string;
 }
 
 export interface Reaction {
