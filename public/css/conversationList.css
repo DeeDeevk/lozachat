@@ -1,0 +1,84 @@
+  /* ── Sidebar wrapper ── */
+        .chat-sidebar {
+          width: 360px;
+          flex-shrink: 0;
+        }
+        @media (max-width: 1100px) { .chat-sidebar { width: 270px; } }
+        @media (max-width: 767px) {
+          .chat-sidebar {
+            position: fixed; top: 0; left: 0; bottom: 0; z-index: 38;
+            width: calc(100vw - 56px) !important; max-width: 300px !important;
+            transform: translateX(-100%); visibility: hidden;
+            transition: transform .28s cubic-bezier(.22,1,.36,1), visibility .28s;
+            box-shadow: 4px 0 32px rgba(0,0,0,.6);
+          }
+          .chat-sidebar.open { transform: translateX(56px); visibility: visible; }
+        }
+
+        /* ── Scoped utils ── */
+        .cl-icon-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 36px; height: 36px; border-radius: 10px; border: none;
+          background: transparent; color: #94a3b8; cursor: pointer;
+          transition: all .18s; flex-shrink: 0;
+        }
+        .cl-icon-btn:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
+        .cl-icon-btn svg { display: block; stroke: currentColor; fill: none; pointer-events: none; }
+
+        .cl-search-input {
+          background: rgba(15,23,42,.9); border: 2px solid rgba(255,255,255,.07);
+          border-radius: 12px; padding: 9px 14px 9px 36px;
+          color: white; font-size: 13px; outline: none; width: 100%;
+          transition: all .2s; font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .cl-search-input:focus { border-color: rgba(59,130,246,.4); background: rgba(20,30,50,.9); }
+        .cl-search-input::placeholder { color: #475569; }
+
+        .cl-tab-btn {
+          flex: 1; padding: 7px 0; border: none; background: transparent;
+          color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer;
+          border-radius: 10px; transition: all .2s;
+          font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .cl-tab-btn.active { background: rgba(59,130,246,.15); color: #60a5fa; }
+
+        .cl-conv-item {
+          display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+          cursor: pointer; border-radius: 12px; transition: all .18s; position: relative;
+        }
+        .cl-conv-item:hover  { background: rgba(59,130,246,.08); }
+        .cl-conv-item.active { background: rgba(59,130,246,.14); }
+        .cl-conv-item.active::before {
+          content: ""; position: absolute; left: 0; top: 20%; bottom: 20%;
+          width: 3px; border-radius: 0 3px 3px 0;
+          background: linear-gradient(180deg,#3b82f6,#2563eb);
+        }
+
+        @keyframes cl-pulse { 0%,100%{opacity:.6;transform:scale(1);} 50%{opacity:1;transform:scale(1.4);} }
+        .cl-online-dot {
+          position: absolute; bottom: -1px; right: -1px;
+          width: 9px; height: 9px; border-radius: 50%;
+          background: #10b981; border: 2px solid #060d1f;
+          animation: cl-pulse 2.5s ease-in-out infinite;
+        }
+        .cl-offline-dot {
+          position: absolute; bottom: -1px; right: -1px;
+          width: 9px; height: 9px; border-radius: 50%;
+          background: #475569; border: 2px solid #060d1f;
+        }
+
+        .cl-sidebar-title { color: white; font-weight: 700; font-size: 18px; }
+
+        /* Unread badge */
+        .cl-badge {
+          min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px;
+          background: linear-gradient(135deg,#2563eb,#3b82f6);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 10px; font-weight: 700; color: white;
+          margin-left: 6px; flex-shrink: 0;
+        }
+
+        /* scrollbar */
+        .cl-list::-webkit-scrollbar { width: 4px; }
+        .cl-list::-webkit-scrollbar-track { background: transparent; }
+        .cl-list::-webkit-scrollbar-thumb { background: rgba(99,130,186,.25); border-radius: 4px; }

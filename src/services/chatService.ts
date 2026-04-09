@@ -51,4 +51,12 @@ export const chatService = {
 
     return res.data.message;
   },
+
+  async getOrCreateDirectConversation(targetUserId: string) {
+    const res = await api.get(
+      `/conversations/direct/${targetUserId}`
+    );
+
+    return res.data.conversation;
+  },
 };

@@ -36,8 +36,13 @@ const getInitials = (name: string) =>
 
 const randomColor = (str: string) => {
   const colors = [
-    "#3b82f6", "#10b981", "#8b5cf6",
-    "#f59e0b", "#ef4444", "#06b6d4", "#ec4899",
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
   ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
@@ -53,16 +58,17 @@ export default function SearchUserModal({
   onRequestSent,
 }: SearchUserModalProps) {
   const currentUser = useAuthStore((s) => s.userProfile);
-  const { loading, searchByUserName, addFriend, getFriendStatus } = useFriendStore();
+  const { loading, searchByUserName, addFriend, getFriendStatus } =
+    useFriendStore();
 
-  const [query, setQuery]                 = useState("");
-  const [result, setResult]               = useState<User | null>(null);
-  const [notFound, setNotFound]           = useState(false);
-  const [sendingReq, setSendingReq]       = useState(false);
-  const [reqSent, setReqSent]             = useState(false);
-  const [showDetail, setShowDetail]       = useState(false);
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<User | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [sendingReq, setSendingReq] = useState(false);
+  const [reqSent, setReqSent] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("none");
-  const [introMessage, setIntroMessage]   = useState(
+  const [introMessage, setIntroMessage] = useState(
     "Chào bạn ~ Có thể kết bạn được không?",
   );
 
@@ -82,7 +88,9 @@ export default function SearchUserModal({
   }, [isOpen]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -118,10 +126,10 @@ export default function SearchUserModal({
 
     const status = await getFriendStatus(user._id);
 
-    if (status === "friend")        setRequestStatus("friend");
-    else if (status === "sent")     setRequestStatus("sent");
+    if (status === "friend") setRequestStatus("friend");
+    else if (status === "sent") setRequestStatus("sent");
     else if (status === "received") setRequestStatus("received");
-    else                            setRequestStatus("none");
+    else setRequestStatus("none");
 
     setResult(user);
   };
@@ -130,7 +138,10 @@ export default function SearchUserModal({
     if (!result) return;
     setSendingReq(true);
     try {
-      await friendService.sendFriendRequest(result._id, introMessage || undefined);
+      await friendService.sendFriendRequest(
+        result._id,
+        introMessage || undefined,
+      );
       setReqSent(true);
       setRequestStatus("sent");
       toast.success("Đã gửi lời mời kết bạn!", {
@@ -346,7 +357,11 @@ export default function SearchUserModal({
               </div>
               Tìm kiếm người dùng
             </div>
-            <button className="su-close-btn" onClick={onClose} aria-label="Đóng">
+            <button
+              className="su-close-btn"
+              onClick={onClose}
+              aria-label="Đóng"
+            >
               <X size={15} />
             </button>
           </div>
@@ -392,7 +407,9 @@ export default function SearchUserModal({
             {isSelf && (
               <div className="su-self-state">
                 <span className="su-self-emoji">🤡</span>
-                <div className="su-self-text">Bạn đang tìm ai vậy. Người này là chính bạn 😄</div>
+                <div className="su-self-text">
+                  Bạn đang tìm ai vậy. Người này là chính bạn 😄
+                </div>
               </div>
             )}
 
@@ -405,21 +422,29 @@ export default function SearchUserModal({
                       src={result.avatarUrl}
                       alt={result.displayName}
                       style={{
-                        width: 46, height: 46, borderRadius: 14,
-                        objectFit: "cover", flexShrink: 0,
+                        width: 46,
+                        height: 46,
+                        borderRadius: 14,
+                        objectFit: "cover",
+                        flexShrink: 0,
                         boxShadow: `0 4px 12px ${avatarColor}44`,
                       }}
                     />
                   ) : (
                     <div
                       className="su-avatar"
-                      style={{ background: avatarColor, boxShadow: `0 4px 12px ${avatarColor}44` }}
+                      style={{
+                        background: avatarColor,
+                        boxShadow: `0 4px 12px ${avatarColor}44`,
+                      }}
                     >
                       {initials}
                     </div>
                   )}
                   <div className="su-user-info">
-                    <div className="su-user-name">{result.displayName || result.username}</div>
+                    <div className="su-user-name">
+                      {result.displayName || result.username}
+                    </div>
                     <div className="su-user-username">@{result.username}</div>
                   </div>
                   <button
@@ -436,15 +461,24 @@ export default function SearchUserModal({
                   <div className="su-detail-panel">
                     <div className="su-detail-row">
                       <span className="su-detail-label">Tên hiển thị</span>
-                      <span className="su-detail-value">{result.displayName || "—"}</span>
+                      <span className="su-detail-value">
+                        {result.displayName || "—"}
+                      </span>
                     </div>
                     <div className="su-detail-row">
                       <span className="su-detail-label">Username</span>
-                      <span className="su-detail-value">@{result.username}</span>
+                      <span className="su-detail-value">
+                        @{result.username}
+                      </span>
                     </div>
                     <div className="su-detail-row">
                       <span className="su-detail-label">Trạng thái</span>
-                      <span className="su-detail-value" style={{ color: result.isOnline ? "#10b981" : "#64748b" }}>
+                      <span
+                        className="su-detail-value"
+                        style={{
+                          color: result.isOnline ? "#10b981" : "#64748b",
+                        }}
+                      >
                         {result.isOnline ? "● Đang hoạt động" : "Offline"}
                       </span>
                     </div>
@@ -461,14 +495,20 @@ export default function SearchUserModal({
                 {requestStatus === "sent" && (
                   <div className="su-status-banner sent">
                     <Clock size={15} />
-                    <span>Bạn đã gửi yêu cầu kết bạn đến người này. Vui lòng chờ phản hồi.</span>
+                    <span>
+                      Bạn đã gửi yêu cầu kết bạn đến người này. Vui lòng chờ
+                      phản hồi.
+                    </span>
                   </div>
                 )}
 
                 {requestStatus === "received" && (
                   <div className="su-status-banner received">
                     <Bell size={15} />
-                    <span>Bạn đã được yêu cầu kết bạn từ người này. Vui lòng phản hồi.</span>
+                    <span>
+                      Bạn đã được yêu cầu kết bạn từ người này. Vui lòng phản
+                      hồi.
+                    </span>
                   </div>
                 )}
 
@@ -482,7 +522,9 @@ export default function SearchUserModal({
                       maxLength={150}
                       onChange={(e) => setIntroMessage(e.target.value)}
                     />
-                    <div className="su-intro-count">{introMessage.length}/150</div>
+                    <div className="su-intro-count">
+                      {introMessage.length}/150
+                    </div>
                   </div>
                 )}
 
@@ -490,7 +532,10 @@ export default function SearchUserModal({
                   <div className="su-actions">
                     <button
                       className="su-btn su-btn-chat"
-                      onClick={() => { onStartChat?.(result); onClose(); }}
+                      onClick={() => {
+                        onStartChat?.(result);
+                        onClose();
+                      }}
                     >
                       <MessageCircle size={15} />
                       Nhắn tin
@@ -523,7 +568,10 @@ export default function SearchUserModal({
                   <div className="su-actions">
                     <button
                       className="su-btn su-btn-chat"
-                      onClick={() => { onStartChat?.(result); onClose(); }}
+                      onClick={() => {
+                        onStartChat?.(result);
+                        onClose();
+                      }}
                     >
                       <MessageCircle size={15} />
                       Nhắn tin
@@ -538,8 +586,12 @@ export default function SearchUserModal({
                 <div className="su-notfound-icon">
                   <UserRoundSearch size={26} color="#334155" />
                 </div>
-                <div className="su-notfound-title">Không tìm thấy người dùng</div>
-                <div className="su-notfound-sub">Vui lòng kiểm tra lại username và thử lại</div>
+                <div className="su-notfound-title">
+                  Không tìm thấy người dùng
+                </div>
+                <div className="su-notfound-sub">
+                  Vui lòng kiểm tra lại username và thử lại
+                </div>
               </div>
             )}
           </div>
