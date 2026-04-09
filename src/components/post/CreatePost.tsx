@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { usePostStore } from "../../stores/usePostStore";
+import type { Visibility } from "@/types/post";
 
 interface CurrentUser {
   _id: string;
@@ -49,6 +50,7 @@ export const CreatePost = ({ currentUser }: Props) => {
   const fileRef    = useRef<HTMLInputElement>(null);
   const textareaRef= useRef<HTMLTextAreaElement>(null);
   const createPost = usePostStore((s) => s.createPost);
+  const [visibility, setVisibility] = useState<Visibility>("public"); 
 
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList) return;
@@ -64,12 +66,15 @@ export const CreatePost = ({ currentUser }: Props) => {
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
+    // Cập nhật hàm handleSubmit để gửi visibility
   const handleSubmit = async () => {
     if (!content.trim() && files.length === 0) return;
     setSubmitting(true);
     try {
-      await createPost(content.trim(), files);
+      // Cập nhật: Truyền thêm tham số visibility
+      await usePostStore.getState().createPost(content.trim(), files, visibility); 
       setContent(""); setFiles([]); setPreviews([]); setFocused(false);
+      setVisibility("public"); // reset về mặc định
     } finally {
       setSubmitting(false);
     }
@@ -85,6 +90,12 @@ export const CreatePost = ({ currentUser }: Props) => {
     if (n === 3) return { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
     return          { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
   };
+  // UI phần chọn quyền (Đặt dưới textarea khi focused)
+  const VISIBILITY_OPTIONS = [
+    { value: "public", label: "Mọi người", icon: "🌎" },
+    { value: "friends", label: "Bạn bè", icon: "👥" },
+    { value: "private", label: "Chỉ mình tôi", icon: "🔒" },
+  ];
 
   return (
     <div className="loza-card loza-slide-up p-4" style={{ animationDelay: "0.05s" }}>
@@ -112,15 +123,31 @@ export const CreatePost = ({ currentUser }: Props) => {
             Bạn đang nghĩ gì, {currentUser.displayName.split(" ").pop()}?
           </button>
         ) : (
-          <textarea
+          <div className="flex flex-col gap-2">
+         {/* Dropdown chọn quyền riêng tư tinh tế */}
+         <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-slate-400">{currentUser.displayName}</span>
+            <select 
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as Visibility)}
+              className="bg-white/5 border border-white/10 text-[10px] text-slate-300 rounded-lg px-2 py-1 outline-none cursor-pointer hover:bg-white/10 transition-all"
+            >
+              <option value="public" className="bg-[#0f172a]">🌎 Mọi người</option>
+              <option value="friends" className="bg-[#0f172a]">👥 Bạn bè</option>
+              <option value="private" className="bg-[#0f172a]">🔒 Chỉ mình tôi</option>
+            </select>
+         </div>
+         
+         <textarea
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder={`Bạn đang nghĩ gì, ${currentUser.displayName.split(" ").pop()}?`}
-            className="flex-1 resize-none outline-none text-sm min-h-[80px] bg-transparent leading-relaxed"
-            style={{ color: "var(--loza-text)" }}
-            maxLength={5000}
+            className="w-full resize-none outline-none text-sm min-h-[80px] bg-transparent leading-relaxed text-white"
+            placeholder="Bạn đang nghĩ gì?"
           />
+      </div>
+          
+          
         )}
       </div>
 

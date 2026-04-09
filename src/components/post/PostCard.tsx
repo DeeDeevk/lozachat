@@ -14,6 +14,15 @@ interface Props {
   style?: React.CSSProperties;
 }
 
+const getVisibilityInfo = (v: Visibility) => {
+  switch (v) {
+    case "public": return { icon: "🌎", label: "Mọi người" };
+    case "friends": return { icon: "👥", label: "Bạn bè" };
+    case "private": return { icon: "🔒", label: "Chỉ mình tôi" };
+    default: return { icon: "🌎", label: "Mọi người" };
+  }
+};
+
 const ImageGrid = ({
   images,
   onClickImage,
@@ -38,6 +47,7 @@ const ImageGrid = ({
     background: "var(--loza-bg-base)",
     transition: "transform 0.2s ease",
   };
+
 
   const cell = (src: string, idx: number, extra?: React.CSSProperties) => (
     <div
@@ -201,9 +211,9 @@ export const PostCard = ({
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-3">
           <div className="flex items-center gap-3">
-            {post.author.avatar ? (
+            {post.author.avatarUrl ? (
               <img
-                src={post.author.avatar}
+                src={post.author.avatarUrl}
                 className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                 style={{
                   outline:
@@ -232,12 +242,15 @@ export const PostCard = ({
               >
                 {post.author.displayName}
               </p>
-              <p
-                className="text-xs mt-0.5"
-                style={{ color: "var(--loza-muted)" }}
-              >
+              <div className="flex items-center gap-1 mt-0.5">
+              <p className="text-xs" style={{ color: "var(--loza-muted)" }}>
                 {timeAgo}
               </p>
+              <span className="text-[10px]" style={{ color: "var(--loza-muted)" }}>•</span>
+              <span title={getVisibilityInfo(post.visibility).label} className="text-[10px] cursor-help">
+                {getVisibilityInfo(post.visibility).icon}
+              </span>
+            </div>
             </div>
           </div>
 
