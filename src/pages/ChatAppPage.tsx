@@ -88,53 +88,30 @@ export default function ChatPage() {
     }
   };
 
-  const handleSend = () => {
-    if (!input.trim() || !activeConversationId) return;
+  const renderMessageContent = (content: string) => {
+    // Regex này sẽ bắt trọn link YouTube của bạn
+    const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
 
-    const newMsg = {
-      id: Date.now().toString(),
-      senderId: user?.userId,
-      text: input,
-      time: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "sent",
-      type: "text",
-    };
+    const parts = content.split(urlRegex);
 
-    useChatStore.setState((state: any) => ({
-      messages: {
-        ...state.messages,
-        [activeConversationId]: [
-          ...(state.messages[activeConversationId] || []),
-          newMsg,
-        ],
-      },
-    }));
-
-    setInput("");
+    return parts.map((part, index) => {
+      if (part && part.match(urlRegex)) {
+        const href = part.startsWith("www.") ? `https://${part}` : part;
+        return (
+          <a
+            key={index}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#f1f1f1", textDecoration: "underline" }}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
   };
-
-  const mappedConversations = conversations.map((c) => {
-    const otherUser = c.participants?.find(
-      (p: any) => p.userId !== user?.userId,
-    );
-
-    return {
-      id: c._id,
-      name: c.group?.name || otherUser?.displayName || "Unknown",
-      avatar: (c.group?.name || otherUser?.displayName || "U")
-        .slice(0, 2)
-        .toUpperCase(),
-      avatarColor: "#3b82f6",
-      lastMessage: c.lastMessage?.content || "Chưa có tin nhắn",
-      time: c.lastMessage?.createdAt ? formatTime(c.lastMessage.createdAt) : "",
-      unread: 0,
-      online: false,
-      messages: [], // không cần dùng ở đây
-    };
-  });
 
   const otherUser = activeConv?.participants.find(
     (p) => p._id !== user?.userId,
@@ -201,7 +178,7 @@ export default function ChatPage() {
                           : "#1e293b",
                       }}
                     >
-                      {msg.content || msg.text}
+                      {renderMessageContent(msg.content)}
                       <div
                         style={{
                           fontSize: 10,
