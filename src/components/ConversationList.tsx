@@ -4,6 +4,10 @@ import { formatTime } from "@/utils/formatTime";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import SearchUserModal from "./SearchUserModal";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { useChatStore } from "@/stores/useChatStore";
+import '../../public/css/conversationList.css'
 
 // ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {
@@ -20,86 +24,111 @@ export interface Conversation {
     content: string;
     createdAt: string;
   };
+  unread?: number;
+  pinned?: boolean;
 }
 
-// ── Props ────────────────────────────────────────────────────
+// ── Props ────────────────────────────────────────────────────────────────────
 interface ConversationListProps {
   conversations: Conversation[];
   activeId: string | null;
+  isOpen: boolean;
   onSelectConversation: (id: string) => void;
+  onClose: () => void;
 }
 
-// ── Component ────────────────────────────────────────────────
+// ── Component ────────────────────────────────────────────────────────────────
 export default function ConversationList({
   conversations,
   activeId,
+  isOpen,
   onSelectConversation,
+  onClose,
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const { user } = useAuthStore();
-  const { onlineUsers } = useSocketStore();
+  const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
   const [showSearchModal, setShowSearchModal] = useState(false);
 
-  // helper lấy tên
+  const { user } = useAuthStore();
+  const { onlineUsers } = useSocketStore();
+
+  const location = useLocation();
+  const { setActiveConversation } = useChatStore();
+
+  const conversationIdFromNav = location.state?.conversationId;
+
+  useEffect(() => {
+    if (conversationIdFromNav) {
+      setActiveConversation(conversationIdFromNav);
+    }
+  }, [conversationIdFromNav, setActiveConversation]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
   const getOtherUser = (conv: Conversation) => {
     if (!user?.userId) return null;
-
     return conv.participants?.find(
       (p) => String(p._id) !== String(user.userId),
     );
-    console.log("ME:", user?.userId);
-    console.log("PARTICIPANTS:", conv.participants);
   };
+
   const getName = (conv: Conversation) => {
     if (conv.group) return conv.group.name;
-
-    const otherUser = getOtherUser(conv);
-
-    return otherUser?.displayName || "Unknown";
+    const other = getOtherUser(conv);
+    return other?.displayName || "Unknown";
   };
 
-  // filter search
-  const filteredConvs = conversations.filter((c) =>
-    getName(c).toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-  const getAvatar = (conv: Conversation) => {
-    const name = getName(conv);
-    return name.slice(0, 2).toUpperCase();
-  };
   const getAvatarText = (conv: Conversation) => {
     const name = getName(conv);
     return name.slice(0, 2).toUpperCase();
   };
 
   const getAvatarUrl = (conv: Conversation) => {
-    const otherUser = getOtherUser(conv);
-    return otherUser?.avatarUrl;
+    if (conv.group) return null;
+    return getOtherUser(conv)?.avatarUrl ?? null;
   };
-  const getGroupColor = (name: string) => {
+
+  const isOnline = (conv: Conversation) => {
+    if (conv.group) return false;
+    const other = getOtherUser(conv);
+    return other ? onlineUsers.includes(other._id) : false;
+  };
+
+  const getAvatarColor = (conv: Conversation) => {
+    const name = getName(conv);
     const colors = [
-      "#ef4444",
+      "#3b82f6",
       "#10b981",
-      "#f59e0b",
       "#8b5cf6",
-      "#ec4899",
+      "#f59e0b",
+      "#ef4444",
       "#06b6d4",
+      "#ec4899",
     ];
-    // Hash tên group để chọn màu cố định cho group đó
     let hash = 0;
-    for (let i = 0; i < name.length; i++) {
+    for (let i = 0; i < name.length; i++)
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
     return colors[Math.abs(hash) % colors.length];
   };
+
+  // ── Filter ───────────────────────────────────────────────────────────────
+  const filteredConvs = conversations.filter((c) => {
+    const matchesSearch = getName(c)
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    if (activeTab === "group") return matchesSearch && !!c.group;
+    if (activeTab === "direct") return matchesSearch && !c.group;
+    return matchesSearch;
+  });
 
   return (
     <>
       <div
+        className={`chat-sidebar ${isOpen ? "open" : ""}`}
         style={{
-          width: 300,
-          borderRight: "1px solid rgba(255,255,255,0.05)",
-          padding: 10,
-          color: "white",
+          display: "flex",
+          flexDirection: "column",
+          background: "rgba(8,14,28,.97)",
+          borderRight: "2px solid rgba(255,255,255,.05)",
         }}
       >
         {/* ── Header ── */}
@@ -143,161 +172,195 @@ export default function ConversationList({
               size={14}
               style={{
                 position: "absolute",
-                left: 10,
+                left: 11,
                 top: "50%",
                 transform: "translateY(-50%)",
                 color: "#475569",
+                pointerEvents: "none",
               }}
             />
             <input
+              className="cl-search-input"
               placeholder="Tìm kiếm..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 10px 8px 30px",
-                borderRadius: 8,
-                border: "none",
-                background: "#1e293b",
-                color: "white",
-              }}
             />
           </div>
         </div>
 
-        {/* ── List ── */}
-        {filteredConvs.map((c) => {
-          const name = getName(c);
-          const avatarUrl = getAvatarUrl(c);
-          const otherUser = getOtherUser(c);
-          const isGroup = !!c.group;
-          const bgColor = isGroup ? getGroupColor(name) : "#3b82f6";
-          const isOnline =
-            !isGroup && otherUser && onlineUsers.includes(otherUser._id);
-          return (
-            <div
-              key={c._id}
-              onClick={() => onSelectConversation(c._id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12, // Tăng gap một chút cho thoáng
-                padding: 10,
-                cursor: "pointer",
-                borderRadius: 10,
-                marginBottom: 8,
-                background:
-                  c._id === activeId ? "rgba(59,130,246,0.2)" : "transparent",
-                position: "relative", // Quan trọng để định vị badge tuyệt đối nếu cần
-              }}
+        {/* ── Tabs ── */}
+        <div style={{ display: "flex", gap: 4, padding: "8px 10px 4px" }}>
+          {(["all", "direct", "group"] as const).map((tab) => (
+            <button
+              key={tab}
+              className={`cl-tab-btn ${activeTab === tab ? "active" : ""}`}
+              onClick={() => setActiveTab(tab)}
             >
-              {/* Avatar Container */}
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    background: isGroup ? getGroupColor(name) : "#3b82f6",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {!isGroup && otherUser?.avatarUrl ? (
-                    <img
-                      src={otherUser.avatarUrl}
-                      alt="avatar"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    <span style={{ color: "white", fontWeight: "bold" }}>
-                      {getAvatarText(c)}
-                    </span>
-                  )}
-                </div>
+              {tab === "all"
+                ? "Tất cả"
+                : tab === "direct"
+                  ? "Đoạn chat"
+                  : "Nhóm chat"}
+            </button>
+          ))}
+        </div>
 
-                {/* Chấm xanh */}
-                {isOnline ? (
+        {/* ── Conversation list ── */}
+        <div
+          className="cl-list"
+          style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}
+        >
+          {filteredConvs.map((conv) => {
+            const name = getName(conv);
+            const avatarUrl = getAvatarUrl(conv);
+            const online = isOnline(conv);
+            const color = getAvatarColor(conv);
+            const unread = conv.unread ?? 0;
+
+            return (
+              <div
+                key={conv._id}
+                className={`cl-conv-item ${conv._id === activeId ? "active" : ""}`}
+                onClick={() => onSelectConversation(conv._id)}
+              >
+                {/* Avatar */}
+                <div style={{ position: "relative", flexShrink: 0 }}>
                   <div
                     style={{
-                      position: "absolute",
-                      bottom: -2,
-                      right: -2,
-                      width: 14,
-                      height: 14,
-                      backgroundColor: "#22c55e", // Màu xanh lá (Emerald 500)
-                      borderRadius: "50%",
-                      border: "3px solid #0f172a", // Màu nền của sidebar để tạo hiệu ứng tách biệt
-                    }}
-                    title="Đang hoạt động"
-                  />
-                ) : (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: -2,
-                      right: -2,
-                      width: 14,
-                      height: 14,
-                      backgroundColor: "#646464",
-                      borderRadius: "50%",
-                      border: "3px solid #0f172a",
-                    }}
-                    title="Đang hoạt động"
-                  />
-                )}
-              </div>
-
-              {/* Content & Time */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontWeight: "600",
-                      color: "#f8fafc",
-                      whiteSpace: "nowrap",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
                       overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      background: color,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow:
+                        conv._id === activeId
+                          ? `0 4px 12px ${color}55`
+                          : "none",
                     }}
                   >
-                    {name}
-                  </span>
-                  {c.lastMessage && (
-                    <span
-                      style={{ fontSize: 10, color: "#64748b", flexShrink: 0 }}
-                    >
-                      {formatTime(c.lastMessage.createdAt)}
-                    </span>
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }}
+                      >
+                        {getAvatarText(conv)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Online/offline dot */}
+                  {online ? (
+                    <div className="cl-online-dot" />
+                  ) : (
+                    <div className="cl-offline-dot" />
                   )}
                 </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: isOnline ? "#94a3b8" : "#64748b",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {c.lastMessage?.content || "Chưa có tin nhắn"}
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 3,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: unread > 0 ? 700 : 500,
+                        fontSize: 14,
+                        color: unread > 0 ? "white" : "#cbd5e1",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {name}
+                    </span>
+                    {conv.lastMessage && (
+                      <span
+                        style={{
+                          color: "#475569",
+                          fontSize: 11,
+                          flexShrink: 0,
+                          marginLeft: 4,
+                        }}
+                      >
+                        {formatTime(conv.lastMessage.createdAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: unread > 0 ? "#94a3b8" : "#475569",
+                        fontSize: 12,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1,
+                      }}
+                    >
+                      {conv.lastMessage?.content || "Chưa có tin nhắn"}
+                    </span>
+                    {unread > 0 && (
+                      <div className="cl-badge">
+                        {unread > 9 ? "9+" : unread}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+            );
+          })}
+
+          {filteredConvs.length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                color: "#475569",
+              }}
+            >
+              <Search
+                size={28}
+                style={{
+                  marginBottom: 8,
+                  opacity: 0.4,
+                  display: "block",
+                  margin: "0 auto 8px",
+                }}
+              />
+              <p style={{ fontSize: 13 }}>Không tìm thấy cuộc trò chuyện</p>
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
+
+      {/* ── Search User Modal ── */}
       <SearchUserModal
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
