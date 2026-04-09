@@ -32,6 +32,10 @@ export interface ChatState {
   addMessage: (message: Message) => Promise<void>;
   // update convo
   updateConversation: (conversation: Conversation) => void;
+  //xoa
+  recallMessage: (messageId: string, conversationId: string) => Promise<void>;
+  applyRecallMessage: (messageId: string, conversationId: string) => void;
+deleteMessageForMe: (messageId: string, conversationId: string) => Promise<void>;
 }
 
 export interface SocketState {

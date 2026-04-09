@@ -152,6 +152,78 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
       },
+    recallMessage: async (messageId: string, conversationId: string) => {
+  try {
+    await chatService.recallMessage(messageId);
+
+    // ✅ gọi hàm mới (đã tách riêng)
+    get().applyRecallMessage(messageId, conversationId);
+  } catch (error) {
+    console.error("Lỗi khi thu hồi tin nhắn:", error);
+    throw error;
+  }
+},
+
+deleteMessageForMe: async (messageId: string, conversationId: string) => {
+  try {
+    await chatService.deleteMessageForMe(messageId);
+
+    set((state) => {
+      const convo = state.messages[conversationId];
+      if (!convo) return state;
+
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: {
+            ...convo,
+            items: convo.items.filter((m) => m._id !== messageId),
+          },
+        },
+      };
+    });
+  } catch (error) {
+    console.error("Lỗi khi xoá tin nhắn:", error);
+    throw error;
+  }
+},
+applyRecallMessage: (messageId: string, conversationId: string) => {
+  set((state) => {
+    const convo = state.messages[conversationId];
+    if (!convo) return state;
+
+    return {
+      messages: {
+        ...state.messages,
+        [conversationId]: {
+          ...convo,
+          items: convo.items.map((m) =>
+            m._id === messageId
+              ? {
+                  ...m,
+                  isRecalled: true,
+                  content: "Tin nhắn đã bị thu hồi",
+                }
+              : m
+          ),
+        },
+      },
+
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId &&
+        c.lastMessage?._id === messageId
+          ? {
+              ...c,
+              lastMessage: {
+                ...c.lastMessage,
+                content: "Tin nhắn đã bị thu hồi",
+              },
+            }
+          : c
+      ),
+    };
+  });
+},
     }),
     {
       name: "chat-storage",
@@ -159,3 +231,4 @@ export const useChatStore = create<ChatState>()(
     },
   ),
 );
+
