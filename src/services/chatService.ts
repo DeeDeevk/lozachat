@@ -51,4 +51,11 @@ export const chatService = {
 
     return res.data.message;
   },
+  async recallMessage(messageId: string): Promise<void> {
+  await api.patch(`/messages/${messageId}/recall`);
+},
+
+async deleteMessageForMe(messageId: string): Promise<void> {
+  await api.delete(`/messages/${messageId}`);
+},
 };
