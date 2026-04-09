@@ -8,7 +8,8 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/stores/useChatStore";
 import '../../public/css/conversationList.css'
-// ── Types (match BE) ─────────────────────────────────────────────────────────
+
+// ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {
   _id: string;
   group?: {
