@@ -38,6 +38,10 @@ export interface ChatState {
   applyRecallMessage: (messageId: string, conversationId: string) => void;
 deleteMessageForMe: (messageId: string, conversationId: string) => Promise<void>;
 addConversation: (conversation: Conversation) => void;
+typingUsersByConv: Record<string, string[]>;
+addTypingUser: (userId: string, conversationId: string) => void;
+removeTypingUser: (userId: string, conversationId: string) => void;
+clearTypingUsers: (conversationId: string) => void;
 }
 
 export interface SocketState {

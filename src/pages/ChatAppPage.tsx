@@ -6,6 +6,7 @@ import { formatTime } from "@/utils/formatTime";
 import ConversationList from "@/components/ConversationList";
 import { Ellipsis, RotateCcw, Trash2 } from "lucide-react";
 import { useSocketStore } from "@/stores/useSocketStore";
+import "../css/chatapppage.css";
 interface ContextMenu {
   x: number;
   y: number;
@@ -35,6 +36,9 @@ export default function ChatPage() {
   const { user, userProfile } = useAuthStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const typingTimeoutRef = useRef<any>(null);
+  const { socket } = useSocketStore();
 
   useEffect(() => {
     fetchConversations();
@@ -106,8 +110,6 @@ export default function ChatPage() {
 }, [messages, activeConversationId]);
   useEffect(() => {
   if (!activeConversationId || currentMessages.length === 0) return;
-
-  const { socket } = useSocketStore.getState();
   const { user } = useAuthStore.getState();
 
   const lastMsg = currentMessages.at(-1);
@@ -129,11 +131,19 @@ useEffect(() => {
     console.log("🔍 LastRead của BẠN     :", me?.lastReadMessageId);
   }
 }, [activeConv]);
+//
   const handleSelect = (id: string) => {
     setActiveConversation(id);
-    fetchMessages(id);
   };
-
+  const typingUsersByConv = useChatStore((s) => s.typingUsersByConv);
+const typingUsers = useMemo(() => {
+  if (!activeConversationId) return [];
+  const users = typingUsersByConv[activeConversationId] || [];
+  console.log("🟡 typingUsers:", users);
+  console.log("🟡 user?.userId:", user?.userId);
+  console.log("🟡 participants:", activeConv?.participants?.map(p => p._id));
+  return users;
+}, [typingUsersByConv, activeConversationId]);
   const sendMessage = async () => {
   if (!input.trim() || !activeConversationId) return;
   try {
@@ -278,7 +288,6 @@ const myAvatar = userProfile?.avatarUrl || "/miku.png";
             >
               {activeConv.group?.name || otherUser?.displayName}
             </div>
-
             {/* Messages */}
             <div
               ref={messagesContainerRef}
@@ -411,7 +420,18 @@ const myAvatar = userProfile?.avatarUrl || "/miku.png";
 })}
               <div ref={messagesEndRef} />
             </div>
-
+<div style={{ fontSize: 12, color: "#94a3b8", height: 18, marginBottom: 6 }}>
+    {typingUsers
+      .filter((id) => id !== user?.userId)
+      .map((id) => {
+        const u = activeConv.participants.find(p => p._id === id);
+        return u ? (
+          <span key={id}>
+            {u.displayName} đang soạn...
+          </span>
+        ) : null;
+      })}
+  </div>
             {/* Input */}
             <div
               style={{
@@ -421,23 +441,35 @@ const myAvatar = userProfile?.avatarUrl || "/miku.png";
                 gap: 8,
               }}
             >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Nhập tin nhắn..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") sendMessage();
-                }}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "none",
-                  outline: "none",
-                  background: "#1e293b",
-                  color: "white",
-                }}
-              />
+             <input
+  value={input}
+  onChange={(e) => {
+    const value = e.target.value;
+    setInput(value);
+    if (!socket?.connected || !activeConversationId) return;
+
+    socket.emit("typing", { conversationId: activeConversationId });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("stop-typing", { conversationId: activeConversationId });
+    }, 1200);
+  }}
+  placeholder="Nhập tin nhắn..."
+  onKeyDown={(e) => {
+    if (e.key === "Enter") sendMessage();
+  }}
+  style={{
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    border: "none",
+    outline: "none",
+    background: "#1e293b",
+    color: "white",
+  }}
+/>
               <button
                 onClick={sendMessage}
                 style={{
@@ -552,3 +584,4 @@ const menuItemStyle: React.CSSProperties = {
   fontSize: 14,
   transition: "background 0.15s",
 };
+

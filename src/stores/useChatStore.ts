@@ -11,6 +11,7 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messages: {},
       activeConversationId: null,
+      typingUsersByConv: {},
       convoLoading: false,
       messageLoading: false,
       setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -21,6 +22,7 @@ export const useChatStore = create<ChatState>()(
           activeConversationId: null,
           convoLoading: false,
           messageLoading: false,
+          typingUsersByConv: {},
         });
       },
       fetchConversations: async () => {
@@ -276,6 +278,42 @@ updateLastRead: (userId: string, conversationId: string, lastReadMessageId: stri
           };
         });
       },
+      addTypingUser: (userId: string, conversationId: string) =>
+        
+  set((state) => {
+    console.log("📝 addTypingUser called:", userId, conversationId);
+  console.log("📝 current typingUsersByConv:", useChatStore.getState().typingUsersByConv);
+    const current = state.typingUsersByConv[conversationId] || [];
+
+    if (current.includes(userId)) return state;
+
+    return {
+      typingUsersByConv: {
+        ...state.typingUsersByConv,
+        [conversationId]: [...current, userId],
+      },
+    };
+  }),
+
+removeTypingUser: (userId: string, conversationId: string) =>
+  set((state) => {
+    const current = state.typingUsersByConv[conversationId] || [];
+
+    return {
+      typingUsersByConv: {
+        ...state.typingUsersByConv,
+        [conversationId]: current.filter((id) => id !== userId),
+      },
+    };
+  }),
+
+clearTypingUsers: (conversationId: string) =>
+  set((state) => ({
+    typingUsersByConv: {
+      ...state.typingUsersByConv,
+      [conversationId]: [],
+    },
+  })),
     }),
     
     {
