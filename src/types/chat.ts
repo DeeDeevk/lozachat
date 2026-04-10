@@ -53,4 +53,7 @@ export interface Message {
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
+  isRecalled?: boolean;     
+  recalledAt?: string;      
+  deletedFor?: string[];
 }

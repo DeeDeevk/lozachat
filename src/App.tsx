@@ -11,6 +11,7 @@ import { SocialPage } from "./pages/SocialPage";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
 import { useEffect } from "react";
+import PublicRoute from "./components/PublicRoute";
 function App() {
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
@@ -26,10 +27,13 @@ function App() {
       <Toaster position="top-right" richColors />
       <BrowserRouter>
         <Routes>
-          {/* public route */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/signin" element={<SignInPage />} />
-          <Route path="/signup" element={<SignUpPage />} />
+
+          {/* public route */}
+          <Route element={<PublicRoute />}>
+            <Route path="/signin" element={<SignInPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
+          </Route>
           {/* protected route */}
           <Route element={<ProtectedRoute />}>
             <Route path="/chat" element={<ChatAppPage />} />
