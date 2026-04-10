@@ -3,6 +3,7 @@ import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
+import type { Participant } from "@/types/chat";
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -59,22 +60,25 @@ export const useChatStore = create<ChatState>()(
             isOwn: m.senderId === user?.userId,
           }));
 
-          set((state) => {
-            const prev = state.messages[convoId]?.items ?? [];
-            const merged =
-              prev.length > 0 ? [...processed, ...prev] : processed;
+        set((state) => {
+  const prev = state.messages[convoId]?.items ?? [];
 
-            return {
-              messages: {
-                ...state.messages,
-                [convoId]: {
-                  items: merged,
-                  hasMore: !!cursor,
-                  nextCursor: cursor ?? null,
-                },
-              },
-            };
-          });
+  // 🔥 lọc trùng theo _id
+  const existingIds = new Set(prev.map((m) => m._id));
+
+  const filtered = processed.filter((m) => !existingIds.has(m._id));
+
+  return {
+    messages: {
+      ...state.messages,
+      [convoId]: {
+        items: [...filtered, ...prev],
+        hasMore: !!cursor,
+        nextCursor: cursor ?? null,
+      },
+    },
+  };
+});
         } catch (error) {
           console.error("Lỗi xảy ra khi fetchMessages:", error);
         } finally {
@@ -112,46 +116,64 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy ra khi gửi group message", error);
         }
       },
-      addMessage: async (message) => {
-        try {
-          const { user } = useAuthStore.getState();
-          const { fetchMessages } = get();
-          message.isOwn = message.senderId === user?.userId;
+   addMessage: async (message) => {
+  try {
+    const { user } = useAuthStore.getState();
+    message.isOwn = message.senderId === user?.userId;
 
-          const convoId = message.conversationId;
+    const convoId = message.conversationId;
 
-          let prevItems = get().messages[convoId]?.items ?? [];
-          if (prevItems.length === 0) {
-            await fetchMessages(message.conversationId);
-            prevItems = get().messages[convoId]?.items ?? [];
-          }
+    set((state) => {
+      const prev = state.messages[convoId]?.items ?? [];
 
-          set((state) => {
-            if (prevItems.some((m) => m._id === message._id)) {
-              return state;
-            }
+      // 🔥 nếu đã có thì skip luôn
+      if (prev.some((m) => m._id === message._id)) {
+        return state;
+      }
+
+      return {
+        messages: {
+          ...state.messages,
+          [convoId]: {
+            ...state.messages[convoId],
+            items: [...prev, message],
+          },
+        },
+      };
+    });
+  } catch (error) {
+    console.error("Lỗi xảy ra khi add message: ", error);
+  }
+},
+    updateConversation: (conversation) => {
+  set((state) => ({
+    conversations: state.conversations.map((c) => {
+      if (c._id !== conversation._id) return c;
+
+      // Giữ lại lastReadMessageId từ store, không để socket overwrite
+      const mergedParticipants = conversation.participants
+        ? conversation.participants.map((incoming) => {
+            const existing = c.participants?.find(
+              (p) => p._id === incoming._id
+            );
             return {
-              messages: {
-                ...state.messages,
-                [convoId]: {
-                  items: [...prevItems, message],
-                  hasMore: state.messages[convoId].hashMore,
-                  nextCursor: state.messages[convoId].nextCursor ?? undefined,
-                },
-              },
+              ...existing,
+              ...incoming,
+              // Ưu tiên giá trị mới nếu có, không thì giữ cũ
+              lastReadMessageId:
+                incoming.lastReadMessageId ?? existing?.lastReadMessageId ?? null,
             };
-          });
-        } catch (error) {
-          console.error("Lỗi xảy ra khi add message: ", error);
-        }
-      },
-      updateConversation: (conversation) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c,
-          ),
-        }));
-      },
+          }) as Participant[]
+        : c.participants;
+
+      return {
+        ...c,
+        ...conversation,
+        participants: mergedParticipants,
+      };
+    }),
+  }));
+},
       addConversation: (conversation) => {
         set((state) => {
           const exists = state.conversations.some(
@@ -176,7 +198,25 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
+updateLastRead: (userId: string, conversationId: string, lastReadMessageId: string) => {
+  set((state) => {
+    const newConversations = state.conversations.map((conv) => {
+      if (conv._id !== conversationId) return conv;
 
+      return {
+        ...conv,
+        participants: conv.participants.map((p) => {
+          if (p._id === userId) {
+            return { ...p, lastReadMessageId };
+          }
+          return { ...p }; 
+        }),
+      };
+    });
+
+    return { conversations: newConversations };
+  });
+},
       deleteMessageForMe: async (messageId: string, conversationId: string) => {
         try {
           await chatService.deleteMessageForMe(messageId);
@@ -237,6 +277,7 @@ export const useChatStore = create<ChatState>()(
         });
       },
     }),
+    
     {
       name: "chat-storage",
       partialize: (state) => ({ conversations: state.conversations }),

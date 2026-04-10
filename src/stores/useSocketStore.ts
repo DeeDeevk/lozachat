@@ -11,10 +11,13 @@ const registerSocketEvents = (socket: Socket, set: any) => {
   socket.off("online-users");
   socket.off("new-message");
   socket.off("message-recalled");
-
+socket.off("message-read");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
+ socket.on("message-read", ({ userId, conversationId, messageId }) => {
+  useChatStore.getState().updateLastRead(userId, conversationId, messageId);
+});
 
   socket.on("online-users", (userIds) => {
     set({ onlineUsers: userIds });

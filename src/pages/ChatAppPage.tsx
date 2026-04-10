@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback , useMemo} from "react";
 import { useChatStore } from "@/stores/useChatStore";
 import SideNav from "@/components/SideNav";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { formatTime } from "@/utils/formatTime";
 import ConversationList from "@/components/ConversationList";
 import { Ellipsis, RotateCcw, Trash2 } from "lucide-react";
+import { useSocketStore } from "@/stores/useSocketStore";
 interface ContextMenu {
   x: number;
   y: number;
@@ -31,7 +32,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuthStore();
+  const { user, userProfile } = useAuthStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +50,7 @@ export default function ChatPage() {
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+  
   //xu li vi tri context menu
   useEffect(() => {
     if (!contextMenu || !menuRef.current) return;
@@ -85,37 +87,67 @@ export default function ChatPage() {
       el.style.overflow = "auto";
     };
   }, [contextMenu]);
+  //load acvatar da doc khi vao trang chat
+  useEffect(() => {
+  if (activeConversationId) {
+    fetchMessages(activeConversationId);
+  }
+}, [activeConversationId]);
 
-  const activeConv = conversations.find((c) => c._id === activeConversationId);
+  const activeConv = useMemo(() => {
+  return conversations.find((c) => c._id === activeConversationId);
+}, [conversations, activeConversationId]);
 
-  const currentMessages = activeConversationId
-    ? Array.isArray(messages[activeConversationId])
-      ? messages[activeConversationId]
-      : messages[activeConversationId]?.items || []
-    : [];
+  const currentMessages = useMemo(() => {
+  if (!activeConversationId) return [];
+  const data = messages[activeConversationId];
+  if (!data) return [];
+  return Array.isArray(data) ? data : data.items ?? [];
+}, [messages, activeConversationId]);
+  useEffect(() => {
+  if (!activeConversationId || currentMessages.length === 0) return;
 
+  const { socket } = useSocketStore.getState();
+  const { user } = useAuthStore.getState();
+
+  const lastMsg = currentMessages.at(-1);
+  if (!socket || !lastMsg) return;
+
+  if (lastMsg.senderId === user?.userId) return;
+
+  socket.emit("mark-read", {
+    conversationId: activeConversationId,
+    messageId: lastMsg._id,
+  });
+}, [activeConversationId, currentMessages]);
+useEffect(() => {
+  if (activeConv?.participants) {
+    const other = activeConv.participants.find(p => p._id !== user?.userId);
+    const me   = activeConv.participants.find(p => p._id === user?.userId);
+
+    console.log("🔍 LastRead của NGƯỜI KIA:", other?.lastReadMessageId);
+    console.log("🔍 LastRead của BẠN     :", me?.lastReadMessageId);
+  }
+}, [activeConv]);
   const handleSelect = (id: string) => {
     setActiveConversation(id);
     fetchMessages(id);
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || !activeConversationId) return;
-    try {
-      if (activeConv?.group) {
-        await sendGroupMessage(activeConversationId, input);
-      } else {
-        const otherUser = activeConv?.participants.find(
-          (p) => p._id !== user?.userId,
-        );
-        if (!otherUser) return;
-        await sendDirectMessage(otherUser._id, input);
-      }
-      setInput("");
-    } catch (error) {
-      console.error("Send message error:", error);
+  if (!input.trim() || !activeConversationId) return;
+  try {
+    if (activeConv?.group) {
+      await sendGroupMessage(activeConversationId, input);
+    } else {
+      if (!otherUser) return;
+      await sendDirectMessage(otherUser._id, input); // chỉ gọi 1 lần
     }
-  };
+    setInput("");
+  } catch (error) {
+    console.error("Send message error:", error);
+  }
+};
 
   const renderMessageContent = (content: string) => {
     // Regex này sẽ bắt trọn link YouTube của bạn
@@ -188,9 +220,9 @@ export default function ChatPage() {
   };
 
   const handleRecall = async () => {
-    if (!contextMenu) return;
+    if (!contextMenu || !activeConversationId) return;
     try {
-      await recallMessage(contextMenu.messageId);
+      await recallMessage(contextMenu.messageId, activeConversationId);
     } catch {
       alert("Không thể thu hồi tin nhắn này");
     } finally {
@@ -208,9 +240,13 @@ export default function ChatPage() {
       setContextMenu(null);
     }
   };
-  const otherUser = activeConv?.participants.find(
+  const otherUser = useMemo(() => {
+  return activeConv?.participants?.find(
     (p) => p._id !== user?.userId,
   );
+}, [activeConv, user?.userId]);
+const otherAvatar = otherUser?.avatarUrl || "/miku.png";
+const myAvatar = userProfile?.avatarUrl || "/miku.png";
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#060d1f" }}>
@@ -248,72 +284,131 @@ export default function ChatPage() {
               ref={messagesContainerRef}
               style={{ flex: 1, padding: 16, overflowY: "auto" }}
             >
-              {currentMessages.map((msg: any, i: number) => {
-                const isMe = msg.senderId === user?.userId;
+            {currentMessages.map((msg: any, i: number) => {
+  const isMe = msg.senderId === user?.userId;
 
-                return (
-                  <div
-                    key={msg._id || i}
-                    className={`group flex items-center gap-1.5 mb-2.5 ${isMe ? "justify-end" : "justify-start"}`}
-                  >
-                    {!msg.isRecalled && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRightClick(e as any, msg);
-                        }}
-                        className={`opacity-0 group-hover:opacity-100 cursor-pointer text-slate-400 hover:text-white text-xl ${isMe ? "order-first" : "order-last"}`}
-                      >
-                        <Ellipsis />
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: 14,
-                        maxWidth: "70%",
-                        // Tin thu hồi style khác
-                        background: msg.isRecalled
-                          ? "transparent"
-                          : isMe
-                            ? "linear-gradient(135deg,#2563eb,#3b82f6)"
-                            : "#1e293b",
-                        border: msg.isRecalled
-                          ? "1px dashed rgba(255,255,255,0.2)"
-                          : "none",
-                      }}
-                      onContextMenu={(e) =>
-                        !msg.isRecalled && handleRightClick(e, msg)
-                      }
-                    >
-                      {msg.isRecalled ? (
-                        <span
-                          style={{
-                            color: "#64748b",
-                            fontStyle: "italic",
-                            fontSize: 13,
-                          }}
-                        >
-                          🚫 Tin nhắn đã được thu hồi
-                        </span>
-                      ) : (
-                        <>
-                          {renderMessageContent(msg.content)}
-                          <div
-                            style={{
-                              fontSize: 10,
-                              marginTop: 4,
-                              color: "#cbd5e1",
-                            }}
-                          >
-                            {msg.createdAt ? formatTime(msg.createdAt) : ""}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+  // ── Tính last read của 2 bên
+  const lastReadId = activeConv?.participants?.find(
+    (p) => p._id !== user?.userId
+  )?.lastReadMessageId;
+
+  const myLastReadId = activeConv?.participants?.find(
+    (p) => p._id === user?.userId
+  )?.lastReadMessageId;
+
+  const isLastRead =
+    lastReadId && msg._id?.toString() === lastReadId.toString();
+
+  const myLastRead =
+    myLastReadId && msg._id?.toString() === myLastReadId.toString();
+
+  return (
+    <div
+      key={`${msg._id}-${i}`}
+      className={`group flex flex-col mb-2.5 ${
+        isMe ? "items-end" : "items-start"
+      }`}
+    >
+      {/* Hàng ngang: icon + bubble */}
+      <div
+        className={`flex items-center gap-1.5 ${
+          isMe ? "justify-end" : "justify-start"
+        }`}
+      >
+        {/* Icon Ellipsis */}
+        {!msg.isRecalled && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRightClick(e as any, msg);
+            }}
+            className={`opacity-0 group-hover:opacity-100 cursor-pointer text-slate-400 hover:text-white text-xl ${
+              isMe ? "order-first" : "order-last"
+            }`}
+          >
+            <Ellipsis />
+          </div>
+        )}
+
+        {/* Bubble tin nhắn */}
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 14,
+            maxWidth: "85%",
+            background: msg.isRecalled
+              ? "transparent"
+              : isMe
+              ? "linear-gradient(135deg,#2563eb,#3b82f6)"
+              : "#1e293b",
+            border: msg.isRecalled
+              ? "1px dashed rgba(255,255,255,0.2)"
+              : "none",
+            wordBreak: "break-word",
+          }}
+          onContextMenu={(e) =>
+            !msg.isRecalled && handleRightClick(e, msg)
+          }
+        >
+          {msg.isRecalled ? (
+            <span
+              style={{
+                color: "#64748b",
+                fontStyle: "italic",
+                fontSize: 13,
+              }}
+            >
+              🚫 Tin nhắn đã được thu hồi
+            </span>
+          ) : (
+            <>
+              <div>{renderMessageContent(msg.content)}</div>
+              <div
+                style={{
+                  fontSize: 10,
+                  marginTop: 4,
+                  color: "#cbd5e1",
+                  textAlign: isMe ? "right" : "left",
+                }}
+              >
+                {msg.createdAt ? formatTime(msg.createdAt) : ""}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 🔥 AVATAR SEEN - CẢ 2 CHIỀU (đặt ở đây, ngoài flex ngang) */}
+      {!msg.isRecalled && (
+        <>
+          {/* 1. Tin của BẠN → người kia đã đọc */}
+          {isMe && isLastRead && (
+            <div className="flex justify-end pr-1 mt-0.5">
+              <img
+                src={otherAvatar}
+                alt="seen"
+                className="w-4 h-4 rounded-full border border-blue-400"
+                title={`${otherUser?.displayName} đã xem`}
+              />
+            </div>
+          )}
+
+          {/* 2. Tin của NGƯỜI KIA → BẠN đã đọc */}
+          {/* {!isMe && myLastRead && (
+            <div className="flex justify-start pl-1 mt-0.5">
+              <img
+                src={myAvatar}
+                alt="seen"
+                className="w-4 h-4 rounded-full border border-blue-400"
+                title="Bạn đã xem"
+              />
+            </div>
+          )} */}
+        </>
+      )}
+    </div>
+  );
+})}
               <div ref={messagesEndRef} />
             </div>
 
@@ -412,21 +507,21 @@ export default function ChatPage() {
 
           {/* Xoá phía mình — ai cũng xoá được */}
           {!contextMenu.isRecalled && (
-            <button
-              onClick={handleDeleteForMe}
-              style={menuItemStyle}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "#334155")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
-            >
-              <button className="flex items-center gap-2 text-white hover:text-gray-300">
-                <Trash2 size={18} />
-                <span>Xoá phía tôi</span>
-              </button>
-            </button>
+           <button
+  onClick={handleDeleteForMe}
+  style={menuItemStyle}
+  onMouseEnter={(e) =>
+    (e.currentTarget.style.background = "#334155")
+  }
+  onMouseLeave={(e) =>
+    (e.currentTarget.style.background = "transparent")
+  }
+>
+  <div className="flex items-center gap-2 text-white hover:text-gray-300">
+    <Trash2 size={18} />
+    <span>Xoá phía tôi</span>
+  </div>
+</button>
           )}
 
           <button

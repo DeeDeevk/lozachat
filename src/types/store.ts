@@ -18,6 +18,7 @@ export interface ChatState {
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
+  updateLastRead: (userId: string, conversationId: string, lastReadMessageId: string) => void;
   sendDirectMessage: (
     recipientId: string,
     content: string,
