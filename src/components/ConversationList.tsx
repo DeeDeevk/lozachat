@@ -7,7 +7,7 @@ import SearchUserModal from "./SearchUserModal";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/stores/useChatStore";
-import '../../public/css/conversationList.css'
+import '../css/conversationList.css';
 
 // ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {

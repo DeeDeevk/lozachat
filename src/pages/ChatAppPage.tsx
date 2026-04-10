@@ -431,7 +431,8 @@ export default function ChatPage() {
 
           <button
             onClick={() => setContextMenu(null)}
-style={{ ...menuItemStyle, color: "#f97316" }}            onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
+            style={{ ...menuItemStyle, color: "#f97316" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
             }

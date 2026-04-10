@@ -661,17 +661,20 @@ export default function FriendsPage() {
                               <button
                                 className="fp-card-btn fp-card-btn-chat"
                                 data-tip="Nhắn tin"
-                          onClick={async () => {
-  try {
-    const convo = await chatService.getOrCreateDirectConversation(friend._id);
+                                onClick={async () => {
+                                  try {
+                                    const convo =
+                                      await chatService.getOrCreateDirectConversation(
+                                        friend._id,
+                                      );
 
-    navigate("/chat", {
-      state: { conversationId: convo._id },
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}}
+                                    navigate("/chat", {
+                                      state: { conversationId: convo._id },
+                                    });
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
                               >
                                 <MessageCircle size={15} />
                               </button>
