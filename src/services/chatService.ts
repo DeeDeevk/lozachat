@@ -66,4 +66,6 @@ export const chatService = {
 async deleteMessageForMe(messageId: string): Promise<void> {
   await api.delete(`/messages/${messageId}`);
 },
+
+
 };

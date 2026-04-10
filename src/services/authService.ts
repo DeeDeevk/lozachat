@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { getDeviceId } from "@/utils/device";
 
 export interface SignInData {
   username: string;
@@ -14,10 +15,20 @@ export interface SignUpData {
 }
 
 export const authService = {
-  signIn: async (data: SignInData) => {
-    const res = await api.post("/auth/signin", data, {
-      withCredentials: true,
-    });
+    signIn: async (data: SignInData) => {
+    const deviceId = getDeviceId(); // thêm dòng này
+
+    const res = await api.post(
+      "/auth/signin",
+      {
+        ...data,
+        deviceId, // gửi lên backend
+      },
+      {
+        withCredentials: true,
+      }
+    );
+
     return res.data;
   },
 
