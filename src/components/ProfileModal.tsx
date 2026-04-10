@@ -48,6 +48,7 @@ export default function ProfileModal({
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [submitError, setSubmitError] = useState("");
 
   // ── Profile form ──
   const [form, setForm] = useState({
@@ -115,8 +116,26 @@ export default function ProfileModal({
     }
   };
 
+  const [errors, setErrors] = useState<{ phone?: string }>({});
+
+  const validate = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    if (form.phone && !/^(0[3|5|7|8|9])+([0-9]{8})$/.test(form.phone)) {
+      newErrors.phone = "Số điện thoại không hợp lệ";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
     if (!userProfile) return;
+    if (!validate()) {
+      setSubmitError("Vui lòng kiểm tra lại thông tin đã nhập");
+      return;
+    }
+    setSubmitError("");
     try {
       const payload: UpdateProfilePayload = {};
       if (form.displayName) payload.displayName = form.displayName;
@@ -533,6 +552,11 @@ export default function ProfileModal({
               </div>
 
               <hr className="pm-divider" />
+              {submitError && (
+                <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 8, textAlign: "right" }}>
+                  {submitError}
+                </p>
+              )}
               <button className="pm-btn-primary" onClick={handleSave}>
                 Cập nhật thông tin
               </button>

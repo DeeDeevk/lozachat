@@ -74,6 +74,12 @@ export default function LoginPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleLoginKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "Enter") {
+    handleSubmit();
+  }
+};
+
   // ── Forgot password handlers ──
   const validateEmail = () => {
     if (!email.trim()) { setEmailError("Vui lòng nhập địa chỉ email"); return false; }
@@ -358,15 +364,15 @@ export default function LoginPage() {
                 {/* Username */}
                 <div>
                   <label style={{ display:"block", color:"#cbd5e1", fontSize:11, fontWeight:500, marginBottom:5 }}>
-                    Tên đăng nhập
+                    Tên đăng nhập hoặc email
                   </label>
                   <div style={{ position:"relative" }}>
                     <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                       <User size={14} color="#64748b" />
                     </span>
                     <input name="username" value={formData.username} onChange={handleChange}
-                      onFocus={() => setFocused("username")} onBlur={() => setFocused("")}
-                      placeholder="abc" style={{ ...inputBase("username"), paddingLeft:34 }} />
+                      onFocus={() => setFocused("username")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}  
+                      placeholder="Nhập tên đăng nhập hoặc email" style={{ ...inputBase("username"), paddingLeft:34 }} />
                   </div>
                   {errors.username && (
                     <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
@@ -393,7 +399,7 @@ export default function LoginPage() {
                     </span>
                     <input name="password" type={showPassword ? "text" : "password"}
                       value={formData.password} onChange={handleChange}
-                      onFocus={() => setFocused("password")} onBlur={() => setFocused("")}
+                      onFocus={() => setFocused("password")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}  
                       placeholder="••••••••" style={{ ...inputBase("password"), paddingLeft:34, paddingRight:38 }} />
                     <button type="button" onClick={() => setShowPassword(v => !v)}
                       onMouseEnter={() => setHoverEye(true)} onMouseLeave={() => setHoverEye(false)}
@@ -430,22 +436,6 @@ export default function LoginPage() {
                   <div style={{ flex:1, height:1, background:"rgba(71,85,105,.3)" }} />
                 </div>
 
-                {/* Google */}
-                {/* <button type="button" style={{ width:"100%", padding:"10px 0", borderRadius:12,
-                  background:"rgba(30,41,59,.8)", border:"1px solid rgba(71,85,105,.5)", color:"#cbd5e1",
-                  fontWeight:500, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center",
-                  justifyContent:"center", gap:8, transition:"all .2s" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor="#3b82f6"; e.currentTarget.style.color="white"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor="rgba(71,85,105,.5)"; e.currentTarget.style.color="#cbd5e1"; }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                  </svg>
-                  Đăng nhập với Google
-                </button> */}
-
                 <p style={{ textAlign:"center", color:"#94a3b8", fontSize:12, margin:0 }}>
                   Chưa có tài khoản?{" "}
                   <button type="button" onClick={() => navigate("/signup")}
@@ -456,12 +446,7 @@ export default function LoginPage() {
                     Đăng ký
                   </button>
                 </p>
-                <p style={{ textAlign:"center", color:"#475569", fontSize:11, margin:0, lineHeight:1.6 }}>
-                  Bằng cách tiếp tục, bạn đồng ý với{" "}
-                  <a href="#" style={{ color:"#64748b", textDecoration:"underline" }}>Điều khoản dịch vụ</a>{" "}
-                  và{" "}
-                  <a href="#" style={{ color:"#64748b", textDecoration:"underline" }}>Chính sách bảo mật</a>.
-                </p>
+               
               </div>
             </>
           )}
@@ -545,12 +530,28 @@ export default function LoginPage() {
                     <h2 style={{ color:"white", fontWeight:800, fontSize:"1.4rem", margin:"0 0 6px" }}>
                       Nhập mã xác nhận
                     </h2>
-                    <p style={{ color:"#64748b", fontSize:13, margin:0, lineHeight:1.6 }}>
-                      Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
-                      <strong style={{ color:"#94a3b8" }}>{email}</strong>
-                      {" "}và có hiệu lực trong{" "}
-                      <strong style={{ color:"#60a5fa" }}>1 phút</strong>.
-                    </p>
+               <p style={{ 
+  color: "#64748b", 
+  fontSize: 13, 
+  margin: 0, 
+  lineHeight: 1.65 
+}}>
+  Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
+  <strong style={{ color: "#94a3b8" }}>{email}</strong>
+  
+  <br />
+  
+  <span style={{ 
+    display: "block", 
+    textAlign: "center", 
+    color: "#60a5fa", 
+    fontWeight: 600,
+    fontSize: 13,
+    marginTop: 10,           // ← Khoảng cách vừa phải
+  }}>
+    Mã có hiệu lực trong 1 phút
+  </span>
+</p>
                   </div>
 
                   <div style={{ display:"flex", flexDirection:"column", gap:20 }}>

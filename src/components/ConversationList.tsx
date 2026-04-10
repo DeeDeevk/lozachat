@@ -1,31 +1,34 @@
 import { useState } from "react";
-import { Search, Star, UserSearch, UsersRound } from "lucide-react";
+import { Search, UserSearch, UsersRound } from "lucide-react";
+import { formatTime } from "@/utils/formatTime";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 import SearchUserModal from "./SearchUserModal";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { useChatStore } from "@/stores/useChatStore";
+import '../../public/css/conversationList.css'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-export interface Message {
-  id: string;
-  senderId: string;
-  text: string;
-  time: string;
-  status: "sent" | "delivered" | "read";
-  type: "text" | "image" | "file";
-}
-
+// ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {
-  id: string;
-  name: string;
-  avatar: string;
-  avatarColor: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  online: boolean;
+  _id: string;
+  group?: {
+    name: string;
+  };
+  participants: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string;
+  }[];
+  lastMessage?: {
+    content: string;
+    createdAt: string;
+  };
+  unread?: number;
   pinned?: boolean;
-  messages: Message[];
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
+// ── Props ────────────────────────────────────────────────────────────────────
 interface ConversationListProps {
   conversations: Conversation[];
   activeId: string | null;
@@ -34,7 +37,7 @@ interface ConversationListProps {
   onClose: () => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Component ────────────────────────────────────────────────────────────────
 export default function ConversationList({
   conversations,
   activeId,
@@ -46,103 +49,79 @@ export default function ConversationList({
   const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
   const [showSearchModal, setShowSearchModal] = useState(false);
 
+  const { user } = useAuthStore();
+  const { onlineUsers } = useSocketStore();
+
+  const location = useLocation();
+  const { setActiveConversation } = useChatStore();
+
+  const conversationIdFromNav = location.state?.conversationId;
+
+  useEffect(() => {
+    if (conversationIdFromNav) {
+      setActiveConversation(conversationIdFromNav);
+    }
+  }, [conversationIdFromNav, setActiveConversation]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const getOtherUser = (conv: Conversation) => {
+    if (!user?.userId) return null;
+    return conv.participants?.find(
+      (p) => String(p._id) !== String(user.userId),
+    );
+  };
+
+  const getName = (conv: Conversation) => {
+    if (conv.group) return conv.group.name;
+    const other = getOtherUser(conv);
+    return other?.displayName || "Unknown";
+  };
+
+  const getAvatarText = (conv: Conversation) => {
+    const name = getName(conv);
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const getAvatarUrl = (conv: Conversation) => {
+    if (conv.group) return null;
+    return getOtherUser(conv)?.avatarUrl ?? null;
+  };
+
+  const isOnline = (conv: Conversation) => {
+    if (conv.group) return false;
+    const other = getOtherUser(conv);
+    return other ? onlineUsers.includes(other._id) : false;
+  };
+
+  const getAvatarColor = (conv: Conversation) => {
+    const name = getName(conv);
+    const colors = [
+      "#3b82f6",
+      "#10b981",
+      "#8b5cf6",
+      "#f59e0b",
+      "#ef4444",
+      "#06b6d4",
+      "#ec4899",
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++)
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // ── Filter ───────────────────────────────────────────────────────────────
   const filteredConvs = conversations.filter((c) => {
-    const matchesSearch = c.name
+    const matchesSearch = getName(c)
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    if (activeTab === "group") return matchesSearch && c.name.includes("Team");
-    if (activeTab === "direct")
-      return matchesSearch && !c.name.includes("Team");
+    if (activeTab === "group") return matchesSearch && !!c.group;
+    if (activeTab === "direct") return matchesSearch && !c.group;
     return matchesSearch;
   });
 
   return (
     <>
-      <style>{`
-        /* ── Sidebar wrapper ── */
-        .chat-sidebar {
-          width: 360px;
-          flex-shrink: 0;
-        }
-
-        @media (max-width: 1100px) { .chat-sidebar { width: 270px; } }
-
-        @media (max-width: 767px) {
-          .chat-sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            z-index: 38;
-            width: calc(100vw - 56px) !important;
-            max-width: 300px !important;
-            transform: translateX(-100%);
-            visibility: hidden;
-            transition: transform .28s cubic-bezier(.22,1,.36,1), visibility .28s;
-            box-shadow: 4px 0 32px rgba(0,0,0,.6);
-          }
-          .chat-sidebar.open {
-            transform: translateX(56px);
-            visibility: visible;
-          }
-          .cl-back-btn { display: flex !important; }
-        }
-
-        /* ── Shared utils (scoped to sidebar) ── */
-        .cl-icon-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 36px; height: 36px; border-radius: 10px; border: none;
-          background: transparent; color: #94a3b8; cursor: pointer;
-          transition: all .18s; flex-shrink: 0;
-        }
-        .cl-icon-btn:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
-        .cl-icon-btn svg { display: block; stroke: currentColor; fill: none; pointer-events: none; }
-
-        .cl-back-btn { display: none; }
-
-        .cl-search-input {
-          background: rgba(15,23,42,.9);
-          border: 2px solid rgba(255,255,255,.07);
-          border-radius: 12px;
-          padding: 9px 14px 9px 36px;
-          color: white; font-size: 13px; outline: none; width: 100%;
-          transition: all .2s;
-          font-family: 'Segoe UI', system-ui, sans-serif;
-        }
-        .cl-search-input:focus { border-color: rgba(59,130,246,.4); background: rgba(20,30,50,.9); }
-        .cl-search-input::placeholder { color: #475569; }
-
-        .cl-tab-btn {
-          flex: 1; padding: 7px 0; border: none; background: transparent;
-          color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer;
-          border-radius: 10px; transition: all .2s;
-          font-family: 'Segoe UI', system-ui, sans-serif;
-        }
-        .cl-tab-btn.active { background: rgba(59,130,246,.15); color: #60a5fa; }
-
-        .cl-conv-item {
-          display: flex; align-items: center; gap: 12px; padding: 10px 12px;
-          cursor: pointer; border-radius: 12px; transition: all .18s; position: relative;
-        }
-        .cl-conv-item:hover  { background: rgba(59,130,246,.08); }
-        .cl-conv-item.active { background: rgba(59,130,246,.14); }
-        .cl-conv-item.active::before {
-          content: ""; position: absolute; left: 0; top: 20%; bottom: 20%;
-          width: 3px; border-radius: 0 3px 3px 0;
-          background: linear-gradient(180deg,#3b82f6,#2563eb);
-        }
-
-        @keyframes cl-pulse { 0%,100%{opacity:.6;transform:scale(1);} 50%{opacity:1;transform:scale(1.4);} }
-        .cl-online-dot {
-          position: absolute; bottom: -1px; right: -1px;
-          width: 9px; height: 9px; border-radius: 50%;
-          background: #10b981; border: 2px solid #060d1f;
-          animation: cl-pulse 2.5s ease-in-out infinite;
-        }
-
-        .cl-sidebar-title { color: white; font-weight: 700; font-size: 18px; }
-      `}</style>
-
       <div
         className={`chat-sidebar ${isOpen ? "open" : ""}`}
         style={{
@@ -226,141 +205,137 @@ export default function ConversationList({
           ))}
         </div>
 
-        {/* ── Pinned label ── */}
-        {filteredConvs.some((c) => c.pinned) && (
-          <div
-            style={{
-              padding: "8px 16px 4px",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Star size={10} color="#64748b" />
-            <span
-              style={{
-                color: "#475569",
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}
-            >
-              Đã ghim
-            </span>
-          </div>
-        )}
-
         {/* ── Conversation list ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-          {filteredConvs.map((conv) => (
-            <div
-              key={conv.id}
-              className={`cl-conv-item ${conv.id === activeId ? "active" : ""}`}
-              onClick={() => onSelectConversation(conv.id)}
-            >
-              {/* Avatar */}
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    background: conv.avatarColor,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "white",
-                    boxShadow:
-                      conv.id === activeId
-                        ? `0 4px 12px ${conv.avatarColor}55`
-                        : "none",
-                  }}
-                >
-                  {conv.avatar}
-                </div>
-                {conv.online && <div className="cl-online-dot" />}
-              </div>
+        <div
+          className="cl-list"
+          style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}
+        >
+          {filteredConvs.map((conv) => {
+            const name = getName(conv);
+            const avatarUrl = getAvatarUrl(conv);
+            const online = isOnline(conv);
+            const color = getAvatarColor(conv);
+            const unread = conv.unread ?? 0;
 
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 3,
-                  }}
-                >
-                  <span
+            return (
+              <div
+                key={conv._id}
+                className={`cl-conv-item ${conv._id === activeId ? "active" : ""}`}
+                onClick={() => onSelectConversation(conv._id)}
+              >
+                {/* Avatar */}
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div
                     style={{
-                      fontWeight: conv.unread > 0 ? 700 : 500,
-                      fontSize: 14,
-                      color: conv.unread > 0 ? "white" : "#cbd5e1",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
                       overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      background: color,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow:
+                        conv._id === activeId
+                          ? `0 4px 12px ${color}55`
+                          : "none",
                     }}
                   >
-                    {conv.name}
-                  </span>
-                  <span
-                    style={{
-                      color: "#475569",
-                      fontSize: 11,
-                      flexShrink: 0,
-                      marginLeft: 4,
-                    }}
-                  >
-                    {conv.time}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: conv.unread > 0 ? "#94a3b8" : "#475569",
-                      fontSize: 12,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      flex: 1,
-                    }}
-                  >
-                    {conv.lastMessage}
-                  </span>
-                  {conv.unread > 0 && (
-                    <div
-                      style={{
-                        minWidth: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        background: "linear-gradient(135deg,#2563eb,#3b82f6)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: "white",
-                        padding: "0 5px",
-                        marginLeft: 6,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {conv.unread > 9 ? "9+" : conv.unread}
-                    </div>
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }}
+                      >
+                        {getAvatarText(conv)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Online/offline dot */}
+                  {online ? (
+                    <div className="cl-online-dot" />
+                  ) : (
+                    <div className="cl-offline-dot" />
                   )}
                 </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 3,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: unread > 0 ? 700 : 500,
+                        fontSize: 14,
+                        color: unread > 0 ? "white" : "#cbd5e1",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {name}
+                    </span>
+                    {conv.lastMessage && (
+                      <span
+                        style={{
+                          color: "#475569",
+                          fontSize: 11,
+                          flexShrink: 0,
+                          marginLeft: 4,
+                        }}
+                      >
+                        {formatTime(conv.lastMessage.createdAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: unread > 0 ? "#94a3b8" : "#475569",
+                        fontSize: 12,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1,
+                      }}
+                    >
+                      {conv.lastMessage?.content || "Chưa có tin nhắn"}
+                    </span>
+                    {unread > 0 && (
+                      <div className="cl-badge">
+                        {unread > 9 ? "9+" : unread}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {filteredConvs.length === 0 && (
             <div
@@ -370,7 +345,15 @@ export default function ConversationList({
                 color: "#475569",
               }}
             >
-              <Search size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
+              <Search
+                size={28}
+                style={{
+                  marginBottom: 8,
+                  opacity: 0.4,
+                  display: "block",
+                  margin: "0 auto 8px",
+                }}
+              />
               <p style={{ fontSize: 13 }}>Không tìm thấy cuộc trò chuyện</p>
             </div>
           )}

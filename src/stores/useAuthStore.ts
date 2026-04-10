@@ -160,7 +160,7 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error) {
           console.error(error);
-          toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          // toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
           get().clearState();
         } finally {
           set({ loading: false });
@@ -177,9 +177,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      partialize: (state) => {
-        user: state.user;
-      },
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken, // Lưu cả token để không bị bắt đăng nhập lại
+        userProfile: state.userProfile, // Lưu profile để hiện avatar/tên ngay lập tức
+      }),
     },
   ),
 );
