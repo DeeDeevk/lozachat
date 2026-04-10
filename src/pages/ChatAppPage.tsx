@@ -4,6 +4,7 @@ import SideNav from "@/components/SideNav";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { formatTime } from "@/utils/formatTime";
 import ConversationList from "@/components/ConversationList";
+import { Image, Send } from "lucide-react";
 interface ContextMenu {
   x: number;
   y: number;
@@ -33,6 +34,30 @@ export default function ChatPage() {
   const { user } = useAuthStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref để điều khiển input file
+  const [image, setImage] = useState<File | null>(null); // Lưu file tạm thời nếu muốn xem trước
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click(); // Kích hoạt chọn file khi bấm vào icon
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log("File đã chọn:", file);
+      setImage(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const cancelImage = () => {
+    setImage(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl); // Giải phóng bộ nhớ
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   useEffect(() => {
     fetchConversations();
@@ -99,7 +124,7 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || !activeConversationId) return;
+    if ((!input.trim() && !image) || !activeConversationId) return;
     try {
       if (activeConv?.group) {
         await sendGroupMessage(activeConversationId, input);
@@ -297,12 +322,38 @@ export default function ChatPage() {
                         </span>
                       ) : (
                         <>
-                          {renderMessageContent(msg.content)}
+                          {msg.imgUrl && (
+                            <div style={{ marginBottom: msg.content ? 8 : 0 }}>
+                              <img
+                                src={msg.imgUrl}
+                                alt="Sent attachment"
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: 300, // Giới hạn chiều cao để không choán hết màn hình
+                                  borderRadius: 8,
+                                  display: "block",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() =>
+                                  window.open(msg.imgUrl, "_blank")
+                                } // Click để xem ảnh to
+                              />
+                            </div>
+                          )}
+
+                          {/* ── HIỂN THỊ CHỮ ── */}
+                          {msg.content && (
+                            <div style={{ wordBreak: "break-word" }}>
+                              {renderMessageContent(msg.content)}
+                            </div>
+                          )}
+
                           <div
                             style={{
                               fontSize: 10,
                               marginTop: 4,
-                              color: "#cbd5e1",
+                              color: isMe ? "rgba(255,255,255,0.7)" : "#cbd5e1", // Chỉnh màu thời gian cho dễ nhìn trên nền xanh
+                              textAlign: isMe ? "right" : "left",
                             }}
                           >
                             {msg.createdAt ? formatTime(msg.createdAt) : ""}
@@ -315,6 +366,52 @@ export default function ChatPage() {
               })}
               <div ref={messagesEndRef} />
             </div>
+            {previewUrl && (
+              <div
+                style={{
+                  padding: "8px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  background: "rgba(30, 41, 59, 0.5)",
+                  borderTop: "1px solid rgba(255,255,255,0.05)",
+                  position: "relative",
+                }}
+              >
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    style={{
+                      height: 80,
+                      borderRadius: 8,
+                      objectFit: "cover",
+                      border: "1px solid #3b82f6",
+                    }}
+                  />
+                  <button
+                    onClick={cancelImage}
+                    style={{
+                      position: "absolute",
+                      top: -8,
+                      right: -8,
+                      background: "#1e293b",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 20,
+                      height: 20,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Input */}
             <div
@@ -325,6 +422,29 @@ export default function ChatPage() {
                 gap: 8,
               }}
             >
+              <button
+                onClick={handleImageClick}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  transition: "color 0.2s",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.color = "#3b82f6")}
+                onMouseOut={(e) => (e.currentTarget.style.color = "#94a3b8")}
+              >
+                <Image size={24} />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                style={{ display: "none" }}
+              />
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
