@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io-client";
 import type { Conversation, Message } from "./chat";
+import type { UploadAttachmentResponse } from "@/services/chatService";
 
 export interface ChatState {
   conversations: Conversation[];
@@ -7,7 +8,7 @@ export interface ChatState {
     string,
     {
       items: Message[];
-      hashMore: boolean; // infinite-scroll
+      hasMore: boolean; // infinite-scroll
       nextCursor?: string | null;
     }
   >;
@@ -20,14 +21,19 @@ export interface ChatState {
   fetchMessages: (conversationId?: string) => Promise<void>;
   sendDirectMessage: (
     recipientId: string,
-    content: string,
-    imgUrl?: string,
+    payload: {
+      content?: string;
+      imgUrl?: string;
+    },
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
-    content: string,
-    imgUrl?: string,
+    payload: {
+      content?: string;
+      imgUrl?: string;
+    },
   ) => Promise<void>;
+  uploadAttachment: (file: File) => Promise<UploadAttachmentResponse>;
   // add message
   addMessage: (message: Message) => Promise<void>;
   // update convo
@@ -35,8 +41,11 @@ export interface ChatState {
   //xoa
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
-deleteMessageForMe: (messageId: string, conversationId: string) => Promise<void>;
-addConversation: (conversation: Conversation) => void;
+  deleteMessageForMe: (
+    messageId: string,
+    conversationId: string,
+  ) => Promise<void>;
+  addConversation: (conversation: Conversation) => void;
 }
 
 export interface SocketState {

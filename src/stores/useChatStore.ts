@@ -81,13 +81,13 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      sendDirectMessage: async (recipientId, content, imgUrl) => {
+      sendDirectMessage: async (recipientId, payload) => {
         try {
           const { activeConversationId } = get();
           await chatService.sendDirecrMessages(
             recipientId,
-            content,
-            imgUrl,
+            payload?.content || "",
+            payload?.imgUrl || "",
             activeConversationId || undefined,
           );
 
@@ -100,9 +100,13 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy ra khi gửi direct message", error);
         }
       },
-      sendGroupMessage: async (conversationId, content, imgUrl) => {
+      sendGroupMessage: async (conversationId, payload) => {
         try {
-          await chatService.sendGroupMessages(conversationId, content, imgUrl);
+          await chatService.sendGroupMessages(
+            conversationId,
+            payload?.content || "",
+            payload?.imgUrl,
+          );
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === get().activeConversationId ? { ...c, seenBy: [] } : c,
@@ -110,6 +114,14 @@ export const useChatStore = create<ChatState>()(
           }));
         } catch (error) {
           console.error("Lỗi xảy ra khi gửi group message", error);
+        }
+      },
+      uploadAttachment: async (file) => {
+        try {
+          return await chatService.uploadAttachment(file);
+        } catch (error) {
+          console.error("Lỗi upload file chat", error);
+          throw error;
         }
       },
       addMessage: async (message) => {
@@ -130,13 +142,20 @@ export const useChatStore = create<ChatState>()(
             if (prevItems.some((m) => m._id === message._id)) {
               return state;
             }
+
+            const currentConvoState = state.messages[convoId] ?? {
+              items: [],
+              hasMore: false,
+              nextCursor: undefined,
+            };
+
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
                   items: [...prevItems, message],
-                  hasMore: state.messages[convoId].hashMore,
-                  nextCursor: state.messages[convoId].nextCursor ?? undefined,
+                  hasMore: currentConvoState.hasMore,
+                  nextCursor: currentConvoState.nextCursor ?? undefined,
                 },
               },
             };
