@@ -3,6 +3,7 @@ export interface Participant {
   displayName: string;
   avatarUrl?: string | null;
   joinedAt: string;
+  lastReadMessageId?: string;
 }
 
 export interface SeenUser {
