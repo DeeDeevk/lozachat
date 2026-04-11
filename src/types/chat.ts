@@ -57,3 +57,56 @@ export interface Message {
   recalledAt?: string;      
   deletedFor?: string[];
 }
+
+export type ChatMessageKind =
+  | "text"
+  | "emoji"
+  | "reply"
+  | "image"
+  | "file"
+  | "audio"
+  | "sticker"
+  | "poll"
+  | "poll_vote";
+
+export interface ChatAttachment {
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PollOption {
+  id: string;
+  label: string;
+}
+
+export interface PollVote {
+  pollId: string;
+  userId: string;
+  optionId: string;
+  userName: string;
+}
+
+export interface ReplyMeta {
+  messageId: string;
+  senderName: string;
+  preview: string;
+}
+
+export interface ChatStructuredPayload {
+  version: 1;
+  kind: ChatMessageKind;
+  text?: string;
+  emoji?: string;
+  attachment?: ChatAttachment;
+  stickerUrl?: string;
+  reply?: ReplyMeta;
+  poll?: {
+    id: string;
+    question: string;
+    options: PollOption[];
+    createdBy: string;
+  };
+  pollVote?: PollVote;
+}
