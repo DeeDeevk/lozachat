@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { formatTime } from "@/utils/formatTime";
 import ConversationList from "@/components/ConversationList";
 import { Image, Send } from "lucide-react";
+import { Ellipsis, RotateCcw, Trash2 } from "lucide-react";
 interface ContextMenu {
   x: number;
   y: number;
@@ -288,7 +289,7 @@ export default function ChatPage() {
                         }}
                         className={`opacity-0 group-hover:opacity-100 cursor-pointer text-slate-400 hover:text-white text-xl ${isMe ? "order-first" : "order-last"}`}
                       >
-                        ⋮
+                        <Ellipsis />
                       </div>
                     )}
                     <div
@@ -522,7 +523,10 @@ export default function ChatPage() {
                 (e.currentTarget.style.background = "transparent")
               }
             >
-              🔄 Thu hồi tin nhắn
+              <button className="flex items-center gap-2 text-white hover:text-gray-300">
+                <RotateCcw size={18} />
+                <span>Thu hồi tin nhắn</span>
+              </button>{" "}
             </button>
           )}
 
@@ -538,13 +542,16 @@ export default function ChatPage() {
                 (e.currentTarget.style.background = "transparent")
               }
             >
-              🗑️ Xoá phía tôi
+              <button className="flex items-center gap-2 text-white hover:text-gray-300">
+                <Trash2 size={18} />
+                <span>Xoá phía tôi</span>
+              </button>
             </button>
           )}
 
           <button
             onClick={() => setContextMenu(null)}
-            style={{ ...menuItemStyle, color: "#64748b" }}
+            style={{ ...menuItemStyle, color: "#f97316" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#334155")}
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")

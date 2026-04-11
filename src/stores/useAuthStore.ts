@@ -151,17 +151,30 @@ export const useAuthStore = create<AuthState>()(
       refresh: async () => {
         try {
           set({ loading: true });
+
           const { user, fetchCurrentUser, setAccessToken } = get();
+
           const accessToken = await authService.refresh();
 
           setAccessToken(accessToken);
+
           if (!user) {
             await fetchCurrentUser();
           }
         } catch (error) {
-          console.error(error);
-          toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          console.error("Refresh token lỗi:", error);
+
+          try {
+            // 🔥 gọi API xoá session phía server
+            await authService.signOut();
+          } catch (e) {
+            console.warn("Không gọi được API logout:", e);
+          }
+
+          // 🔥 clear toàn bộ state phía client
           get().clearState();
+
+          // toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
         } finally {
           set({ loading: false });
         }

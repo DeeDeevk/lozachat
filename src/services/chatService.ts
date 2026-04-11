@@ -51,6 +51,14 @@ export const chatService = {
 
     return res.data.message;
   },
+
+  async getOrCreateDirectConversation(targetUserId: string) {
+    const res = await api.get(
+      `/conversations/direct/${targetUserId}`
+    );
+
+    return res.data.conversation;
+  },
   async recallMessage(messageId: string): Promise<void> {
   await api.patch(`/messages/${messageId}/recall`);
 },
@@ -58,4 +66,6 @@ export const chatService = {
 async deleteMessageForMe(messageId: string): Promise<void> {
   await api.delete(`/messages/${messageId}`);
 },
+
+
 };

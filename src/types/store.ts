@@ -36,6 +36,7 @@ export interface ChatState {
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
 deleteMessageForMe: (messageId: string, conversationId: string) => Promise<void>;
+addConversation: (conversation: Conversation) => void;
 }
 
 export interface SocketState {

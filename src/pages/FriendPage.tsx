@@ -19,13 +19,28 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import SideNav from "../components/SideNav";
 import SearchUserModal from "@/components/SearchUserModal";
 import type { Friend, FriendRequest } from "../types/user";
+import axios from "axios";
+import { chatService } from "@/services/chatService";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getInitials = (name: string) =>
-  name?.split(" ").slice(-2).map((w) => w[0]).join("").toUpperCase() || "U";
+  name
+    ?.split(" ")
+    .slice(-2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
 
 const randomColor = (str: string) => {
-  const colors = ["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#ec4899"];
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -35,7 +50,15 @@ const randomColor = (str: string) => {
 type Tab = "friends" | "received" | "sent";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
-function Avatar({ name, avatarUrl, size = 44 }: { name: string; avatarUrl?: string; size?: number }) {
+function Avatar({
+  name,
+  avatarUrl,
+  size = 44,
+}: {
+  name: string;
+  avatarUrl?: string;
+  size?: number;
+}) {
   const color = randomColor(name);
   const radius = Math.round(size * 0.28);
   if (avatarUrl) {
@@ -43,17 +66,31 @@ function Avatar({ name, avatarUrl, size = 44 }: { name: string; avatarUrl?: stri
       <img
         src={avatarUrl}
         alt={name}
-        style={{ width: size, height: size, borderRadius: radius, objectFit: "cover", flexShrink: 0, boxShadow: `0 3px 10px rgba(0,0,0,.4)` }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          objectFit: "cover",
+          flexShrink: 0,
+          boxShadow: `0 3px 10px rgba(0,0,0,.4)`,
+        }}
       />
     );
   }
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: radius,
-        background: color, display: "flex", alignItems: "center",
-        justifyContent: "center", fontSize: Math.round(size * 0.36),
-        fontWeight: 800, color: "white", flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: Math.round(size * 0.36),
+        fontWeight: 800,
+        color: "white",
+        flexShrink: 0,
         boxShadow: `0 3px 10px ${color}44`,
       }}
     >
@@ -66,9 +103,16 @@ function Avatar({ name, avatarUrl, size = 44 }: { name: string; avatarUrl?: stri
 export default function FriendsPage() {
   const navigate = useNavigate();
   const {
-    loading, friends, receivedList, sentList,
-    getAllFriendRequest, getFriends,
-    acceptRequest, declineRequest, cancelRequest, unfriend,
+    loading,
+    friends,
+    receivedList,
+    sentList,
+    getAllFriendRequest,
+    getFriends,
+    acceptRequest,
+    declineRequest,
+    cancelRequest,
+    unfriend,
   } = useFriendStore();
 
   const [activeTab, setActiveTab] = useState<Tab>("friends");
@@ -115,10 +159,30 @@ export default function FriendsPage() {
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
-    { key: "friends",  label: "Bạn bè",      icon: <UserCheck size={18} />, count: friends.length      },
-    { key: "received", label: "Lời mời nhận", icon: <UserPlus size={18} />,  count: receivedList.length },
-    { key: "sent",     label: "Lời mời gửi",  icon: <Clock size={18} />,     count: sentList.length     },
+  const tabs: {
+    key: Tab;
+    label: string;
+    icon: React.ReactNode;
+    count?: number;
+  }[] = [
+    {
+      key: "friends",
+      label: "Bạn bè",
+      icon: <UserCheck size={18} />,
+      count: friends.length,
+    },
+    {
+      key: "received",
+      label: "Lời mời nhận",
+      icon: <UserPlus size={18} />,
+      count: receivedList.length,
+    },
+    {
+      key: "sent",
+      label: "Lời mời gửi",
+      icon: <Clock size={18} />,
+      count: sentList.length,
+    },
   ];
 
   return (
@@ -480,9 +544,9 @@ export default function FriendsPage() {
                 <div className="fp-tab-text">
                   <span className="fp-tab-label">{tab.label}</span>
                   <span className="fp-tab-desc">
-                    {tab.key === "friends"  && "Danh sách bạn bè đã kết nối"}
+                    {tab.key === "friends" && "Danh sách bạn bè đã kết nối"}
                     {tab.key === "received" && "Lời mời kết bạn từ người khác"}
-                    {tab.key === "sent"     && "Lời mời bạn đã gửi đi"}
+                    {tab.key === "sent" && "Lời mời bạn đã gửi đi"}
                   </span>
                 </div>
                 {(tab.count ?? 0) > 0 && (
@@ -497,13 +561,12 @@ export default function FriendsPage() {
 
         {/* ── Main content ── */}
         <div className="fp-main">
-
           {/* Mobile header */}
           <div className="fp-mobile-header">
             <div className="fp-mobile-header-title">
-              {activeTab === "friends"  && "Bạn bè"}
+              {activeTab === "friends" && "Bạn bè"}
               {activeTab === "received" && "Lời mời nhận"}
-              {activeTab === "sent"     && "Lời mời gửi"}
+              {activeTab === "sent" && "Lời mời gửi"}
             </div>
             <button
               className="fp-mobile-search-btn"
@@ -525,9 +588,14 @@ export default function FriendsPage() {
                     <Search
                       size={14}
                       style={{
-                        position: "absolute", left: 12, top: "50%",
-                        transform: "translateY(-50%)", pointerEvents: "none",
-                        display: "block", stroke: "#475569", fill: "none",
+                        position: "absolute",
+                        left: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        pointerEvents: "none",
+                        display: "block",
+                        stroke: "#475569",
+                        fill: "none",
                       }}
                     />
                     <input
@@ -541,76 +609,99 @@ export default function FriendsPage() {
               </div>
               <div className="fp-content-body">
                 <div className="fp-content-inner">
-                {loading && friends.length === 0 ? (
-                  <div className="fp-loading">
-                    <Loader2 size={24} className="fp-spin" color="#6366f1" />
-                  </div>
-                ) : filteredFriends.length === 0 ? (
-                  <div className="fp-empty">
-                    <div className="fp-empty-icon"><UserCheck size={32} /></div>
-                    <div className="fp-empty-title">
-                      {searchQuery ? "Không tìm thấy kết quả" : "Chưa có bạn bè"}
+                  {loading && friends.length === 0 ? (
+                    <div className="fp-loading">
+                      <Loader2 size={24} className="fp-spin" color="#6366f1" />
                     </div>
-                    <div className="fp-empty-sub">
-                      {searchQuery
-                        ? `Không có bạn bè nào khớp với "${searchQuery}"`
-                        : "Hãy gửi lời mời kết bạn để bắt đầu kết nối!"}
+                  ) : filteredFriends.length === 0 ? (
+                    <div className="fp-empty">
+                      <div className="fp-empty-icon">
+                        <UserCheck size={32} />
+                      </div>
+                      <div className="fp-empty-title">
+                        {searchQuery
+                          ? "Không tìm thấy kết quả"
+                          : "Chưa có bạn bè"}
+                      </div>
+                      <div className="fp-empty-sub">
+                        {searchQuery
+                          ? `Không có bạn bè nào khớp với "${searchQuery}"`
+                          : "Hãy gửi lời mời kết bạn để bắt đầu kết nối!"}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="fp-friends-grid">
-                    {filteredFriends.map((friend: Friend, idx: number) => {
-                      const name = friend.displayName || friend.username || "Người dùng";
-                      return (
-                        <div
-                          key={friend._id}
-                          className="fp-friend-card"
-                          style={{ animationDelay: `${idx * 0.04}s` }}
-                        >
-                          <Avatar name={name} avatarUrl={friend.avatarUrl} size={46} />
-                          <div className="fp-friend-info">
-                            <div className="fp-friend-name">{name}</div>
-                            <div className="fp-friend-username">
-                              @{friend.username || name.toLowerCase()}
-                            </div>
-                            {friend.isOnline && (
-                              <div className="fp-friend-online">
-                                <div className="fp-online-dot" />
-                                Đang hoạt động
+                  ) : (
+                    <div className="fp-friends-grid">
+                      {filteredFriends.map((friend: Friend, idx: number) => {
+                        const name =
+                          friend.displayName || friend.username || "Người dùng";
+                        return (
+                          <div
+                            key={friend._id}
+                            className="fp-friend-card"
+                            style={{ animationDelay: `${idx * 0.04}s` }}
+                          >
+                            <Avatar
+                              name={name}
+                              avatarUrl={friend.avatarUrl}
+                              size={46}
+                            />
+                            <div className="fp-friend-info">
+                              <div className="fp-friend-name">{name}</div>
+                              <div className="fp-friend-username">
+                                @{friend.username || name.toLowerCase()}
                               </div>
-                            )}
+                              {friend.isOnline && (
+                                <div className="fp-friend-online">
+                                  <div className="fp-online-dot" />
+                                  Đang hoạt động
+                                </div>
+                              )}
+                            </div>
+                            <div className="fp-card-actions">
+                              <button
+                                className="fp-card-btn fp-card-btn-chat"
+                                data-tip="Nhắn tin"
+                                onClick={async () => {
+                                  try {
+                                    const convo =
+                                      await chatService.getOrCreateDirectConversation(
+                                        friend._id,
+                                      );
+
+                                    navigate("/chat", {
+                                      state: { conversationId: convo._id },
+                                    });
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
+                              >
+                                <MessageCircle size={15} />
+                              </button>
+                              <button
+                                className="fp-card-btn fp-card-btn-info"
+                                data-tip="Xem hồ sơ"
+                              >
+                                <Info size={15} />
+                              </button>
+                              <button
+                                className="fp-card-btn fp-card-btn-unfriend"
+                                data-tip="Hủy kết bạn"
+                                disabled={actionId === friend._id}
+                                onClick={() => handleUnfriend(friend._id, name)}
+                              >
+                                {actionId === friend._id ? (
+                                  <Loader2 size={15} className="fp-spin" />
+                                ) : (
+                                  <UserX size={15} />
+                                )}
+                              </button>
+                            </div>
                           </div>
-                          <div className="fp-card-actions">
-                            <button
-                              className="fp-card-btn fp-card-btn-chat"
-                              data-tip="Nhắn tin"
-                              onClick={() => navigate("/chat")}
-                            >
-                              <MessageCircle size={15} />
-                            </button>
-                            <button
-                              className="fp-card-btn fp-card-btn-info"
-                              data-tip="Xem hồ sơ"
-                            >
-                              <Info size={15} />
-                            </button>
-                            <button
-                              className="fp-card-btn fp-card-btn-unfriend"
-                              data-tip="Hủy kết bạn"
-                              disabled={actionId === friend._id}
-                              onClick={() => handleUnfriend(friend._id, name)}
-                            >
-                              {actionId === friend._id
-                                ? <Loader2 size={15} className="fp-spin" />
-                                : <UserX size={15} />
-                              }
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -629,64 +720,84 @@ export default function FriendsPage() {
               </div>
               <div className="fp-content-body">
                 <div className="fp-content-inner">
-                {loading && receivedList.length === 0 ? (
-                  <div className="fp-loading">
-                    <Loader2 size={24} className="fp-spin" color="#6366f1" />
-                  </div>
-                ) : receivedList.length === 0 ? (
-                  <div className="fp-empty">
-                    <div className="fp-empty-icon"><UserPlus size={32} /></div>
-                    <div className="fp-empty-title">Không có lời mời nào</div>
-                    <div className="fp-empty-sub">
-                      Khi có người gửi lời mời kết bạn cho bạn, chúng sẽ xuất hiện ở đây.
+                  {loading && receivedList.length === 0 ? (
+                    <div className="fp-loading">
+                      <Loader2 size={24} className="fp-spin" color="#6366f1" />
                     </div>
-                  </div>
-                ) : (
-                  <div className="fp-request-list">
-                    {receivedList.map((req: FriendRequest, idx: number) => {
-                      const from = req.from as any;
-                      const name = from?.displayName || from?.username || "Người dùng";
-                      const isActing = actionId === req._id;
-                      return (
-                        <div
-                          key={req._id}
-                          className="fp-request-card"
-                          style={{ animationDelay: `${idx * 0.05}s` }}
-                        >
-                          <Avatar name={name} avatarUrl={from?.avatarUrl} size={46} />
-                          <div className="fp-request-info">
-                            <div className="fp-request-name">{name}</div>
-                            {req.message ? (
-                              <div className="fp-request-msg">"{req.message}"</div>
-                            ) : (
-                              <div className="fp-request-msg" style={{ fontStyle: "normal", color: "#475569" }}>
-                                @{from?.username || name.toLowerCase()}
-                              </div>
-                            )}
+                  ) : receivedList.length === 0 ? (
+                    <div className="fp-empty">
+                      <div className="fp-empty-icon">
+                        <UserPlus size={32} />
+                      </div>
+                      <div className="fp-empty-title">Không có lời mời nào</div>
+                      <div className="fp-empty-sub">
+                        Khi có người gửi lời mời kết bạn cho bạn, chúng sẽ xuất
+                        hiện ở đây.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="fp-request-list">
+                      {receivedList.map((req: FriendRequest, idx: number) => {
+                        const from = req.from as any;
+                        const name =
+                          from?.displayName || from?.username || "Người dùng";
+                        const isActing = actionId === req._id;
+                        return (
+                          <div
+                            key={req._id}
+                            className="fp-request-card"
+                            style={{ animationDelay: `${idx * 0.05}s` }}
+                          >
+                            <Avatar
+                              name={name}
+                              avatarUrl={from?.avatarUrl}
+                              size={46}
+                            />
+                            <div className="fp-request-info">
+                              <div className="fp-request-name">{name}</div>
+                              {req.message ? (
+                                <div className="fp-request-msg">
+                                  "{req.message}"
+                                </div>
+                              ) : (
+                                <div
+                                  className="fp-request-msg"
+                                  style={{
+                                    fontStyle: "normal",
+                                    color: "#475569",
+                                  }}
+                                >
+                                  @{from?.username || name.toLowerCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="fp-request-actions">
+                              <button
+                                className="fp-req-btn fp-req-btn-accept"
+                                onClick={() => handleAccept(req._id, name)}
+                                disabled={isActing}
+                              >
+                                {isActing ? (
+                                  <Loader2 size={13} className="fp-spin" />
+                                ) : (
+                                  <Check size={13} />
+                                )}
+                                Chấp nhận
+                              </button>
+                              <button
+                                className="fp-req-btn fp-req-btn-decline"
+                                onClick={() => handleDecline(req._id, name)}
+                                disabled={isActing}
+                              >
+                                <X size={13} />
+                                Từ chối
+                              </button>
+                            </div>
                           </div>
-                          <div className="fp-request-actions">
-                            <button
-                              className="fp-req-btn fp-req-btn-accept"
-                              onClick={() => handleAccept(req._id, name)}
-                              disabled={isActing}
-                            >
-                              {isActing ? <Loader2 size={13} className="fp-spin" /> : <Check size={13} />}
-                              Chấp nhận
-                            </button>
-                            <button
-                              className="fp-req-btn fp-req-btn-decline"
-                              onClick={() => handleDecline(req._id, name)}
-                              disabled={isActing}
-                            >
-                              <X size={13} />
-                              Từ chối
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -705,53 +816,65 @@ export default function FriendsPage() {
               </div>
               <div className="fp-content-body">
                 <div className="fp-content-inner">
-                {loading && sentList.length === 0 ? (
-                  <div className="fp-loading">
-                    <Loader2 size={24} className="fp-spin" color="#6366f1" />
-                  </div>
-                ) : sentList.length === 0 ? (
-                  <div className="fp-empty">
-                    <div className="fp-empty-icon"><Clock size={32} /></div>
-                    <div className="fp-empty-title">Chưa gửi lời mời nào</div>
-                    <div className="fp-empty-sub">
-                      Tìm kiếm người dùng và gửi lời mời để kết nối với bạn bè mới.
+                  {loading && sentList.length === 0 ? (
+                    <div className="fp-loading">
+                      <Loader2 size={24} className="fp-spin" color="#6366f1" />
                     </div>
-                  </div>
-                ) : (
-                  <div className="fp-request-list">
-                    {sentList.map((req: FriendRequest, idx: number) => {
-                      const to = req.to as any;
-                      const name = to?.displayName || to?.username || "Người dùng";
-                      const isActing = actionId === req._id;
-                      return (
-                        <div
-                          key={req._id}
-                          className="fp-request-card"
-                          style={{ animationDelay: `${idx * 0.05}s` }}
-                        >
-                          <Avatar name={name} avatarUrl={to?.avatarUrl} size={46} />
-                          <div className="fp-request-info">
-                            <div className="fp-request-name">{name}</div>
-                            <div className="fp-request-pending">
-                              <Clock size={11} />
-                              Đang chờ phản hồi
+                  ) : sentList.length === 0 ? (
+                    <div className="fp-empty">
+                      <div className="fp-empty-icon">
+                        <Clock size={32} />
+                      </div>
+                      <div className="fp-empty-title">Chưa gửi lời mời nào</div>
+                      <div className="fp-empty-sub">
+                        Tìm kiếm người dùng và gửi lời mời để kết nối với bạn bè
+                        mới.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="fp-request-list">
+                      {sentList.map((req: FriendRequest, idx: number) => {
+                        const to = req.to as any;
+                        const name =
+                          to?.displayName || to?.username || "Người dùng";
+                        const isActing = actionId === req._id;
+                        return (
+                          <div
+                            key={req._id}
+                            className="fp-request-card"
+                            style={{ animationDelay: `${idx * 0.05}s` }}
+                          >
+                            <Avatar
+                              name={name}
+                              avatarUrl={to?.avatarUrl}
+                              size={46}
+                            />
+                            <div className="fp-request-info">
+                              <div className="fp-request-name">{name}</div>
+                              <div className="fp-request-pending">
+                                <Clock size={11} />
+                                Đang chờ phản hồi
+                              </div>
+                            </div>
+                            <div className="fp-request-actions">
+                              <button
+                                className="fp-req-btn fp-req-btn-cancel"
+                                onClick={() => handleCancel(req._id, name)}
+                                disabled={isActing}
+                              >
+                                {isActing ? (
+                                  <Loader2 size={13} className="fp-spin" />
+                                ) : (
+                                  <UserMinus size={13} />
+                                )}
+                                Huỷ lời mời
+                              </button>
                             </div>
                           </div>
-                          <div className="fp-request-actions">
-                            <button
-                              className="fp-req-btn fp-req-btn-cancel"
-                              onClick={() => handleCancel(req._id, name)}
-                              disabled={isActing}
-                            >
-                              {isActing ? <Loader2 size={13} className="fp-spin" /> : <UserMinus size={13} />}
-                              Huỷ lời mời
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
