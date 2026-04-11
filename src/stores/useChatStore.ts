@@ -87,13 +87,13 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      sendDirectMessage: async (recipientId, content, imgUrl) => {
+      sendDirectMessage: async (recipientId, payload) => {
         try {
           const { activeConversationId } = get();
           await chatService.sendDirecrMessages(
             recipientId,
-            content,
-            imgUrl,
+            payload?.content || "",
+            payload?.imgUrl || "",
             activeConversationId || undefined,
           );
 
@@ -106,9 +106,13 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy ra khi gửi direct message", error);
         }
       },
-      sendGroupMessage: async (conversationId, content, imgUrl) => {
+      sendGroupMessage: async (conversationId, payload) => {
         try {
-          await chatService.sendGroupMessages(conversationId, content, imgUrl);
+          await chatService.sendGroupMessages(
+            conversationId,
+            payload?.content || "",
+            payload?.imgUrl,
+          );
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === get().activeConversationId ? { ...c, seenBy: [] } : c,
@@ -118,10 +122,19 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy ra khi gửi group message", error);
         }
       },
-   addMessage: async (message) => {
-  try {
-    const { user } = useAuthStore.getState();
-    message.isOwn = message.senderId === user?.userId;
+      uploadAttachment: async (file) => {
+        try {
+          return await chatService.uploadAttachment(file);
+        } catch (error) {
+          console.error("Lỗi upload file chat", error);
+          throw error;
+        }
+      },
+      addMessage: async (message) => {
+        try {
+          const { user } = useAuthStore.getState();
+          const { fetchMessages } = get();
+          message.isOwn = message.senderId === user?.userId;
 
     const convoId = message.conversationId;
 
@@ -318,7 +331,10 @@ clearTypingUsers: (conversationId: string) =>
     
     {
       name: "chat-storage",
-      partialize: (state) => ({ conversations: state.conversations }),
+      partialize: (state) => ({
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
+      }),
     },
   ),
 );
