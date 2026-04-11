@@ -7,6 +7,7 @@ import SearchUserModal from "./SearchUserModal";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/stores/useChatStore";
+import { getSafeMessagePreview } from "@/utils/chatMessageCodec";
 import '../css/conversationList.css';
 
 // ── Types (match BE) ─────────────────────────────────────────
@@ -43,7 +44,7 @@ export default function ConversationList({
   activeId,
   isOpen,
   onSelectConversation,
-  onClose,
+  onClose: _onClose,
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
@@ -324,7 +325,7 @@ export default function ConversationList({
                         flex: 1,
                       }}
                     >
-                      {conv.lastMessage?.content || "Chưa có tin nhắn"}
+                      {getSafeMessagePreview(conv.lastMessage?.content, "Chưa có tin nhắn")}
                     </span>
                     {unread > 0 && (
                       <div className="cl-badge">
