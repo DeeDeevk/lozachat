@@ -148,7 +148,7 @@ export const SocialPage = () => {
                
                <div className="grid grid-cols-3 gap-2">
                   {[
-                    { label: "Bài viết", val: posts.filter(p => p.author._id === currentUser._id).length },
+                    { label: "Bài viết", val: posts.filter(p => p.author?._id === currentUser._id).length },
                     { label: "Bạn bè", val: "128" },
                     { label: "Likes", val: "1.2k" }
                   ].map(stat => (

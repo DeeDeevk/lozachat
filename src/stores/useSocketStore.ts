@@ -42,8 +42,8 @@ const registerSocketEvents = (socket: Socket, set: any) => {
   });
 
   socket.on("message-recalled", ({ messageId, conversationId }) => {
-  useChatStore.getState().applyRecallMessage(messageId, conversationId);
-});
+    useChatStore.getState().applyRecallMessage(messageId, conversationId);
+  });
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({
