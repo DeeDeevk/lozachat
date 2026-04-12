@@ -32,6 +32,7 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   signIn: (data: SignInData) => Promise<boolean>;
+  fetchMe: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<boolean>;
   signOut: () => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
@@ -61,7 +62,7 @@ export const useAuthStore = create<AuthState>()(
 
       signIn: async (data: SignInData) => {
         set({ loading: true, error: null });
-        localStorage.clear();
+        localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
         try {
           const response = await authService.signIn(data);
@@ -72,6 +73,7 @@ export const useAuthStore = create<AuthState>()(
           const payload = JSON.parse(atob(token.split(".")[1]));
 
           get().setAccessToken(token);
+          await get().fetchMe();
 
           set({
             //accessToken: token
@@ -95,6 +97,21 @@ export const useAuthStore = create<AuthState>()(
           set({ loading: false, error: errorMessage });
           toast.error(errorMessage);
           return false;
+        }
+      },
+
+      fetchMe: async () => {
+        try {
+          set({ loading: true });
+          const user = await authService.fetchMe();
+
+          set({ user });
+        } catch (error) {
+          console.error(error);
+          set({ user: null, accessToken: null });
+          toast.error("Lỗi xảy ra khi lấy dữ liệu người dùng. Hãy thử lại!");
+        } finally {
+          set({ loading: false });
         }
       },
 
@@ -157,7 +174,7 @@ export const useAuthStore = create<AuthState>()(
           const accessToken = await authService.refresh();
 
           setAccessToken(accessToken);
-
+          console.log("Access token đã được làm mới:", accessToken);
           if (!user) {
             await fetchCurrentUser();
           }
@@ -184,7 +201,7 @@ export const useAuthStore = create<AuthState>()(
 
       clearState: () => {
         set({ accessToken: null, user: null, loading: false });
-        localStorage.clear();
+        localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
       },
     }),
@@ -192,7 +209,6 @@ export const useAuthStore = create<AuthState>()(
       name: "auth-storage",
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken, // Lưu cả token để không bị bắt đăng nhập lại
         userProfile: state.userProfile, // Lưu profile để hiện avatar/tên ngay lập tức
       }),
     },

@@ -18,9 +18,9 @@ import { toast } from "sonner";
 import { useFriendStore } from "@/stores/useFriendStore";
 import SideNav from "../components/SideNav";
 import SearchUserModal from "@/components/SearchUserModal";
-import type { Friend, FriendRequest } from "../types/user";
-import axios from "axios";
+import type { FriendRequest } from "../types/user";
 import { chatService } from "@/services/chatService";
+import { useChatStore } from "@/stores/useChatStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getInitials = (name: string) =>
@@ -100,11 +100,14 @@ function Avatar({
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+import { useSocketStore } from "@/stores/useSocketStore";
+
 export default function FriendsPage() {
   const navigate = useNavigate();
   const {
     loading,
     friends,
+    newFriendIds,
     receivedList,
     sentList,
     getAllFriendRequest,
@@ -113,17 +116,60 @@ export default function FriendsPage() {
     declineRequest,
     cancelRequest,
     unfriend,
+    clearNewFriends,
   } = useFriendStore();
+
+  const socket = useSocketStore((state) => state.socket);
+  const onlineUsers = useSocketStore((state) => state.onlineUsers);
 
   const [activeTab, setActiveTab] = useState<Tab>("friends");
   const [actionId, setActionId] = useState<string | null>(null);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmUnfriend, setConfirmUnfriend] = useState<{
+    friendId: string;
+    name: string;
+  } | null>(null);
 
+  // Fetch initial data on mount
   useEffect(() => {
+    // Socket already connected globally in App.tsx, just fetch initial data
     getAllFriendRequest();
     getFriends();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Listen for real-time friend updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleFriendUpdate = (update: {
+      action: string;
+      [key: string]: string | undefined;
+    }) => {
+      // Re-fetch friends and requests to sync state for ALL friend actions
+      if (
+        [
+          "request_received",
+          "request_accepted",
+          "request_declined",
+          "request_cancelled",
+          "unfriend",
+        ].includes(update.action)
+      ) {
+        getAllFriendRequest();
+        getFriends();
+      }
+    };
+
+    socket.off("friend_update");
+    socket.on("friend_update", handleFriendUpdate);
+
+    return () => {
+      socket.off("friend_update", handleFriendUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
 
   const handleAccept = async (requestId: string, name: string) => {
     setActionId(requestId);
@@ -148,13 +194,31 @@ export default function FriendsPage() {
   };
 
   const handleUnfriend = async (targetId: string, name: string) => {
-    setActionId(targetId);
-    await unfriend(targetId);
-    toast.info(`Đã huỷ kết bạn với ${name}`);
-    setActionId(null);
+    setConfirmUnfriend({ friendId: targetId, name });
   };
 
-  const filteredFriends = friends.filter((f: Friend) => {
+  const confirmUnfriendAction = async () => {
+    if (!confirmUnfriend) return;
+    setActionId(confirmUnfriend.friendId);
+    await unfriend(confirmUnfriend.friendId);
+    toast.info(`Đã huỷ kết bạn với ${confirmUnfriend.name}`);
+    setActionId(null);
+    setConfirmUnfriend(null);
+  };
+
+  const enrichedFriends = friends.map((f) => ({
+    ...f,
+    isNew: newFriendIds.includes(f._id),
+    isOnline: onlineUsers.includes(f._id),
+  }));
+
+  // Sort: new friends first, then alphabetically
+  const sortedFriends = [...enrichedFriends].sort((a, b) => {
+    if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+    return (a.displayName || "").localeCompare(b.displayName || "");
+  });
+
+  const filteredFriends = sortedFriends.filter((f) => {
     const name = f.displayName || f.username || "";
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -169,7 +233,7 @@ export default function FriendsPage() {
       key: "friends",
       label: "Bạn bè",
       icon: <UserCheck size={18} />,
-      count: friends.length,
+      count: friends.length > 0 ? friends.length : undefined,
     },
     {
       key: "received",
@@ -316,7 +380,7 @@ export default function FriendsPage() {
         @media (max-width: 600px) { .fp-content-header { padding: 16px 16px 14px; } }
 
         .fp-content-title { font-size: 20px; font-weight: 800; color: white; margin-bottom: 3px; }
-        .fp-content-sub   { font-size: 13px; color: #475569; }
+        .fp-content-sub   { font-size: 15px; color: #475569; }
 
         .fp-search-wrap { position: relative; margin-top: 14px; max-width: 360px; }
         .fp-search-input {
@@ -371,9 +435,9 @@ export default function FriendsPage() {
         }
         .fp-friend-info { flex: 1; min-width: 0; }
         .fp-friend-name     { font-size: 14px; font-weight: 700; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .fp-friend-username { font-size: 12px; color: #475569; margin-top: 2px; }
+        .fp-friend-username { font-size: 12px; color: #475569; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .fp-friend-online   { display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 11px; color: #10b981; }
-        .fp-online-dot      { width: 6px; height: 6px; border-radius: 50%; background: #10b981; animation: fp-pulse 2.5s ease-in-out infinite; flex-shrink: 0; }
+        .fp-online-dot      { width: 6px; height: 6px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
 
         .fp-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
         .fp-card-btn {
@@ -538,7 +602,12 @@ export default function FriendsPage() {
               <button
                 key={tab.key}
                 className={`fp-tab fp-tab-${tab.key} ${activeTab === tab.key ? "active" : ""}`}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  if (tab.key === "friends") {
+                    clearNewFriends();
+                  }
+                }}
               >
                 <div className="fp-tab-icon-wrap">{tab.icon}</div>
                 <div className="fp-tab-text">
@@ -631,7 +700,7 @@ export default function FriendsPage() {
                     </div>
                   ) : (
                     <div className="fp-friends-grid">
-                      {filteredFriends.map((friend: Friend, idx: number) => {
+                      {filteredFriends.map((friend, idx: number) => {
                         const name =
                           friend.displayName || friend.username || "Người dùng";
                         return (
@@ -646,16 +715,52 @@ export default function FriendsPage() {
                               size={46}
                             />
                             <div className="fp-friend-info">
-                              <div className="fp-friend-name">{name}</div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <div className="fp-friend-name">{name}</div>
+                                {friend.isNew && (
+                                  <span
+                                    style={{
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      color: "#fbbf24",
+                                      background: "rgba(251, 191, 36, .15)",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                    }}
+                                  >
+                                    Bạn mới
+                                  </span>
+                                )}
+                              </div>
                               <div className="fp-friend-username">
                                 @{friend.username || name.toLowerCase()}
                               </div>
-                              {friend.isOnline && (
-                                <div className="fp-friend-online">
-                                  <div className="fp-online-dot" />
-                                  Đang hoạt động
-                                </div>
-                              )}
+                              <div
+                                className="fp-friend-online"
+                                style={{
+                                  color: friend.isOnline
+                                    ? "#06b6d4"
+                                    : "#9ca3af",
+                                }}
+                              >
+                                <div
+                                  className="fp-online-dot"
+                                  style={{
+                                    background: friend.isOnline
+                                      ? "#06b6d4"
+                                      : "#9ca3af",
+                                  }}
+                                />
+                                {friend.isOnline
+                                  ? "Đang hoạt động"
+                                  : "Ngoại tuyến"}
+                              </div>
                             </div>
                             <div className="fp-card-actions">
                               <button
@@ -667,6 +772,10 @@ export default function FriendsPage() {
                                       await chatService.getOrCreateDirectConversation(
                                         friend._id,
                                       );
+
+                                    useChatStore
+                                      .getState()
+                                      .addConversation(convo);
 
                                     navigate("/chat", {
                                       state: { conversationId: convo._id },
@@ -687,7 +796,10 @@ export default function FriendsPage() {
                               <button
                                 className="fp-card-btn fp-card-btn-unfriend"
                                 data-tip="Hủy kết bạn"
-                                disabled={actionId === friend._id}
+                                disabled={
+                                  actionId === friend._id ||
+                                  confirmUnfriend?.friendId === friend._id
+                                }
                                 onClick={() => handleUnfriend(friend._id, name)}
                               >
                                 {actionId === friend._id ? (
@@ -738,7 +850,7 @@ export default function FriendsPage() {
                   ) : (
                     <div className="fp-request-list">
                       {receivedList.map((req: FriendRequest, idx: number) => {
-                        const from = req.from as any;
+                        const from = req.from as Partial<typeof req.from>;
                         const name =
                           from?.displayName || from?.username || "Người dùng";
                         const isActing = actionId === req._id;
@@ -834,7 +946,7 @@ export default function FriendsPage() {
                   ) : (
                     <div className="fp-request-list">
                       {sentList.map((req: FriendRequest, idx: number) => {
-                        const to = req.to as any;
+                        const to = req.to as Partial<typeof req.to>;
                         const name =
                           to?.displayName || to?.username || "Người dùng";
                         const isActing = actionId === req._id;
@@ -904,9 +1016,125 @@ export default function FriendsPage() {
       <SearchUserModal
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
-        onStartChat={() => navigate("/chat")}
         onRequestSent={() => getAllFriendRequest()}
       />
+
+      {/* ── Unfriend Confirmation Modal ── */}
+      {confirmUnfriend && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            WebkitBackdropFilter: "blur(4px)",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setConfirmUnfriend(null)}
+        >
+          <div
+            style={{
+              background: "rgba(10,16,32,.98)",
+              border: "1px solid rgba(255,255,255,.1)",
+              borderRadius: "16px",
+              padding: "28px 24px",
+              maxWidth: "360px",
+              width: "90%",
+              boxShadow: "0 20px 60px rgba(0,0,0,.6)",
+              animation: "fp-fadein .2s cubic-bezier(.22,1,.36,1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "white",
+                marginBottom: 8,
+              }}
+            >
+              Huỷ kết bạn với {confirmUnfriend.name}?
+            </div>
+            <div
+              style={{
+                fontSize: "13px",
+                color: "#94a3b8",
+                marginBottom: 20,
+                lineHeight: 1.5,
+              }}
+            >
+              Bạn sẽ không còn nhìn thấy bài viết của {confirmUnfriend.name}{" "}
+              nữa, và họ cũng sẽ không thể nhìn thấy bài viết của bạn.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setConfirmUnfriend(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(100,116,139,.2)",
+                  background: "rgba(100,116,139,.1)",
+                  color: "#94a3b8",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all .18s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(100,116,139,.18)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(100,116,139,.1)";
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmUnfriendAction}
+                disabled={actionId === confirmUnfriend.friendId}
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "linear-gradient(135deg,#ef4444,#dc2626)",
+                  color: "white",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all .18s",
+                  opacity: actionId === confirmUnfriend.friendId ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+                onMouseEnter={(e) => {
+                  if (actionId !== confirmUnfriend.friendId) {
+                    e.currentTarget.style.boxShadow =
+                      "0 5px 16px rgba(239,68,68,.5)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                {actionId === confirmUnfriend.friendId ? (
+                  <Loader2
+                    size={13}
+                    style={{ animation: "fp-spin .7s linear infinite" }}
+                  />
+                ) : null}
+                Huỷ kết bạn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

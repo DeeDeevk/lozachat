@@ -82,4 +82,13 @@ export const chatService = {
   async deleteMessageForMe(messageId: string): Promise<void> {
     await api.delete(`/messages/${messageId}`);
   },
+
+  async updateStrangerStatus(
+    conversationId: string,
+    action: "accepted" | "decline",
+  ): Promise<void> {
+    await api.patch(`/conversations/${conversationId}/stranger-status`, {
+      action,
+    });
+  },
 };
