@@ -11,27 +11,32 @@ const registerSocketEvents = (socket: Socket, set: any) => {
   socket.off("online-users");
   socket.off("new-message");
   socket.off("message-recalled");
-socket.off("message-read");
-socket.off("user-typing");
-socket.off("user-stop-typing");
+  socket.off("message-read");
+  socket.off("user-typing");
+  socket.off("user-stop-typing");
+  socket.off("stranger-declined");
+  socket.off("stranger-accepted");
+  socket.off("stranger-request");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
- socket.on("message-read", ({ userId, conversationId, messageId }) => {
-  useChatStore.getState().updateLastRead(userId, conversationId, messageId);
-});
+  socket.on("message-read", ({ userId, conversationId, messageId }) => {
+    useChatStore.getState().updateLastRead(userId, conversationId, messageId);
+  });
 
   socket.on("online-users", (userIds) => {
     set({ onlineUsers: userIds });
   });
- socket.on("user-typing", (payload) => {
-  console.log("🔥 typing event:", payload);
-  useChatStore.getState().addTypingUser(payload.userId, payload.conversationId);
-});
+  socket.on("user-typing", (payload) => {
+    console.log("🔥 typing event:", payload);
+    useChatStore
+      .getState()
+      .addTypingUser(payload.userId, payload.conversationId);
+  });
 
-socket.on("user-stop-typing", ({ userId, conversationId }) => {
-  useChatStore.getState().removeTypingUser(userId, conversationId);
-});
+  socket.on("user-stop-typing", ({ userId, conversationId }) => {
+    useChatStore.getState().removeTypingUser(userId, conversationId);
+  });
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     useChatStore.getState().addMessage(message);
@@ -56,6 +61,33 @@ socket.on("user-stop-typing", ({ userId, conversationId }) => {
 
   socket.on("message-recalled", ({ messageId, conversationId }) => {
     useChatStore.getState().applyRecallMessage(messageId, conversationId);
+  });
+
+  socket.on("stranger-request", ({ conversation }) => {
+    useChatStore.getState().addConversation(conversation);
+    socket.emit("join-conversation", { conversationId: conversation._id });
+  });
+
+  socket.on("stranger-accepted", ({ conversationId }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId
+          ? { ...c, isStranger: false, strangerStatus: "accepted" }
+          : c,
+      ),
+    }));
+  });
+
+  socket.on("stranger-declined", ({ conversationId }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.filter(
+        (c) => c._id !== conversationId,
+      ),
+      activeConversationId:
+        state.activeConversationId === conversationId
+          ? null
+          : state.activeConversationId,
+    }));
   });
 };
 

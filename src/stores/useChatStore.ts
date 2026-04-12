@@ -62,25 +62,25 @@ export const useChatStore = create<ChatState>()(
             isOwn: m.senderId === user?.userId,
           }));
 
-        set((state) => {
-  const prev = state.messages[convoId]?.items ?? [];
+          set((state) => {
+            const prev = state.messages[convoId]?.items ?? [];
 
-  // 🔥 lọc trùng theo _id
-  const existingIds = new Set(prev.map((m) => m._id));
+            // 🔥 lọc trùng theo _id
+            const existingIds = new Set(prev.map((m) => m._id));
 
-  const filtered = processed.filter((m) => !existingIds.has(m._id));
+            const filtered = processed.filter((m) => !existingIds.has(m._id));
 
-  return {
-    messages: {
-      ...state.messages,
-      [convoId]: {
-        items: [...filtered, ...prev],
-        hasMore: !!cursor,
-        nextCursor: cursor ?? null,
-      },
-    },
-  };
-});
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  items: [...filtered, ...prev],
+                  hasMore: !!cursor,
+                  nextCursor: cursor ?? null,
+                },
+              },
+            };
+          });
         } catch (error) {
           console.error("Lỗi xảy ra khi fetchMessages:", error);
         } finally {
@@ -136,59 +136,61 @@ export const useChatStore = create<ChatState>()(
           const { fetchMessages } = get();
           message.isOwn = message.senderId === user?.userId;
 
-    const convoId = message.conversationId;
+          const convoId = message.conversationId;
 
-    set((state) => {
-      const prev = state.messages[convoId]?.items ?? [];
+          set((state) => {
+            const prev = state.messages[convoId]?.items ?? [];
 
-      // 🔥 nếu đã có thì skip luôn
-      if (prev.some((m) => m._id === message._id)) {
-        return state;
-      }
+            // 🔥 nếu đã có thì skip luôn
+            if (prev.some((m) => m._id === message._id)) {
+              return state;
+            }
 
-      return {
-        messages: {
-          ...state.messages,
-          [convoId]: {
-            ...state.messages[convoId],
-            items: [...prev, message],
-          },
-        },
-      };
-    });
-  } catch (error) {
-    console.error("Lỗi xảy ra khi add message: ", error);
-  }
-},
-    updateConversation: (conversation) => {
-  set((state) => ({
-    conversations: state.conversations.map((c) => {
-      if (c._id !== conversation._id) return c;
-
-      // Giữ lại lastReadMessageId từ store, không để socket overwrite
-      const mergedParticipants = conversation.participants
-        ? conversation.participants.map((incoming) => {
-            const existing = c.participants?.find(
-              (p) => p._id === incoming._id
-            );
             return {
-              ...existing,
-              ...incoming,
-              // Ưu tiên giá trị mới nếu có, không thì giữ cũ
-              lastReadMessageId:
-                incoming.lastReadMessageId ?? existing?.lastReadMessageId ?? null,
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...state.messages[convoId],
+                  items: [...prev, message],
+                },
+              },
             };
-          }) as Participant[]
-        : c.participants;
+          });
+        } catch (error) {
+          console.error("Lỗi xảy ra khi add message: ", error);
+        }
+      },
+      updateConversation: (conversation) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c._id !== conversation._id) return c;
 
-      return {
-        ...c,
-        ...conversation,
-        participants: mergedParticipants,
-      };
-    }),
-  }));
-},
+            // Giữ lại lastReadMessageId từ store, không để socket overwrite
+            const mergedParticipants = conversation.participants
+              ? (conversation.participants.map((incoming) => {
+                  const existing = c.participants?.find(
+                    (p) => p._id === incoming._id,
+                  );
+                  return {
+                    ...existing,
+                    ...incoming,
+                    // Ưu tiên giá trị mới nếu có, không thì giữ cũ
+                    lastReadMessageId:
+                      incoming.lastReadMessageId ??
+                      existing?.lastReadMessageId ??
+                      null,
+                  };
+                }) as Participant[])
+              : c.participants;
+
+            return {
+              ...c,
+              ...conversation,
+              participants: mergedParticipants,
+            };
+          }),
+        }));
+      },
       addConversation: (conversation) => {
         set((state) => {
           const exists = state.conversations.some(
@@ -213,25 +215,29 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
-updateLastRead: (userId: string, conversationId: string, lastReadMessageId: string) => {
-  set((state) => {
-    const newConversations = state.conversations.map((conv) => {
-      if (conv._id !== conversationId) return conv;
+      updateLastRead: (
+        userId: string,
+        conversationId: string,
+        lastReadMessageId: string,
+      ) => {
+        set((state) => {
+          const newConversations = state.conversations.map((conv) => {
+            if (conv._id !== conversationId) return conv;
 
-      return {
-        ...conv,
-        participants: conv.participants.map((p) => {
-          if (p._id === userId) {
-            return { ...p, lastReadMessageId };
-          }
-          return { ...p }; 
-        }),
-      };
-    });
+            return {
+              ...conv,
+              participants: conv.participants.map((p) => {
+                if (p._id === userId) {
+                  return { ...p, lastReadMessageId };
+                }
+                return { ...p };
+              }),
+            };
+          });
 
-    return { conversations: newConversations };
-  });
-},
+          return { conversations: newConversations };
+        });
+      },
       deleteMessageForMe: async (messageId: string, conversationId: string) => {
         try {
           await chatService.deleteMessageForMe(messageId);
@@ -292,43 +298,72 @@ updateLastRead: (userId: string, conversationId: string, lastReadMessageId: stri
         });
       },
       addTypingUser: (userId: string, conversationId: string) =>
-        
-  set((state) => {
-    console.log("📝 addTypingUser called:", userId, conversationId);
-  console.log("📝 current typingUsersByConv:", useChatStore.getState().typingUsersByConv);
-    const current = state.typingUsersByConv[conversationId] || [];
+        set((state) => {
+          console.log("📝 addTypingUser called:", userId, conversationId);
+          console.log(
+            "📝 current typingUsersByConv:",
+            useChatStore.getState().typingUsersByConv,
+          );
+          const current = state.typingUsersByConv[conversationId] || [];
 
-    if (current.includes(userId)) return state;
+          if (current.includes(userId)) return state;
 
-    return {
-      typingUsersByConv: {
-        ...state.typingUsersByConv,
-        [conversationId]: [...current, userId],
+          return {
+            typingUsersByConv: {
+              ...state.typingUsersByConv,
+              [conversationId]: [...current, userId],
+            },
+          };
+        }),
+
+      removeTypingUser: (userId: string, conversationId: string) =>
+        set((state) => {
+          const current = state.typingUsersByConv[conversationId] || [];
+
+          return {
+            typingUsersByConv: {
+              ...state.typingUsersByConv,
+              [conversationId]: current.filter((id) => id !== userId),
+            },
+          };
+        }),
+
+      clearTypingUsers: (conversationId: string) =>
+        set((state) => ({
+          typingUsersByConv: {
+            ...state.typingUsersByConv,
+            [conversationId]: [],
+          },
+        })),
+      updateStrangerStatus: async (conversationId, action) => {
+        try {
+          await chatService.updateStrangerStatus(conversationId, action);
+          if (action === "declined") {
+            set((state) => ({
+              conversations: state.conversations.filter(
+                (c) => c._id !== conversationId,
+              ),
+              activeConversationId:
+                get().activeConversationId === conversationId
+                  ? null
+                  : get().activeConversationId,
+            }));
+          } else {
+            set((state) => ({
+              conversations: state.conversations.map((c) =>
+                c._id === conversationId
+                  ? { ...c, isStranger: false, strangerStatus: "accepted" }
+                  : c,
+              ),
+            }));
+          }
+        } catch (error) {
+          console.log("Lỗi khi update trạng thái người lạ: ", error);
+          throw error;
+        }
       },
-    };
-  }),
-
-removeTypingUser: (userId: string, conversationId: string) =>
-  set((state) => {
-    const current = state.typingUsersByConv[conversationId] || [];
-
-    return {
-      typingUsersByConv: {
-        ...state.typingUsersByConv,
-        [conversationId]: current.filter((id) => id !== userId),
-      },
-    };
-  }),
-
-clearTypingUsers: (conversationId: string) =>
-  set((state) => ({
-    typingUsersByConv: {
-      ...state.typingUsersByConv,
-      [conversationId]: [],
-    },
-  })),
     }),
-    
+
     {
       name: "chat-storage",
       partialize: (state) => ({

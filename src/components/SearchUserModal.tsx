@@ -21,6 +21,7 @@ import "../css/userSearchModal.css";
 import { useNavigate } from "react-router-dom";
 import { chatService } from "@/services/chatService";
 import { useChatStore } from "@/stores/useChatStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 interface SearchUserModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export default function SearchUserModal({
   const currentUser = useAuthStore((s) => s.userProfile);
   const { loading, searchByUserName, addFriend, getFriendStatus } =
     useFriendStore();
-const { setActiveConversation, addConversation } = useChatStore();
+  const { setActiveConversation, addConversation } = useChatStore();
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<User | null>(null);
@@ -84,19 +85,24 @@ const { setActiveConversation, addConversation } = useChatStore();
       const res = await chatService.getOrCreateDirectConversation(user._id);
       const convo = res;
       console.log("Convo ID:", convo._id); // Kiểm tra convo._id có hợp lệ không
-     if (!convo?._id) {
-      console.error("Conversation không hợp lệ");
-      return;
-    }
+      if (!convo._id) return;
+      const socket = useSocketStore.getState().socket;
+      socket?.emit("join-conversation", { conversationId: convo._id });
+      navigate("/chat");
+      onClose();
+      if (!convo?._id) {
+        console.error("Conversation không hợp lệ");
+        return;
+      }
 
-    // ✅ thêm vào store ngay lập tức
-    addConversation(convo);
+      // ✅ thêm vào store ngay lập tức
+      addConversation(convo);
 
-    // ✅ set active
-    setActiveConversation(convo._id);
+      // ✅ set active
+      setActiveConversation(convo._id);
 
-    // ✅ navigate
-    navigate("/chat");
+      // ✅ navigate
+      navigate("/chat");
 
       onClose();
     } catch (error) {

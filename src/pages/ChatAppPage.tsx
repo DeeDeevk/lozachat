@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 import SideNav from "@/components/SideNav";
@@ -66,6 +66,8 @@ interface ConversationListItem {
   lastMessage?: { content: string; createdAt: string };
   unread?: number;
   pinned?: boolean;
+  isStranger: string;
+  strangerStatus: string;
 }
 
 const CHAT_STICKER_LIST = [
@@ -213,6 +215,7 @@ export default function ChatPage() {
     deleteMessageForMe,
     uploadAttachment,
     typingUsersByConv,
+    updateStrangerStatus,
   } = useChatStore();
 
   const { user, userProfile } = useAuthStore();
@@ -282,7 +285,8 @@ export default function ChatPage() {
   // ─── Cleanup recording on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+      if (recordingTimerRef.current)
+        window.clearInterval(recordingTimerRef.current);
       recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -317,7 +321,7 @@ export default function ChatPage() {
     if (!activeConversationId) return [];
     const data = messages[activeConversationId];
     if (!data) return [];
-    return Array.isArray(data) ? data : data.items ?? [];
+    return Array.isArray(data) ? data : (data.items ?? []);
   }, [messages, activeConversationId]);
 
   // lastReadMessageId của người kia (để hiện avatar seen dưới tin của mình)
@@ -346,10 +350,15 @@ export default function ChatPage() {
           avatarUrl: p.avatarUrl || undefined,
         })),
         lastMessage: c.lastMessage
-          ? { content: c.lastMessage.content, createdAt: c.lastMessage.createdAt }
+          ? {
+              content: c.lastMessage.content,
+              createdAt: c.lastMessage.createdAt,
+            }
           : undefined,
         unread: c.unreadCounts?.[user?.userId || ""] || 0,
         pinned: false,
+        isStranger: c.isStranger,
+        strangerStatus: c.strangerStatus,
       })),
     [conversations, user?.userId],
   );
@@ -390,7 +399,9 @@ export default function ChatPage() {
         );
         const nextVote = { ...payload.pollVote, createdAt: message.createdAt };
         if (voteIndex >= 0) {
-          const oldTime = new Date(aggregate.votes[voteIndex].createdAt).getTime();
+          const oldTime = new Date(
+            aggregate.votes[voteIndex].createdAt,
+          ).getTime();
           const newTime = new Date(message.createdAt).getTime();
           if (newTime >= oldTime) aggregate.votes[voteIndex] = nextVote;
         } else {
@@ -441,7 +452,10 @@ export default function ChatPage() {
     (message: Message) => {
       if (message.senderId !== user?.userId) return false;
       if (message.isRecalled) return false;
-      return Date.now() - new Date(message.createdAt).getTime() <= 24 * 60 * 60 * 1000;
+      return (
+        Date.now() - new Date(message.createdAt).getTime() <=
+        24 * 60 * 60 * 1000
+      );
     },
     [user?.userId],
   );
@@ -451,13 +465,22 @@ export default function ChatPage() {
       if (!activeConversationId) return;
       const encoded = encodeChatPayload(payload);
       if (activeConversation?.group) {
-        await sendGroupMessage(activeConversationId, { content: encoded, imgUrl });
+        await sendGroupMessage(activeConversationId, {
+          content: encoded,
+          imgUrl,
+        });
       } else {
         if (!otherUser?._id) return;
         await sendDirectMessage(otherUser._id, { content: encoded, imgUrl });
       }
     },
-    [activeConversation?.group, activeConversationId, otherUser?._id, sendDirectMessage, sendGroupMessage],
+    [
+      activeConversation?.group,
+      activeConversationId,
+      otherUser?._id,
+      sendDirectMessage,
+      sendGroupMessage,
+    ],
   );
 
   const sendTextMessage = useCallback(async () => {
@@ -606,7 +629,12 @@ export default function ChatPage() {
       await sendStructuredMessage({
         version: 1,
         kind: "poll",
-        poll: { id: createPollId(), question: q, options, createdBy: user?.userId || "" },
+        poll: {
+          id: createPollId(),
+          question: q,
+          options,
+          createdBy: user?.userId || "",
+        },
       });
       setPollQuestion("");
       setPollOptions(["", ""]);
@@ -641,7 +669,13 @@ export default function ChatPage() {
         alert("Không thể gửi bình chọn");
       }
     },
-    [pollAggregates, sendStructuredMessage, user?.userId, user?.username, userProfile?.displayName],
+    [
+      pollAggregates,
+      sendStructuredMessage,
+      user?.userId,
+      user?.username,
+      userProfile?.displayName,
+    ],
   );
 
   const handleOpenContextMenu = useCallback(
@@ -654,9 +688,11 @@ export default function ChatPage() {
       const menuHeight = 172;
       let x = isMine ? rect.left - menuWidth - 6 : rect.right + 6;
       let y = rect.bottom + 4;
-      if (x + menuWidth > window.innerWidth - 6) x = window.innerWidth - menuWidth - 6;
+      if (x + menuWidth > window.innerWidth - 6)
+        x = window.innerWidth - menuWidth - 6;
       if (x < 6) x = 6;
-      if (y + menuHeight > window.innerHeight - 6) y = window.innerHeight - menuHeight - 6;
+      if (y + menuHeight > window.innerHeight - 6)
+        y = window.innerHeight - menuHeight - 6;
       if (y < 6) y = 6;
       setContextMenu({ x, y, message });
     },
@@ -691,7 +727,8 @@ export default function ChatPage() {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
     return parts.map((part, index) => {
-      if (!part.match(urlRegex)) return <span key={`${part}-${index}`}>{part}</span>;
+      if (!part.match(urlRegex))
+        return <span key={`${part}-${index}`}>{part}</span>;
       const href = part.startsWith("www.") ? `https://${part}` : part;
       return (
         <a
@@ -744,7 +781,11 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "emoji") {
-        return <span style={{ fontSize: 28, lineHeight: "34px" }}>{payload.emoji || "🙂"}</span>;
+        return (
+          <span style={{ fontSize: 28, lineHeight: "34px" }}>
+            {payload.emoji || "🙂"}
+          </span>
+        );
       }
 
       if (payload.kind === "image" && payload.attachment?.url) {
@@ -771,7 +812,9 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
-        return <audio controls src={payload.attachment.url} style={{ width: 260 }} />;
+        return (
+          <audio controls src={payload.attachment.url} style={{ width: 260 }} />
+        );
       }
 
       if (payload.kind === "sticker" && payload.stickerUrl) {
@@ -779,14 +822,21 @@ export default function ChatPage() {
           <img
             src={payload.stickerUrl}
             alt="sticker"
-            style={{ width: 148, height: 148, objectFit: "contain", borderRadius: 14 }}
+            style={{
+              width: 148,
+              height: 148,
+              objectFit: "contain",
+              borderRadius: 14,
+            }}
           />
         );
       }
 
       if (payload.kind === "poll" && payload.poll) {
         const aggregate = pollAggregates.get(payload.poll.id);
-        const votedOption = aggregate?.votes.find((v) => v.userId === user?.userId)?.optionId;
+        const votedOption = aggregate?.votes.find(
+          (v) => v.userId === user?.userId,
+        )?.optionId;
         const totalVotes = aggregate?.votes.length || 0;
 
         return (
@@ -804,11 +854,32 @@ export default function ChatPage() {
             }}
           >
             <div>
-              <div style={{ color: "#fafafa", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+              <div
+                style={{
+                  color: "#fafafa",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  marginBottom: 4,
+                }}
+              >
                 {payload.poll.question}
               </div>
-              <div style={{ color: "#71717a", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: "6px" }}>
+              <div
+                style={{
+                  color: "#71717a",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                  }}
+                >
                   {totalVotes} vote
                 </span>
                 <span>•</span>
@@ -818,11 +889,17 @@ export default function ChatPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {payload.poll.options.map((option) => {
-                const voters = aggregate?.votes.filter((v) => v.optionId === option.id) || [];
+                const voters =
+                  aggregate?.votes.filter((v) => v.optionId === option.id) ||
+                  [];
                 const voted = option.id === votedOption;
-                const percent = totalVotes ? Math.round((voters.length / totalVotes) * 100) : 0;
+                const percent = totalVotes
+                  ? Math.round((voters.length / totalVotes) * 100)
+                  : 0;
                 const voterProfiles = voters.map((v) => {
-                  const participant = activeConversation?.participants.find((p) => p._id === v.userId);
+                  const participant = activeConversation?.participants.find(
+                    (p) => p._id === v.userId,
+                  );
                   return {
                     id: v.userId,
                     name: participant?.displayName || v.userName || "User",
@@ -850,42 +927,96 @@ export default function ChatPage() {
                     <div
                       style={{
                         position: "absolute",
-                        left: 0, top: 0, bottom: 0,
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
                         width: `${percent}%`,
-                        background: voted ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+                        background: voted
+                          ? "rgba(99,102,241,0.15)"
+                          : "rgba(255,255,255,0.03)",
                         transition: "width .4s ease",
                         zIndex: 0,
                       }}
                     />
                     <div style={{ position: "relative", zIndex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600, color: voted ? "#818cf8" : "#e4e4e7", fontSize: 14 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 4,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color: voted ? "#818cf8" : "#e4e4e7",
+                            fontSize: 14,
+                          }}
+                        >
                           {option.label}
                         </span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: voted ? "#818cf8" : "#71717a" }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: voted ? "#818cf8" : "#71717a",
+                          }}
+                        >
                           {percent}%
                         </span>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
                         <div style={{ display: "flex", alignItems: "center" }}>
                           {voterProfiles.slice(0, 3).map((v, i) => (
                             <div
                               key={i}
                               style={{
-                                width: 20, height: 20, borderRadius: "50%",
-                                border: "2px solid #18181b", background: "#27272a",
-                                marginLeft: i === 0 ? 0 : -8, overflow: "hidden",
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                border: "2px solid #18181b",
+                                background: "#27272a",
+                                marginLeft: i === 0 ? 0 : -8,
+                                overflow: "hidden",
                               }}
                             >
                               {v.avatarUrl ? (
-                                <img src={v.avatarUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                <img
+                                  src={v.avatarUrl}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
                               ) : (
-                                <UserIcon size={12} style={{ margin: "auto", display: "block", marginTop: 2, color: "#a1a1aa" }} />
+                                <UserIcon
+                                  size={12}
+                                  style={{
+                                    margin: "auto",
+                                    display: "block",
+                                    marginTop: 2,
+                                    color: "#a1a1aa",
+                                  }}
+                                />
                               )}
                             </div>
                           ))}
                           {voterProfiles.length > 3 && (
-                            <span style={{ marginLeft: 8, fontSize: 11, color: "#52525b" }}>
+                            <span
+                              style={{
+                                marginLeft: 8,
+                                fontSize: 11,
+                                color: "#52525b",
+                              }}
+                            >
                               +{voterProfiles.length - 3}
                             </span>
                           )}
@@ -893,16 +1024,25 @@ export default function ChatPage() {
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
-                            const rect = e.currentTarget.getBoundingClientRect();
+                            const rect =
+                              e.currentTarget.getBoundingClientRect();
                             setVoteViewer({
-                              x: Math.min(rect.left - 18, window.innerWidth - 310),
+                              x: Math.min(
+                                rect.left - 18,
+                                window.innerWidth - 310,
+                              ),
                               y: rect.bottom + 10,
                               optionLabel: option.label,
                               users: voterProfiles,
                               totalVotes: voters.length,
                             });
                           }}
-                          style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, cursor: "pointer" }}
+                          style={{
+                            fontSize: 11,
+                            color: "#6366f1",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
                         >
                           Chi tiết
                         </span>
@@ -917,12 +1057,22 @@ export default function ChatPage() {
               <button
                 onClick={() => {
                   if (payload.poll?.options[0])
-                    void handleVote(payload.poll.id, payload.poll.options[0].id);
+                    void handleVote(
+                      payload.poll.id,
+                      payload.poll.options[0].id,
+                    );
                 }}
                 style={{
-                  marginTop: 4, width: "100%", padding: "10px",
-                  borderRadius: "10px", border: "none", background: "#6366f1",
-                  color: "white", fontWeight: 600, fontSize: 14, cursor: "pointer",
+                  marginTop: 4,
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#6366f1",
+                  color: "white",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
                 }}
               >
                 Gửi bình chọn
@@ -936,9 +1086,19 @@ export default function ChatPage() {
         return <span style={{ color: "#cbd5e1" }}>Đã cập nhật bình chọn</span>;
       }
 
-      return <span>{renderLinks(payload.text || payload.emoji || message.content || "")}</span>;
+      return (
+        <span>
+          {renderLinks(payload.text || payload.emoji || message.content || "")}
+        </span>
+      );
     },
-    [activeConversation?.participants, handleVote, pollAggregates, renderLinks, user?.userId],
+    [
+      activeConversation?.participants,
+      handleVote,
+      pollAggregates,
+      renderLinks,
+      user?.userId,
+    ],
   );
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
@@ -987,9 +1147,35 @@ export default function ChatPage() {
                 justifyContent: "space-between",
               }}
             >
-              <strong>
-                {activeConversation.group?.name || otherUser?.displayName || "Đoạn chat"}
-              </strong>
+              {/* Cột trái: tên + badge người lạ */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <strong style={{ color: "#f1f5f9", fontSize: 15 }}>
+                  {activeConversation.group?.name ||
+                    otherUser?.displayName ||
+                    "Đoạn chat"}
+                </strong>
+
+                {activeConversation.strangerStatus === "accepted" && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      width: "fit-content",
+                      background: "rgba(148,163,184,0.1)",
+                      border: "1px solid rgba(148,163,184,0.2)",
+                      borderRadius: 20,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      color: "#94a3b8",
+                    }}
+                  >
+                    <UserIcon size={15} /> Người lạ
+                  </span>
+                )}
+              </div>
+
+              {/* Cột phải: số tin nhắn */}
               <span style={{ color: "#94a3b8", fontSize: 13 }}>
                 {displayMessages.length} tin nhắn
               </span>
@@ -1006,7 +1192,11 @@ export default function ChatPage() {
                 return (
                   <div
                     key={message._id || `${message.createdAt}-${index}`}
-                    style={{ display: "flex", flexDirection: "column", marginBottom: 10 }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      marginBottom: 10,
+                    }}
                   >
                     {/* Bubble row */}
                     <div
@@ -1045,7 +1235,14 @@ export default function ChatPage() {
                         }}
                       >
                         {renderStructuredMessage(message)}
-                        <div style={{ marginTop: 4, fontSize: 11, color: "#cbd5e1", textAlign: "right" }}>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 11,
+                            color: "#cbd5e1",
+                            textAlign: "right",
+                          }}
+                        >
                           {formatTime(message.createdAt)}
                         </div>
                       </div>
@@ -1064,11 +1261,23 @@ export default function ChatPage() {
 
                     {/* Avatar seen — tin của mình, người kia đã đọc */}
                     {isMine && !message.isRecalled && isLastRead && (
-                      <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 4, marginTop: 2 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          paddingRight: 4,
+                          marginTop: 2,
+                        }}
+                      >
                         <img
                           src={otherAvatar}
                           alt="seen"
-                          style={{ width: 16, height: 16, borderRadius: "50%", border: "1.5px solid #60a5fa" }}
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: "50%",
+                            border: "1.5px solid #60a5fa",
+                          }}
                           title={`${otherUser?.displayName} đã xem`}
                         />
                       </div>
@@ -1078,13 +1287,192 @@ export default function ChatPage() {
               })}
               <div ref={messagesEndRef} />
             </div>
+            {activeConversation.isStranger &&
+              activeConversation.strangerStatus === "pending" &&
+              activeConversation.initiatorId === user?.userId && ( // ✅ người gửi
+                <div
+                  style={{
+                    margin: "0 16px 8px",
+                    padding: "10px 14px",
+                    background: "rgba(37,99,235,0.08)",
+                    border: "1px solid rgba(37,99,235,0.2)",
+                    borderRadius: 12,
+                    color: "#94a3b8",
+                    fontSize: 13,
+                    textAlign: "center",
+                  }}
+                >
+                  ⏳ Đang chờ{" "}
+                  <strong style={{ color: "#f1f5f9" }}>
+                    {otherUser?.displayName}
+                  </strong>{" "}
+                  chấp nhận tin nhắn của bạn
+                </div>
+              )}
+
+            {activeConversation.isStranger &&
+              activeConversation.strangerStatus === "pending" &&
+              activeConversation.initiatorId !== user?.userId && (
+                <div
+                  style={{
+                    margin: "0 16px 8px",
+                    background: "rgba(30,41,59,0.9)",
+                    border: "1px solid rgba(148,163,184,0.2)",
+                    borderRadius: 14,
+                    padding: "14px 16px",
+                  }}
+                >
+                  {/* Avatar + tên người gửi */}
+                  {(() => {
+                    const sender = activeConversation.participants.find(
+                      (p) => p._id !== user?.userId,
+                    );
+                    return (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        {sender?.avatarUrl ? (
+                          <img
+                            src={sender.avatarUrl}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: "50%",
+                              background: "#2563eb",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#fff",
+                              fontWeight: 700,
+                              fontSize: 14,
+                            }}
+                          >
+                            {sender?.displayName?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div
+                            style={{
+                              color: "#f1f5f9",
+                              fontWeight: 600,
+                              fontSize: 14,
+                            }}
+                          >
+                            {sender?.displayName}
+                          </div>
+                          <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                            Muốn nhắn tin với bạn
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <p
+                    style={{
+                      color: "#94a3b8",
+                      fontSize: 13,
+                      marginBottom: 12,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin nhắn
+                    từ họ không?
+                  </p>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() =>
+                        updateStrangerStatus(activeConversation._id, "accepted")
+                      }
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 10,
+                        border: "none",
+                        background: "#2563eb",
+                        color: "#fff",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✓ Chấp nhận
+                    </button>
+                    <button
+                      onClick={() =>
+                        updateStrangerStatus(activeConversation._id, "declined")
+                      }
+                      style={{
+                        flex: 1,
+                        padding: "8px 0",
+                        borderRadius: 10,
+                        border: "1px solid rgba(248,113,113,0.4)",
+                        background: "rgba(248,113,113,0.1)",
+                        color: "#fca5a5",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✗ Từ chối
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {/* Input area — disable nếu stranger pending
+            <div
+              style={{
+                padding: "10px 14px 14px",
+                borderTop: "1px solid rgba(255,255,255,.08)",
+                // ✅ Mờ đi khi chưa accept
+                opacity:
+                  activeConversation.isStranger &&
+                  activeConversation.strangerStatus === "pending"
+                    ? 0.4
+                    : 1,
+                pointerEvents:
+                  activeConversation.isStranger &&
+                  activeConversation.strangerStatus === "pending"
+                    ? "none"
+                    : "auto",
+              }}
+            ></div> */}
 
             {/* Typing indicator */}
-            <div style={{ fontSize: 12, color: "#94a3b8", height: 18, marginBottom: 4, paddingLeft: 16 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "#94a3b8",
+                height: 18,
+                marginBottom: 4,
+                paddingLeft: 16,
+              }}
+            >
               {typingUsers.length > 0 && (
                 <span>
                   {typingUsers
-                    .map((id) => activeConversation.participants.find((p) => p._id === id)?.displayName)
+                    .map(
+                      (id) =>
+                        activeConversation.participants.find(
+                          (p) => p._id === id,
+                        )?.displayName,
+                    )
                     .filter(Boolean)
                     .join(", ")}{" "}
                   đang soạn...
@@ -1093,7 +1481,12 @@ export default function ChatPage() {
             </div>
 
             {/* Input area */}
-            <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+            <div
+              style={{
+                padding: "10px 14px 14px",
+                borderTop: "1px solid rgba(255,255,255,.08)",
+              }}
+            >
               {/* Reply banner */}
               {replyingTo && (
                 <div
@@ -1110,9 +1503,19 @@ export default function ChatPage() {
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 600 }}>
+                    <div
+                      style={{
+                        color: "#bfdbfe",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
                       Đang trả lời{" "}
-                      {getSenderName(replyingTo, user?.userId, activeConversation.participants)}
+                      {getSenderName(
+                        replyingTo,
+                        user?.userId,
+                        activeConversation.participants,
+                      )}
                     </div>
                     <div
                       style={{
@@ -1128,7 +1531,12 @@ export default function ChatPage() {
                   </div>
                   <button
                     onClick={() => setReplyingTo(null)}
-                    style={{ border: "none", background: "transparent", color: "#e2e8f0", cursor: "pointer" }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#e2e8f0",
+                      cursor: "pointer",
+                    }}
                   >
                     <X size={16} />
                   </button>
@@ -1139,7 +1547,13 @@ export default function ChatPage() {
                 {/* Media popup */}
                 {activePopup === "media" && (
                   <div style={popupBoxStyle}>
-                    <div style={{ fontWeight: 600, marginBottom: 10, color: "#f1f5f9" }}>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        marginBottom: 10,
+                        color: "#f1f5f9",
+                      }}
+                    >
                       Gửi tệp hoặc hình ảnh
                     </div>
                     <div style={{ display: "grid", gap: 8 }}>
@@ -1164,13 +1578,25 @@ export default function ChatPage() {
                 {/* Audio popup */}
                 {activePopup === "audio" && (
                   <div style={popupBoxStyle}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>Ghi âm</div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
+                        Ghi âm
+                      </div>
                       <div
                         style={{
                           fontSize: 12,
                           color: isRecording ? "#fca5a5" : "#64748b",
-                          background: isRecording ? "rgba(252,165,165,.1)" : "rgba(100,116,139,.1)",
+                          background: isRecording
+                            ? "rgba(252,165,165,.1)"
+                            : "rgba(100,116,139,.1)",
                           border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
                           borderRadius: 20,
                           padding: "4px 10px",
@@ -1184,14 +1610,22 @@ export default function ChatPage() {
                     <div style={{ display: "grid", gap: 8 }}>
                       {!isRecording ? (
                         <button
-                          style={{ ...popupActionStyle, borderColor: "rgba(37,99,235,.45)", background: "rgba(37,99,235,.1)" }}
+                          style={{
+                            ...popupActionStyle,
+                            borderColor: "rgba(37,99,235,.45)",
+                            background: "rgba(37,99,235,.1)",
+                          }}
                           onClick={() => void startRecording()}
                         >
                           <Mic size={16} /> Bắt đầu ghi âm
                         </button>
                       ) : (
                         <button
-                          style={{ ...popupActionStyle, borderColor: "rgba(248,113,113,.45)", background: "rgba(248,113,113,.15)" }}
+                          style={{
+                            ...popupActionStyle,
+                            borderColor: "rgba(248,113,113,.45)",
+                            background: "rgba(248,113,113,.15)",
+                          }}
                           onClick={() => stopRecording()}
                         >
                           <Mic size={16} /> Dừng và gửi
@@ -1204,24 +1638,65 @@ export default function ChatPage() {
                 {/* Sticker popup */}
                 {activePopup === "sticker" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
                       <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
-                      <a href="https://chatsticker.com" target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontSize: 12, fontWeight: 500 }}>
+                      <a
+                        href="https://chatsticker.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "#3b82f6",
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
                         Xem thêm
                       </a>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: 10,
+                      }}
+                    >
                       {CHAT_STICKER_LIST.map((stickerUrl, index) => (
                         <button
                           key={`sticker-${index}`}
                           className="sticker-btn"
                           onClick={() => {
-                            void sendStructuredMessage({ version: 1, kind: "sticker", stickerUrl });
+                            void sendStructuredMessage({
+                              version: 1,
+                              kind: "sticker",
+                              stickerUrl,
+                            });
                             setActivePopup(null);
                           }}
-                          style={{ border: "0.5px solid rgba(148,163,184,.15)", background: "rgba(255,255,255,.03)", borderRadius: 12, padding: 6, cursor: "pointer", transition: "all .2s ease" }}
+                          style={{
+                            border: "0.5px solid rgba(148,163,184,.15)",
+                            background: "rgba(255,255,255,.03)",
+                            borderRadius: 12,
+                            padding: 6,
+                            cursor: "pointer",
+                            transition: "all .2s ease",
+                          }}
                         >
-                          <img src={stickerUrl} alt="sticker" style={{ width: "100%", height: 80, objectFit: "contain" }} />
+                          <img
+                            src={stickerUrl}
+                            alt="sticker"
+                            style={{
+                              width: "100%",
+                              height: 80,
+                              objectFit: "contain",
+                            }}
+                          />
                         </button>
                       ))}
                     </div>
@@ -1231,7 +1706,15 @@ export default function ChatPage() {
                 {/* Poll popup */}
                 {activePopup === "poll" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 12, color: "#f1f5f9" }}>Tạo cuộc thăm dò</div>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        marginBottom: 12,
+                        color: "#f1f5f9",
+                      }}
+                    >
+                      Tạo cuộc thăm dò
+                    </div>
                     <input
                       value={pollQuestion}
                       onChange={(e) => setPollQuestion(e.target.value)}
@@ -1252,10 +1735,16 @@ export default function ChatPage() {
                       />
                     ))}
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <button onClick={() => setPollOptions((p) => [...p, ""])} style={miniButtonStyle}>
+                      <button
+                        onClick={() => setPollOptions((p) => [...p, ""])}
+                        style={miniButtonStyle}
+                      >
                         + Thêm
                       </button>
-                      <button onClick={() => void handleCreatePoll()} style={miniButtonPrimaryStyle}>
+                      <button
+                        onClick={() => void handleCreatePoll()}
+                        style={miniButtonPrimaryStyle}
+                      >
                         Tạo bình chọn
                       </button>
                     </div>
@@ -1310,7 +1799,9 @@ export default function ChatPage() {
                       title="Ảnh / Tệp"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup((p) => (p === "media" ? null : "media"))}
+                      onClick={() =>
+                        setActivePopup((p) => (p === "media" ? null : "media"))
+                      }
                     >
                       <ImagePlus size={18} />
                     </button>
@@ -1318,7 +1809,11 @@ export default function ChatPage() {
                       title="Nhãn dán"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup((p) => (p === "sticker" ? null : "sticker"))}
+                      onClick={() =>
+                        setActivePopup((p) =>
+                          p === "sticker" ? null : "sticker",
+                        )
+                      }
                     >
                       <Sticker size={18} />
                     </button>
@@ -1326,7 +1821,9 @@ export default function ChatPage() {
                       title="Ghi âm"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup((p) => (p === "audio" ? null : "audio"))}
+                      onClick={() =>
+                        setActivePopup((p) => (p === "audio" ? null : "audio"))
+                      }
                     >
                       <Mic size={18} />
                     </button>
@@ -1334,7 +1831,9 @@ export default function ChatPage() {
                       title="Thăm dò"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup((p) => (p === "poll" ? null : "poll"))}
+                      onClick={() =>
+                        setActivePopup((p) => (p === "poll" ? null : "poll"))
+                      }
                     >
                       <BarChart3 size={18} />
                     </button>
@@ -1346,10 +1845,15 @@ export default function ChatPage() {
                       setInput(event.target.value);
                       // Typing indicator
                       if (socket?.connected && activeConversationId) {
-                        socket.emit("typing", { conversationId: activeConversationId });
-                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                        socket.emit("typing", {
+                          conversationId: activeConversationId,
+                        });
+                        if (typingTimeoutRef.current)
+                          clearTimeout(typingTimeoutRef.current);
                         typingTimeoutRef.current = setTimeout(() => {
-                          socket.emit("stop-typing", { conversationId: activeConversationId });
+                          socket.emit("stop-typing", {
+                            conversationId: activeConversationId,
+                          });
                         }, 1200);
                       }
                     }}
@@ -1374,7 +1878,14 @@ export default function ChatPage() {
                   {/* Emoji picker */}
                   <div style={{ position: "relative", display: "inline-flex" }}>
                     {activePopup === "emoji" && (
-                      <div style={{ position: "absolute", right: 0, bottom: 46, zIndex: 40 }}>
+                      <div
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          bottom: 46,
+                          zIndex: 40,
+                        }}
+                      >
                         <Picker
                           data={data}
                           theme="dark"
@@ -1391,7 +1902,9 @@ export default function ChatPage() {
                       title="Emoji"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup((p) => (p === "emoji" ? null : "emoji"))}
+                      onClick={() =>
+                        setActivePopup((p) => (p === "emoji" ? null : "emoji"))
+                      }
                     >
                       <Smile size={18} />
                     </button>
@@ -1406,9 +1919,11 @@ export default function ChatPage() {
                       borderRadius: 12,
                       width: 38,
                       height: 38,
-                      background: sending || !input.trim() ? "#334155" : "#2563eb",
+                      background:
+                        sending || !input.trim() ? "#334155" : "#2563eb",
                       color: "white",
-                      cursor: sending || !input.trim() ? "not-allowed" : "pointer",
+                      cursor:
+                        sending || !input.trim() ? "not-allowed" : "pointer",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1478,9 +1993,16 @@ export default function ChatPage() {
             </button>
           )}
 
-          {!contextMenu.message.isRecalled && canRecall(contextMenu.message) && (
-            <div style={{ height: "0.5px", background: "rgba(148,163,184,.1)", margin: "4px 0" }} />
-          )}
+          {!contextMenu.message.isRecalled &&
+            canRecall(contextMenu.message) && (
+              <div
+                style={{
+                  height: "0.5px",
+                  background: "rgba(148,163,184,.1)",
+                  margin: "4px 0",
+                }}
+              />
+            )}
 
           {!contextMenu.message.isRecalled && (
             <button
@@ -1511,7 +2033,13 @@ export default function ChatPage() {
             padding: 14,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 14,
+            }}
+          >
             <div>
               <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14 }}>
                 {voteViewer.optionLabel}
@@ -1522,7 +2050,12 @@ export default function ChatPage() {
             </div>
             <button
               onClick={() => setVoteViewer(null)}
-              style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer" }}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
+              }}
             >
               <X size={18} />
             </button>
@@ -1541,18 +2074,29 @@ export default function ChatPage() {
                 }}
               >
                 {person.avatarUrl ? (
-                  <img src={person.avatarUrl} style={{ width: 28, height: 28, borderRadius: "50%" }} alt="" />
+                  <img
+                    src={person.avatarUrl}
+                    style={{ width: 28, height: 28, borderRadius: "50%" }}
+                    alt=""
+                  />
                 ) : (
                   <div
                     style={{
-                      width: 28, height: 28, borderRadius: "50%",
-                      background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      background: "#1e293b",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     <UserIcon size={14} />
                   </div>
                 )}
-                <span style={{ fontSize: 13, color: "#e2e8f0" }}>{person.name}</span>
+                <span style={{ fontSize: 13, color: "#e2e8f0" }}>
+                  {person.name}
+                </span>
               </div>
             ))}
           </div>
