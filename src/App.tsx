@@ -13,7 +13,7 @@ import { useSocketStore } from "./stores/useSocketStore";
 import { useEffect } from "react";
 import PublicRoute from "./components/PublicRoute";
 function App() {
-  const { accessToken } = useAuthStore();
+  const { accessToken} = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
 
   useEffect(() => {
@@ -22,6 +22,9 @@ function App() {
     }
     return () => disconnectSocket();
   }, [accessToken]);
+
+ 
+
   return (
     <>
       <Toaster position="top-right" richColors />

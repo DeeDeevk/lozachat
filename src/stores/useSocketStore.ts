@@ -3,10 +3,14 @@ import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
+import { useFriendStore } from "./useFriendStore";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
-const registerSocketEvents = (socket: Socket, set: any) => {
+const registerSocketEvents = (
+  socket: Socket,
+  set: (partial: Partial<SocketState>) => void,
+) => {
   socket.off("connect");
   socket.off("online-users");
   socket.off("new-message");
@@ -17,6 +21,7 @@ const registerSocketEvents = (socket: Socket, set: any) => {
   socket.off("stranger-declined");
   socket.off("stranger-accepted");
   socket.off("stranger-request");
+  socket.off("stranger-removed");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -72,7 +77,7 @@ const registerSocketEvents = (socket: Socket, set: any) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.map((c) =>
         c._id === conversationId
-          ? { ...c, isStranger: false, strangerStatus: "accepted" }
+          ? { ...c, isStranger: true, strangerStatus: "accepted" }
           : c,
       ),
     }));
@@ -87,6 +92,31 @@ const registerSocketEvents = (socket: Socket, set: any) => {
         state.activeConversationId === conversationId
           ? null
           : state.activeConversationId,
+    }));
+  });
+  socket.off("friend_update");
+  socket.on("friend_update", (update) => {
+    useFriendStore.getState().handleRealTimeUpdate(update);
+  });
+
+  socket.off("new-conversation");
+  socket.on("new-conversation", (conversation) => {
+    const existing = useChatStore
+      .getState()
+      .conversations.find((c) => c._id === conversation.id);
+    if (existing) {
+      console.log("Updated conversation from socket:", conversation);
+      useChatStore.getState().updateConversation(conversation);
+    } else {
+      console.log("New conversation from socket:", conversation);
+      useChatStore.getState().addConversation(conversation);
+    }
+  });
+  socket.on("stranger-removed", ({ conversationId }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId ? { ...c, isStranger: false } : c,
+      ),
     }));
   });
 };

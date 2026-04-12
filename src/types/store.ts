@@ -61,9 +61,28 @@ export interface ChatState {
   ) => Promise<void>;
 }
 
+export interface FriendUpdateEvent {
+  action: string;
+  targetUserId?: string;
+  senderId?: string;
+  receiverId?: string;
+  fromUserId?: string;
+  requestId?: string;
+  newFriend?: { _id: string; displayName: string; avatarUrl: string };
+  deleteMessageForMe: (
+    messageId: string,
+    conversationId: string,
+  ) => Promise<void>;
+  addConversation: (conversation: Conversation) => void;
+  typingUsersByConv: Record<string, string[]>;
+  addTypingUser: (userId: string, conversationId: string) => void;
+  removeTypingUser: (userId: string, conversationId: string) => void;
+  clearTypingUsers: (conversationId: string) => void;
+}
+
 export interface SocketState {
   socket: Socket | null;
-  onlineUsers: String[];
+  onlineUsers: string[];
   connectSocket: () => void;
   disconnectSocket: () => void;
 }

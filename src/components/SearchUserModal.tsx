@@ -6,7 +6,6 @@ import {
   MessageCircle,
   UserPlus,
   Info,
-  Users,
   Loader2,
   Clock,
   Bell,
@@ -26,7 +25,6 @@ import { useSocketStore } from "@/stores/useSocketStore";
 interface SearchUserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartChat?: (user: User) => void;
   onRequestSent?: () => void; // ← callback reload data sau khi gửi lời mời
 }
 
@@ -59,24 +57,33 @@ const randomColor = (str: string) => {
 export default function SearchUserModal({
   isOpen,
   onClose,
-  onStartChat,
   onRequestSent,
 }: SearchUserModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const onStartChat = () => {};
   const currentUser = useAuthStore((s) => s.userProfile);
-  const { loading, searchByUserName, addFriend, getFriendStatus } =
-    useFriendStore();
+  const friendStore = useFriendStore();
+  const { loading, searchByUserName } = friendStore;
+  const onlineUsers = useSocketStore((s) => s.onlineUsers);
   const { setActiveConversation, addConversation } = useChatStore();
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<User | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [sendingReq, setSendingReq] = useState(false);
-  const [reqSent, setReqSent] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  const [requestStatus, setRequestStatus] = useState<RequestStatus>("none");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const requestStatus = useFriendStore(
+    (s) => s.targetStatuses[result?._id || ""] || ("none" as RequestStatus),
+  );
+  const updateFriendStatus = friendStore.updateFriendStatus;
+  const socket = useSocketStore((s) => s.socket);
   const [introMessage, setIntroMessage] = useState(
     "Chào bạn ~ Có thể kết bạn được không?",
   );
+
+  // ✨ Compute isOnline from onlineUsers store
+  const isOnline = result ? onlineUsers.includes(result._id) : false;
 
   const navigate = useNavigate();
 
@@ -119,12 +126,17 @@ export default function SearchUserModal({
       setQuery("");
       setResult(null);
       setNotFound(false);
-      setReqSent(false);
       setShowDetail(false);
-      setRequestStatus("none");
       setIntroMessage("Chào bạn ~ Có thể kết bạn được không?");
     }
   }, [isOpen]);
+
+  // Reset intro message and ensure clean state when status changes
+  useEffect(() => {
+    if (requestStatus !== "friend") {
+      setIntroMessage("Chào bạn ~ Có thể kết bạn được không?");
+    }
+  }, [requestStatus]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -143,9 +155,7 @@ export default function SearchUserModal({
     if (!q) return;
     setResult(null);
     setNotFound(false);
-    setReqSent(false);
     setShowDetail(false);
-    setRequestStatus("none");
     setIntroMessage("Chào bạn ~ Có thể kết bạn được không?");
 
     const user = await searchByUserName(q);
@@ -154,23 +164,8 @@ export default function SearchUserModal({
       return;
     }
 
-    if (
-      user._id === currentUser?._id ||
-      user.username === currentUser?.username
-    ) {
-      setRequestStatus("self");
-      setResult(user);
-      return;
-    }
-
-    const status = await getFriendStatus(user._id);
-
-    if (status === "friend") setRequestStatus("friend");
-    else if (status === "sent") setRequestStatus("sent");
-    else if (status === "received") setRequestStatus("received");
-    else setRequestStatus("none");
-
     setResult(user);
+    await updateFriendStatus(user._id);
   };
 
   const handleSendRequest = async () => {
@@ -181,16 +176,15 @@ export default function SearchUserModal({
         result._id,
         introMessage || undefined,
       );
-      setReqSent(true);
-      setRequestStatus("sent");
       toast.success("Đã gửi lời mời kết bạn!", {
         description: `Yêu cầu đã được gửi đến ${result.displayName || result.username}`,
       });
+      // Socket will handle real-time status update via store
       // ← Reload danh sách lời mời gửi ở FriendsPage
       onRequestSent?.();
-    } catch (err: any) {
+    } catch (err) {
       const msg =
-        err?.response?.data?.message ||
+        (err as any)?.response?.data?.message ||
         "Không thể gửi lời mời. Vui lòng thử lại.";
       toast.error(msg);
     } finally {
@@ -202,13 +196,50 @@ export default function SearchUserModal({
     if (e.key === "Enter") handleSearch();
   };
 
+  // Real-time socket listener for current result user's friend status
+  useEffect(() => {
+    if (!socket || !result?._id) return;
+
+    const handleFriendUpdate = async (update: any) => {
+      // Check if this update is for the current result user
+      const targetId =
+        update.targetUserId ||
+        update.senderId ||
+        update.receiverId ||
+        update.fromUserId;
+
+      if (targetId === result._id) {
+        console.log(
+          "🔥 SearchUserModal real-time update:",
+          result.username,
+          "action:",
+          update.action,
+        );
+        // 🔄 Refresh friend status in real-time with visual feedback
+        setIsUpdatingStatus(true);
+        try {
+          await updateFriendStatus(result._id);
+        } finally {
+          setIsUpdatingStatus(false);
+        }
+      }
+    };
+
+    socket.on("friend_update", handleFriendUpdate);
+
+    // Cleanup listener on unmount
+    return () => {
+      socket.off("friend_update", handleFriendUpdate);
+    };
+  }, [socket, result?._id, updateFriendStatus]);
+
   if (!isOpen) return null;
 
   const avatarColor = result ? randomColor(result.username) : "#3b82f6";
   const initials = result
     ? getInitials(result.displayName || result.username)
     : "";
-  const isSelf = requestStatus === "self";
+  const isSelf = requestStatus === "self" || currentUser?._id === result?._id;
 
   return (
     <>
@@ -247,7 +278,6 @@ export default function SearchUserModal({
                     if (result || notFound) {
                       setResult(null);
                       setNotFound(false);
-                      setRequestStatus("none");
                       setIntroMessage("Chào bạn ~ Có thể kết bạn được không?");
                     }
                   }}
@@ -312,14 +342,7 @@ export default function SearchUserModal({
                     </div>
                     <div className="su-user-username">@{result.username}</div>
                   </div>
-                  <button
-                    className="su-detail-btn"
-                    onClick={() => setShowDetail((v) => !v)}
-                    aria-label="Xem thông tin"
-                    title="Thông tin chi tiết"
-                  >
-                    <Info size={15} />
-                  </button>
+                  
                 </div>
 
                 {showDetail && (
@@ -341,14 +364,40 @@ export default function SearchUserModal({
                       <span
                         className="su-detail-value"
                         style={{
-                          color: result.isOnline ? "#10b981" : "#64748b",
+                          color: "#64748b",
                         }}
                       >
-                        {result.isOnline ? "● Đang hoạt động" : "Offline"}
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: isOnline ? "#06b6d4" : "#9ca3af",
+                              animation: isOnline
+                                ? "su-pulse 2.5s ease-in-out infinite"
+                                : "none",
+                            }}
+                          />
+                          {isOnline ? "Đang hoạt động" : "Ngoại tuyến"}
+                        </div>
                       </span>
                     </div>
                   </div>
                 )}
+
+                <style>{`
+                  @keyframes su-pulse {
+                    0%,100% { opacity: .6; transform: scale(1); }
+                    50% { opacity: 1; transform: scale(1.4); }
+                  }
+                `}</style>
 
                 {requestStatus === "friend" && (
                   <div className="su-status-banner friend">
@@ -359,7 +408,11 @@ export default function SearchUserModal({
 
                 {requestStatus === "sent" && (
                   <div className="su-status-banner sent">
-                    <Clock size={15} />
+                    {isUpdatingStatus ? (
+                      <Loader2 size={15} className="su-spinner" />
+                    ) : (
+                      <Clock size={15} />
+                    )}
                     <span>
                       Bạn đã gửi yêu cầu kết bạn đến người này. Vui lòng chờ
                       phản hồi.
@@ -369,7 +422,11 @@ export default function SearchUserModal({
 
                 {requestStatus === "received" && (
                   <div className="su-status-banner received">
-                    <Bell size={15} />
+                    {isUpdatingStatus ? (
+                      <Loader2 size={15} className="su-spinner" />
+                    ) : (
+                      <Bell size={15} />
+                    )}
                     <span>
                       Bạn đã được yêu cầu kết bạn từ người này. Vui lòng phản
                       hồi.
@@ -377,7 +434,7 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {requestStatus === "none" && !reqSent && (
+                {requestStatus === "none" && (
                   <div className="su-intro-wrap">
                     <div className="su-intro-label">Giới thiệu</div>
                     <textarea
@@ -393,50 +450,29 @@ export default function SearchUserModal({
                   </div>
                 )}
 
-                {requestStatus === "none" && (
-                  <div className="su-actions">
+                <div className="su-actions">
+                  <button
+                    className="su-btn su-btn-chat"
+                    onClick={() => handleStartChat(result)}
+                  >
+                    <MessageCircle size={15} />
+                    Nhắn tin
+                  </button>
+                  {requestStatus === "none" && (
                     <button
-                      className="su-btn su-btn-chat"
-                      onClick={() => handleStartChat(result)}
+                      className="su-btn su-btn-friend"
+                      onClick={handleSendRequest}
+                      disabled={sendingReq}
                     >
-                      <MessageCircle size={15} />
-                      Nhắn tin
+                      {sendingReq ? (
+                        <Loader2 size={15} className="su-spinner" />
+                      ) : (
+                        <UserPlus size={15} />
+                      )}
+                      Kết bạn
                     </button>
-                    {reqSent ? (
-                      <button className="su-btn su-btn-sent" disabled>
-                        <Users size={15} />
-                        Đã gửi lời mời
-                      </button>
-                    ) : (
-                      <button
-                        className="su-btn su-btn-friend"
-                        onClick={handleSendRequest}
-                        disabled={sendingReq}
-                      >
-                        {sendingReq ? (
-                          <Loader2 size={15} className="su-spinner" />
-                        ) : (
-                          <UserPlus size={15} />
-                        )}
-                        Kết bạn
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {(requestStatus === "friend" ||
-                  requestStatus === "sent" ||
-                  requestStatus === "received") && (
-                  <div className="su-actions">
-                    <button
-                      className="su-btn su-btn-chat"
-                      onClick={() => handleStartChat(result)}
-                    >
-                      <MessageCircle size={15} />
-                      Nhắn tin
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
 

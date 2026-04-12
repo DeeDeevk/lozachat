@@ -218,13 +218,17 @@ export default function ChatPage() {
     updateStrangerStatus,
   } = useChatStore();
 
-  const { user, userProfile } = useAuthStore();
-  const { socket } = useSocketStore();
+  const socketStore = useSocketStore();
 
   const [input, setInput] = useState("");
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const { user, userProfile } = useAuthStore();
+  const { socket } = useSocketStore();
   const [sending, setSending] = useState(false);
   const [activePopup, setActivePopup] = useState<PopupType>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
@@ -238,7 +242,6 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -262,6 +265,10 @@ export default function ChatPage() {
   }, [activeConversationId]);
 
   // ─── Scroll to bottom on new messages ────────────────────────────────────────
+  useEffect(() => {
+    socketStore.connectSocket();
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
@@ -1155,24 +1162,25 @@ export default function ChatPage() {
                     "Đoạn chat"}
                 </strong>
 
-                {activeConversation.strangerStatus === "accepted" && (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      width: "fit-content",
-                      background: "rgba(148,163,184,0.1)",
-                      border: "1px solid rgba(148,163,184,0.2)",
-                      borderRadius: 20,
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      color: "#94a3b8",
-                    }}
-                  >
-                    <UserIcon size={15} /> Người lạ
-                  </span>
-                )}
+                {activeConversation.strangerStatus === "accepted" &&
+                  activeConversation.isStranger === true && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        width: "fit-content",
+                        background: "rgba(148,163,184,0.1)",
+                        border: "1px solid rgba(148,163,184,0.2)",
+                        borderRadius: 20,
+                        padding: "2px 8px",
+                        fontSize: 11,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      <UserIcon size={15} /> Người lạ
+                    </span>
+                  )}
               </div>
 
               {/* Cột phải: số tin nhắn */}

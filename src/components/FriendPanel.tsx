@@ -19,10 +19,23 @@ import type { Friend, FriendRequest } from "../types/user";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getInitials = (name: string) =>
-  name?.split(" ").slice(-2).map((w) => w[0]).join("").toUpperCase() || "U";
+  name
+    ?.split(" ")
+    .slice(-2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
 
 const randomColor = (str: string) => {
-  const colors = ["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#ec4899"];
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -46,16 +59,30 @@ function Avatar({
       <img
         src={avatarUrl}
         alt={name}
-        style={{ width: size, height: size, borderRadius: radius, objectFit: "cover", flexShrink: 0 }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          objectFit: "cover",
+          flexShrink: 0,
+        }}
       />
     );
   }
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: radius, background: color,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: Math.round(size * 0.35), fontWeight: 800, color: "white", flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: Math.round(size * 0.35),
+        fontWeight: 800,
+        color: "white",
+        flexShrink: 0,
         boxShadow: `0 3px 10px ${color}44`,
       }}
     >
@@ -107,7 +134,11 @@ interface FriendPanelProps {
   onStartChat?: (userId: string, name: string) => void;
 }
 
-export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPanelProps) {
+export default function FriendPanel({
+  isOpen,
+  onClose,
+  onStartChat,
+}: FriendPanelProps) {
   const {
     loading,
     friends,
@@ -121,16 +152,20 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
   } = useFriendStore();
 
   const [openReceived, setOpenReceived] = useState(true);
-  const [openSent,     setOpenSent]     = useState(false);
-  const [openFriends,  setOpenFriends]  = useState(true);
-  const [actionId,     setActionId]     = useState<string | null>(null);
+  const [openSent, setOpenSent] = useState(false);
+  const [openFriends, setOpenFriends] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
 
+  // Auto-refetch khi panel mở hoặc store thay đổi (live updates)
   useEffect(() => {
     if (isOpen) {
-      getAllFriendRequest();
-      getFriends();
+      const timer = setTimeout(() => {
+        getAllFriendRequest();
+        getFriends();
+      }, 100); // debounce 100ms
+      return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, receivedList.length, sentList.length, friends.length]);
 
   const handleAccept = async (requestId: string, name: string) => {
     setActionId(requestId);
@@ -285,7 +320,6 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
       `}</style>
 
       <div className={`fp-sidebar ${isOpen ? "open" : ""}`}>
-
         {/* Header */}
         <div className="fp-header">
           <div className="fp-header-title">
@@ -299,7 +333,6 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
 
         {/* Body */}
         <div className="fp-body">
-
           {/* ── Lời mời đã nhận ── */}
           <SectionHeader
             icon={<UserPlus size={14} color="#818cf8" />}
@@ -319,11 +352,16 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
               ) : (
                 receivedList.map((req: FriendRequest) => {
                   const from = req.from as any;
-                  const name = from?.displayName || from?.username || "Người dùng";
+                  const name =
+                    from?.displayName || from?.username || "Người dùng";
                   const isActing = actionId === req._id;
                   return (
                     <div key={req._id} className="fp-item">
-                      <Avatar name={name} avatarUrl={from?.avatarUrl} size={40} />
+                      <Avatar
+                        name={name}
+                        avatarUrl={from?.avatarUrl}
+                        size={40}
+                      />
                       <div className="fp-item-info">
                         <div className="fp-item-name">{name}</div>
                         {req.message && (
@@ -339,7 +377,11 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
                           disabled={isActing}
                           title="Chấp nhận"
                         >
-                          {isActing ? <Loader2 size={13} className="fp-spin" /> : <Check size={13} />}
+                          {isActing ? (
+                            <Loader2 size={13} className="fp-spin" />
+                          ) : (
+                            <Check size={13} />
+                          )}
                         </button>
                         <button
                           className="fp-btn fp-btn-decline"
@@ -385,7 +427,8 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
                       <div className="fp-item-info">
                         <div className="fp-item-name">{name}</div>
                         <div className="fp-item-sub">
-                          <span style={{ color: "#fbbf24" }}>● </span>Đang chờ phản hồi
+                          <span style={{ color: "#fbbf24" }}>● </span>Đang chờ
+                          phản hồi
                         </div>
                       </div>
                       <div className="fp-actions">
@@ -395,7 +438,11 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
                           disabled={isActing}
                           title="Huỷ lời mời"
                         >
-                          {isActing ? <Loader2 size={13} className="fp-spin" /> : <UserMinus size={13} />}
+                          {isActing ? (
+                            <Loader2 size={13} className="fp-spin" />
+                          ) : (
+                            <UserMinus size={13} />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -424,22 +471,33 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
                 <Empty text="Chưa có bạn bè nào" />
               ) : (
                 friends.map((friend: Friend) => {
-                  const name = friend.displayName || friend.username || "Người dùng";
+                  const name =
+                    friend.displayName || friend.username || "Người dùng";
                   return (
                     <div key={friend._id} className="fp-item">
-                      <Avatar name={name} avatarUrl={friend.avatarUrl} size={40} />
+                      <Avatar
+                        name={name}
+                        avatarUrl={friend.avatarUrl}
+                        size={40}
+                      />
                       <div className="fp-item-info">
                         <div className="fp-item-name">{name}</div>
                         <div className="fp-item-sub">
-                          {friend.isOnline
-                            ? <span style={{ color: "#10b981" }}>● Đang hoạt động</span>
-                            : `@${friend.username || name}`
-                          }
+                          {friend.isOnline ? (
+                            <span style={{ color: "#10b981" }}>
+                              ● Đang hoạt động
+                            </span>
+                          ) : (
+                            `@${friend.username || name}`
+                          )}
                         </div>
                       </div>
                       <div className="fp-actions">
                         {friend.isOnline && (
-                          <div className="fp-online-dot" style={{ marginRight: 2 }} />
+                          <div
+                            className="fp-online-dot"
+                            style={{ marginRight: 2 }}
+                          />
                         )}
                         <button
                           className="fp-btn fp-btn-chat"
@@ -455,7 +513,6 @@ export default function FriendPanel({ isOpen, onClose, onStartChat }: FriendPane
               )}
             </>
           )}
-
         </div>
       </div>
     </>

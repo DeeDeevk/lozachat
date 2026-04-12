@@ -352,7 +352,7 @@ export const useChatStore = create<ChatState>()(
             set((state) => ({
               conversations: state.conversations.map((c) =>
                 c._id === conversationId
-                  ? { ...c, isStranger: false, strangerStatus: "accepted" }
+                  ? { ...c, isStranger: true, strangerStatus: "accepted" }
                   : c,
               ),
             }));
