@@ -14,6 +14,8 @@ interface ContextMenu {
   isRecalled: boolean;
 }
 
+import { useSocketStore } from "@/stores/useSocketStore";
+
 export default function ChatPage() {
   const {
     conversations,
@@ -28,6 +30,8 @@ export default function ChatPage() {
     deleteMessageForMe,
   } = useChatStore();
 
+  const socketStore = useSocketStore();
+
   const [input, setInput] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -37,6 +41,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetchConversations();
+  }, []);
+
+  useEffect(() => {
+    socketStore.connectSocket();
   }, []);
 
   useEffect(() => {

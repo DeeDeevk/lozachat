@@ -3,10 +3,14 @@ import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
+import { useFriendStore } from "./useFriendStore";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
-const registerSocketEvents = (socket: Socket, set: any) => {
+const registerSocketEvents = (
+  socket: Socket,
+  set: (partial: Partial<SocketState>) => void,
+) => {
   socket.off("connect");
   socket.off("online-users");
   socket.off("new-message");
@@ -42,8 +46,19 @@ const registerSocketEvents = (socket: Socket, set: any) => {
   });
 
   socket.on("message-recalled", ({ messageId, conversationId }) => {
-  useChatStore.getState().applyRecallMessage(messageId, conversationId);
-});
+    useChatStore.getState().applyRecallMessage(messageId, conversationId);
+  });
+
+  socket.off("friend_update");
+  socket.on("friend_update", (update) => {
+    useFriendStore.getState().handleRealTimeUpdate(update);
+  });
+
+  socket.off("new-conversation");
+  socket.on("new-conversation", (conversation) => {
+    console.log("New conversation from socket:", conversation);
+    useChatStore.getState().addConversation(conversation);
+  });
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({

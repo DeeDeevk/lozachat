@@ -15,6 +15,8 @@ export interface Friend {
   username: string;
   displayName: string;
   avatarUrl?: string;
+  isOnline?: boolean;
+  isNew?: boolean;
 }
 
 export type RequestStatus =

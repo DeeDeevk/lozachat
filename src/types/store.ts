@@ -35,13 +35,26 @@ export interface ChatState {
   //xoa
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
-deleteMessageForMe: (messageId: string, conversationId: string) => Promise<void>;
-addConversation: (conversation: Conversation) => void;
+  deleteMessageForMe: (
+    messageId: string,
+    conversationId: string,
+  ) => Promise<void>;
+  addConversation: (conversation: Conversation) => void;
+}
+
+export interface FriendUpdateEvent {
+  action: string;
+  targetUserId?: string;
+  senderId?: string;
+  receiverId?: string;
+  fromUserId?: string;
+  requestId?: string;
+  newFriend?: { _id: string; displayName: string; avatarUrl: string };
 }
 
 export interface SocketState {
   socket: Socket | null;
-  onlineUsers: String[];
+  onlineUsers: string[];
   connectSocket: () => void;
   disconnectSocket: () => void;
 }
