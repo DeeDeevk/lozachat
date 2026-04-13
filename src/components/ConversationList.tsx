@@ -91,7 +91,10 @@ export default function ConversationList({
   const isOnline = (conv: Conversation) => {
     if (conv.group) return false;
     const other = getOtherUser(conv);
-    return other ? onlineUsers.includes(other._id) : false;
+    if (!other) return false;
+
+    // Ép kiểu cả hai về string để tránh lệch Object ID
+    return onlineUsers.some((id) => String(id) === String(other._id));
   };
 
   const getAvatarColor = (conv: Conversation) => {

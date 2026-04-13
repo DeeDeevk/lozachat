@@ -216,6 +216,7 @@ export default function ChatPage() {
     uploadAttachment,
     typingUsersByConv,
     updateStrangerStatus,
+    forwardMessage,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -251,6 +252,12 @@ export default function ChatPage() {
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
+    null,
+  );
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
 
   // ─── Fetch conversations on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -2011,6 +2018,19 @@ export default function ChatPage() {
                 }}
               />
             )}
+          {!contextMenu.message.isRecalled && (
+            <button
+              onClick={() => {
+                setForwardingMessage(contextMenu.message);
+                setIsForwardModalOpen(true);
+                setContextMenu(null);
+              }}
+              style={contextMenuItemStyle}
+              className="menu-item"
+            >
+              <Send size={15} /> Chuyển tiếp
+            </button>
+          )}
 
           {!contextMenu.message.isRecalled && (
             <button
@@ -2107,6 +2127,122 @@ export default function ChatPage() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+      {/* 1. Modal Chuyển tiếp tin nhắn */}
+      {isForwardModalOpen && forwardingMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              width: 400,
+              borderRadius: 16,
+              padding: 20,
+            }}
+          >
+            <h3 style={{ color: "white", marginBottom: 15 }}>
+              Chuyển tiếp tin nhắn
+            </h3>
+            <input
+              placeholder="Tìm hội thoại..."
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+              style={pollInputStyle}
+            />
+            <div style={{ maxHeight: 300, overflowY: "auto", marginTop: 15 }}>
+              {conversations
+                .filter((c) => {
+                  const name =
+                    c.group?.name ||
+                    c.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Người dùng";
+                  return name
+                    .toLowerCase()
+                    .includes(forwardSearch.toLowerCase());
+                })
+                .map((conv) => {
+                  const isSelected = selectedConvs.includes(conv._id);
+                  const chatName =
+                    conv.group?.name ||
+                    conv.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Đoạn chat";
+
+                  return (
+                    <label
+                      key={conv._id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        background: isSelected
+                          ? "rgba(37,99,235,0.1)"
+                          : "transparent", // Highlight khi chọn
+                        borderRadius: 8,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedConvs((prev) => [...prev, conv._id]);
+                          } else {
+                            setSelectedConvs((prev) =>
+                              prev.filter((id) => id !== conv._id),
+                            );
+                          }
+                        }}
+                      />
+                      <span style={{ color: "white", fontSize: 14 }}>
+                        {chatName}
+                      </span>
+                    </label>
+                  );
+                })}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => {
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                }}
+                style={miniButtonStyle}
+              >
+                Hủy
+              </button>
+              <button
+                disabled={selectedConvs.length === 0 || sending}
+                onClick={async () => {
+                  setSending(true);
+                  await forwardMessage(forwardingMessage, selectedConvs);
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                  setForwardingMessage(null);
+                  setSending(false);
+                }}
+                style={miniButtonPrimaryStyle}
+              >
+                Gửi ({selectedConvs.length})
+              </button>
+            </div>
           </div>
         </div>
       )}
