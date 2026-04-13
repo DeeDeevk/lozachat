@@ -201,6 +201,16 @@ function getSenderName(
   );
 }
 
+function formatMessageDateTime(dateString: string) {
+  return new Date(dateString).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function ChatPage() {
   const {
     conversations,
@@ -242,7 +252,6 @@ export default function ChatPage() {
   } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -251,6 +260,10 @@ export default function ChatPage() {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+  const [expandedMessageKey, setExpandedMessageKey] = useState<string | null>(
+    null,
+  );
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
@@ -269,6 +282,14 @@ export default function ChatPage() {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
     }
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    setExpandedMessageKey(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    setImagePreviewUrl(null);
   }, [activeConversationId]);
 
   // ─── Scroll to bottom on new messages ────────────────────────────────────────
@@ -435,31 +456,53 @@ export default function ChatPage() {
 
   const displayMessages = useMemo(() => {
     const pollActivityOrder = new Map<string, number>();
-    pollAggregates.forEach((agg, pollId) => {
-      pollActivityOrder.set(pollId, new Date(agg.latestActivityAt).getTime());
+
+    pollAggregates.forEach((aggregate, pollId) => {
+      pollActivityOrder.set(
+        pollId,
+        new Date(aggregate.latestActivityAt).getTime(),
+      );
     });
 
     return currentMessages
-      .filter((m) => {
-        const payload = decodeChatPayload(m.content);
+      .filter((message) => {
+        const payload = decodeChatPayload(message.content);
         return payload?.kind !== "poll_vote";
       })
-      .map((m, index) => {
-        const payload = decodeChatPayload(m.content);
-        let displayTime = new Date(m.createdAt).getTime();
+      .map((message, index) => {
+        const payload = decodeChatPayload(message.content);
+        let displayTime = new Date(message.createdAt).getTime();
+
         if (payload?.kind === "poll" && payload.poll) {
-          const latest = pollActivityOrder.get(payload.poll.id);
-          if (latest) displayTime = Math.max(displayTime, latest);
+          const latestPollActivity = pollActivityOrder.get(payload.poll.id);
+          if (latestPollActivity) {
+            displayTime = Math.max(displayTime, latestPollActivity);
+          }
         }
-        return { message: m, index, displayTime };
+
+        return {
+          message,
+          index,
+          displayTime,
+        };
       })
-      .sort((a, b) =>
-        a.displayTime !== b.displayTime
-          ? a.displayTime - b.displayTime
-          : a.index - b.index,
-      )
+      .sort((a, b) => {
+        if (a.displayTime !== b.displayTime) {
+          return a.displayTime - b.displayTime;
+        }
+        return a.index - b.index;
+      })
       .map((item) => item.message);
   }, [currentMessages, pollAggregates]);
+
+  const lastDisplayMessageKey = useMemo(() => {
+    const lastIndex = displayMessages.length - 1;
+    if (lastIndex < 0) return null;
+    const lastMessage = displayMessages[lastIndex];
+    return (
+      lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`
+    );
+  }, [displayMessages]);
 
   // ─── Callbacks ───────────────────────────────────────────────────────────────
   const canRecall = useCallback(
@@ -579,9 +622,15 @@ export default function ChatPage() {
     if (isRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
+      const mimeCandidates = [
+        "audio/mp4;codecs=mp4a.40.2",
+        "audio/mp4",
+        "audio/webm;codecs=opus",
+        "audio/webm",
+      ];
+      const mimeType =
+        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ||
+        "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType });
       recordingChunksRef.current = [];
       recordingStreamRef.current = stream;
@@ -596,7 +645,8 @@ export default function ChatPage() {
             type: recorder.mimeType || "audio/webm",
           });
           if (blob.size === 0) return;
-          const file = new File([blob], `recording-${Date.now()}.webm`, {
+          const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+          const file = new File([blob], `recording-${Date.now()}.${ext}`, {
             type: blob.type || "audio/webm",
           });
           await sendAttachmentMessage(file, "audio");
@@ -807,27 +857,72 @@ export default function ChatPage() {
           <img
             src={payload.attachment.url}
             alt={payload.attachment.name || "image"}
-            style={{ width: "100%", maxWidth: 280, borderRadius: 12 }}
+            style={{
+              width: "100%",
+              maxWidth: 280,
+              borderRadius: 12,
+              cursor: "zoom-in",
+              display: "block",
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (payload.attachment?.url) {
+                setImagePreviewUrl(payload.attachment.url);
+              }
+            }}
           />
         );
       }
 
       if (payload.kind === "file" && payload.attachment) {
         return (
-          <a
-            href={payload.attachment.url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "#bfdbfe", textDecoration: "underline" }}
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              background: "rgba(148,163,184,0.1)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
           >
-            Tệp: {payload.attachment.name}
-          </a>
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
+              Tệp đính kèm
+            </div>
+            <a
+              href={payload.attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#e2e8f0", textDecoration: "underline" }}
+            >
+              {payload.attachment.name}
+            </a>
+          </div>
         );
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
         return (
-          <audio controls src={payload.attachment.url} style={{ width: 260 }} />
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              background: "rgba(148,163,184,0.1)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 10,
+              padding: "8px 10px",
+              minWidth: 220,
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
+              Ghi âm
+            </div>
+            <audio
+              controls
+              src={payload.attachment.url}
+              style={{ width: "100%" }}
+            />
+          </div>
         );
       }
 
@@ -1200,9 +1295,22 @@ export default function ChatPage() {
             <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
               {displayMessages.map((message, index) => {
                 const isMine = message.senderId === user?.userId;
+                const payload = decodeChatPayload(message.content);
+                const isAttachmentCard =
+                  payload?.kind === "file" || payload?.kind === "audio";
+                const useNeutralBubble = message.isRecalled || isAttachmentCard;
                 const isLastRead =
                   otherLastReadMessageId &&
                   message._id?.toString() === otherLastReadMessageId.toString();
+                const messageKey =
+                  message._id?.toString() || `${message.createdAt}-${index}`;
+                const isLastMessage = messageKey === lastDisplayMessageKey;
+                const isTimeVisible =
+                  isLastMessage || expandedMessageKey === messageKey;
+                const timeLabel =
+                  expandedMessageKey === messageKey
+                    ? formatMessageDateTime(message.createdAt)
+                    : formatTime(message.createdAt);
 
                 return (
                   <div
@@ -1234,32 +1342,55 @@ export default function ChatPage() {
                       )}
 
                       <div
+                        onClick={() =>
+                          setExpandedMessageKey((prev) =>
+                            prev === messageKey ? null : messageKey,
+                          )
+                        }
                         style={{
                           maxWidth: "72%",
-                          padding: "10px 12px",
                           borderRadius: 14,
-                          border: message.isRecalled
-                            ? "1px dashed rgba(148,163,184,.45)"
-                            : "1px solid rgba(148,163,184,.18)",
-                          background: message.isRecalled
-                            ? "rgba(15,23,42,.4)"
-                            : isMine
-                              ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                              : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-                          boxShadow: "0 8px 20px rgba(0,0,0,.25)",
+                          cursor: "pointer",
+
+                          padding:
+                            payload?.kind === "image" ||
+                            payload?.kind === "file" ||
+                            payload?.kind === "poll"
+                              ? 0
+                              : "10px 12px",
+                          background:
+                            payload?.kind === "image" ||
+                            payload?.kind === "file" ||
+                            payload?.kind === "poll"
+                              ? "transparent"
+                              : message.isRecalled
+                                ? "rgba(15,23,42,.4)"
+                                : isMine
+                                  ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                                  : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+
+                          // ✅ 3. Xóa viền nếu là Ảnh, File, hoặc Poll
+                          border:
+                            payload?.kind === "image" ||
+                            payload?.kind === "file" ||
+                            payload?.kind === "poll"
+                              ? "none"
+                              : isMine
+                                ? "none"
+                                : "1px solid rgba(148,163,184,.18)",
+
+                          // ✅ 4. Xóa bóng đổ nếu là Ảnh, File, hoặc Poll
+                          boxShadow:
+                            payload?.kind === "image" ||
+                            payload?.kind === "file" ||
+                            payload?.kind === "poll"
+                              ? "none"
+                              : "0 8px 20px rgba(0,0,0,.25)",
+
+                          overflow: "hidden",
                         }}
                       >
                         {renderStructuredMessage(message)}
-                        <div
-                          style={{
-                            marginTop: 4,
-                            fontSize: 11,
-                            color: "#cbd5e1",
-                            textAlign: "right",
-                          }}
-                        >
-                          {formatTime(message.createdAt)}
-                        </div>
                       </div>
 
                       {!isMine && !message.isRecalled && (
@@ -1273,6 +1404,28 @@ export default function ChatPage() {
                         </button>
                       )}
                     </div>
+                    {/* Chỉ hiện thời gian KHI VÀ CHỈ KHI tin nhắn được nhấn vào (expanded) */}
+                    {expandedMessageKey === messageKey && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: isMine ? "flex-end" : "flex-start",
+                          marginTop: 4,
+                          padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#94a3b8",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {/* Hiện đầy đủ ngày giờ khi nhấn vào */}
+                          {formatMessageDateTime(message.createdAt)}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Avatar seen — tin của mình, người kia đã đọc */}
                     {isMine && !message.isRecalled && isLastRead && (
@@ -1756,6 +1909,7 @@ export default function ChatPage() {
                       >
                         + Thêm
                       </button>
+
                       <button
                         onClick={() => void handleCreatePoll()}
                         style={miniButtonPrimaryStyle}
@@ -2016,6 +2170,16 @@ export default function ChatPage() {
                   background: "rgba(148,163,184,.1)",
                   margin: "4px 0",
                 }}
+              ></div>
+            )}
+          {!contextMenu.message.isRecalled &&
+            canRecall(contextMenu.message) && (
+              <div
+                style={{
+                  height: "0.5px",
+                  background: "rgba(148,163,184,.1)",
+                  margin: "4px 0",
+                }}
               />
             )}
           {!contextMenu.message.isRecalled && (
@@ -2088,6 +2252,7 @@ export default function ChatPage() {
               <X size={18} />
             </button>
           </div>
+
           <div style={{ display: "grid", gap: 8 }}>
             {voteViewer.users.map((person, i) => (
               <div
@@ -2128,6 +2293,60 @@ export default function ChatPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {imagePreviewUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.9)", // Nền đen mờ cực sang
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999, // Phải cực cao để đè lên mọi thứ
+            cursor: "zoom-out",
+          }}
+          onClick={() => setImagePreviewUrl(null)} // Nhấn ra ngoài để đóng
+        >
+          {/* Nút đóng góc trên bên phải */}
+          <button
+            onClick={() => setImagePreviewUrl(null)}
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              background: "rgba(255,255,255,0.1)",
+              border: "none",
+              borderRadius: "50%",
+              width: 40,
+              height: 40,
+              color: "white",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <X size={24} />
+          </button>
+
+          {/* Ảnh phóng to */}
+          <img
+            src={imagePreviewUrl}
+            alt="Preview"
+            style={{
+              maxHeight: "90vh",
+              maxWidth: "90vw",
+              objectFit: "contain",
+              borderRadius: 8,
+              boxShadow: "0 0 30px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()} // Nhấn vào ảnh thì không đóng modal
+          />
         </div>
       )}
       {/* 1. Modal Chuyển tiếp tin nhắn */}
