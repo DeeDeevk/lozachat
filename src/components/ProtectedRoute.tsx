@@ -4,8 +4,15 @@ import { Navigate, Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 const ProtectedRoute = () => {
-  const { accessToken, user, loading, refresh, fetchCurrentUser } =
-    useAuthStore();
+  const {
+    accessToken,
+    user,
+    loading,
+    refresh,
+    fetchCurrentUser,
+    fetchMe,
+    signOut,
+  } = useAuthStore();
   const [starting, setStarting] = useState(true);
 
   const init = async () => {
@@ -16,6 +23,7 @@ const ProtectedRoute = () => {
 
     if (accessToken && !user) {
       await fetchCurrentUser();
+      await fetchMe();
     }
 
     setStarting(false);

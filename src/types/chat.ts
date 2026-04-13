@@ -3,6 +3,7 @@ export interface Participant {
   displayName: string;
   avatarUrl?: string | null;
   joinedAt: string;
+  lastReadMessageId?: string;
 }
 
 export interface SeenUser {
@@ -38,6 +39,9 @@ export interface Conversation {
   unreadCounts: Record<string, number>; // key = userId, value = unread count
   createdAt: string;
   updatedAt: string;
+  isStranger: boolean;
+  strangerStatus: "pending" | "accepted" | "declined";
+  initiatorId?: string;
 }
 
 export interface ConversationResponse {
@@ -53,8 +57,8 @@ export interface Message {
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
-  isRecalled?: boolean;     
-  recalledAt?: string;      
+  isRecalled?: boolean;
+  recalledAt?: string;
   deletedFor?: string[];
 }
 
