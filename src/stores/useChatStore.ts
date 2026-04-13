@@ -3,10 +3,7 @@ import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
-<<<<<<< Updated upstream
-=======
 import type { Message, Participant } from "@/types/chat";
->>>>>>> Stashed changes
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -262,8 +259,7 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
-<<<<<<< Updated upstream
-=======
+
       addTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           console.log("📝 addTypingUser called:", userId, conversationId);
@@ -356,7 +352,6 @@ export const useChatStore = create<ChatState>()(
           }
         }
       },
->>>>>>> Stashed changes
     }),
     {
       name: "chat-storage",

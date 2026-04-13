@@ -5,6 +5,7 @@ import SideNav from "@/components/SideNav";
 import ConversationList from "@/components/ConversationList";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { useSocketStore } from "@/stores/useSocketStore"; // FIX: import socketStore
 import type {
   ChatStructuredPayload,
   Conversation,
@@ -226,15 +227,12 @@ export default function ChatPage() {
     recallMessage,
     deleteMessageForMe,
     uploadAttachment,
-<<<<<<< Updated upstream
-=======
-    typingUsersByConv,
-    updateStrangerStatus,
     forwardMessage,
->>>>>>> Stashed changes
   } = useChatStore();
 
+  const { connectSocket } = useSocketStore(); // FIX: destructure from proper store
   const { user, userProfile } = useAuthStore();
+
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [activePopup, setActivePopup] = useState<PopupType>(null);
@@ -248,15 +246,15 @@ export default function ChatPage() {
     x: number;
     y: number;
     optionLabel: string;
-    users: Array<{
-      id: string;
-      name: string;
-      avatarUrl?: string;
-    }>;
+    users: Array<{ id: string; name: string; avatarUrl?: string }>;
     totalVotes: number;
   } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -267,29 +265,18 @@ export default function ChatPage() {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
-<<<<<<< Updated upstream
-=======
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
-  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
-    null,
-  );
-  const [forwardSearch, setForwardSearch] = useState("");
-  const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
->>>>>>> Stashed changes
+
+  // ─── Effects ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-<<<<<<< Updated upstream
-=======
-  // ─── Fetch messages when active conversation changes ─────────────────────────
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
     }
-  }, [activeConversationId]);
+  }, [activeConversationId, fetchMessages]);
 
   useEffect(() => {
     setExpandedMessageKey(null);
@@ -299,12 +286,10 @@ export default function ChatPage() {
     setImagePreviewUrl(null);
   }, [activeConversationId]);
 
-  // ─── Scroll to bottom on new messages ────────────────────────────────────────
   useEffect(() => {
-    socketStore.connectSocket();
-  }, []);
+    connectSocket(); // FIX: use destructured method
+  }, [connectSocket]);
 
->>>>>>> Stashed changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
@@ -320,7 +305,6 @@ export default function ChatPage() {
       }
       setVoteViewer(null);
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -334,16 +318,16 @@ export default function ChatPage() {
     };
   }, []);
 
+  // ─── Derived state ────────────────────────────────────────────────────────────
+
   const activeConversation = useMemo(
-    () => conversations.find((conversation) => conversation._id === activeConversationId),
+    () => conversations.find((c) => c._id === activeConversationId),
     [conversations, activeConversationId],
   );
 
   const otherUser = useMemo(
     () =>
-      activeConversation?.participants.find(
-        (participant) => participant._id !== user?.userId,
-      ),
+      activeConversation?.participants.find((p) => p._id !== user?.userId),
     [activeConversation, user?.userId],
   );
 
@@ -356,10 +340,10 @@ export default function ChatPage() {
       conversations.map((conversation: Conversation) => ({
         _id: conversation._id,
         group: conversation.group,
-        participants: conversation.participants.map((participant) => ({
-          _id: participant._id,
-          displayName: participant.displayName,
-          avatarUrl: participant.avatarUrl || undefined,
+        participants: conversation.participants.map((p) => ({
+          _id: p._id,
+          displayName: p.displayName,
+          avatarUrl: p.avatarUrl || undefined,
         })),
         lastMessage: conversation.lastMessage
           ? {
@@ -382,11 +366,13 @@ export default function ChatPage() {
 
       if (payload.kind === "poll" && payload.poll) {
         const existing = map.get(payload.poll.id);
-        const latestActivityAt = existing?.latestActivityAt
-          ? new Date(existing.latestActivityAt).getTime() > new Date(message.createdAt).getTime()
-            ? existing.latestActivityAt
-            : message.createdAt
-          : message.createdAt;
+        const latestActivityAt =
+          existing?.latestActivityAt
+            ? new Date(existing.latestActivityAt).getTime() >
+              new Date(message.createdAt).getTime()
+              ? existing.latestActivityAt
+              : message.createdAt
+            : message.createdAt;
         map.set(payload.poll.id, {
           question: payload.poll.question,
           options: payload.poll.options,
@@ -406,13 +392,9 @@ export default function ChatPage() {
         };
 
         const voteIndex = aggregate.votes.findIndex(
-          (vote) => vote.userId === payload.pollVote?.userId,
+          (v) => v.userId === payload.pollVote?.userId,
         );
-
-        const nextVote = {
-          ...payload.pollVote,
-          createdAt: message.createdAt,
-        };
+        const nextVote = { ...payload.pollVote, createdAt: message.createdAt };
 
         if (voteIndex >= 0) {
           const oldTime = new Date(aggregate.votes[voteIndex].createdAt).getTime();
@@ -429,7 +411,6 @@ export default function ChatPage() {
           new Date(message.createdAt).getTime(),
         );
         aggregate.latestActivityAt = new Date(latestActivityTime).toISOString();
-
         map.set(payload.pollVote.pollId, aggregate);
       }
     });
@@ -439,7 +420,6 @@ export default function ChatPage() {
 
   const displayMessages = useMemo(() => {
     const pollActivityOrder = new Map<string, number>();
-
     pollAggregates.forEach((aggregate, pollId) => {
       pollActivityOrder.set(pollId, new Date(aggregate.latestActivityAt).getTime());
     });
@@ -460,32 +440,24 @@ export default function ChatPage() {
           }
         }
 
-        return {
-          message,
-          index,
-          displayTime,
-        };
+        return { message, index, displayTime };
       })
       .sort((a, b) => {
-        if (a.displayTime !== b.displayTime) {
-          return a.displayTime - b.displayTime;
-        }
+        if (a.displayTime !== b.displayTime) return a.displayTime - b.displayTime;
         return a.index - b.index;
       })
       .map((item) => item.message);
   }, [currentMessages, pollAggregates]);
 
-<<<<<<< Updated upstream
-=======
   const lastDisplayMessageKey = useMemo(() => {
     const lastIndex = displayMessages.length - 1;
     if (lastIndex < 0) return null;
-    const lastMessage = displayMessages[lastIndex];
-    return lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`;
+    const last = displayMessages[lastIndex];
+    return last._id?.toString() || `${last.createdAt}-${lastIndex}`;
   }, [displayMessages]);
 
   // ─── Callbacks ───────────────────────────────────────────────────────────────
->>>>>>> Stashed changes
+
   const canRecall = useCallback(
     (message: Message) => {
       if (message.senderId !== user?.userId) return false;
@@ -499,19 +471,12 @@ export default function ChatPage() {
   const sendStructuredMessage = useCallback(
     async (payload: ChatStructuredPayload, imgUrl?: string) => {
       if (!activeConversationId) return;
-
       const encoded = encodeChatPayload(payload);
       if (activeConversation?.group) {
-        await sendGroupMessage(activeConversationId, {
-          content: encoded,
-          imgUrl,
-        });
+        await sendGroupMessage(activeConversationId, { content: encoded, imgUrl });
       } else {
         if (!otherUser?._id) return;
-        await sendDirectMessage(otherUser._id, {
-          content: encoded,
-          imgUrl,
-        });
+        await sendDirectMessage(otherUser._id, { content: encoded, imgUrl });
       }
     },
     [
@@ -569,7 +534,6 @@ export default function ChatPage() {
       try {
         setSending(true);
         const uploaded = await uploadAttachment(file);
-
         await sendStructuredMessage(
           {
             version: 1,
@@ -606,12 +570,6 @@ export default function ChatPage() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-<<<<<<< Updated upstream
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-
-=======
       const mimeCandidates = [
         "audio/mp4;codecs=mp4a.40.2",
         "audio/mp4",
@@ -619,18 +577,15 @@ export default function ChatPage() {
         "audio/webm",
       ];
       const mimeType =
-        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ||
-        "audio/webm";
->>>>>>> Stashed changes
+        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType });
+
       recordingChunksRef.current = [];
       recordingStreamRef.current = stream;
       recordingRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordingChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
       };
 
       recorder.onstop = async () => {
@@ -638,25 +593,16 @@ export default function ChatPage() {
           const blob = new Blob(recordingChunksRef.current, {
             type: recorder.mimeType || "audio/webm",
           });
-<<<<<<< Updated upstream
-
-          if (blob.size === 0) {
-            return;
-          }
-
-          const file = new File([blob], `recording-${Date.now()}.webm`, {
-=======
           if (blob.size === 0) return;
           const ext = blob.type.includes("mp4") ? "m4a" : "webm";
           const file = new File([blob], `recording-${Date.now()}.${ext}`, {
->>>>>>> Stashed changes
             type: blob.type || "audio/webm",
           });
           await sendAttachmentMessage(file, "audio");
         } finally {
           recordingChunksRef.current = [];
           recordingRecorderRef.current = null;
-          recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+          recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
           recordingStreamRef.current = null;
           if (recordingTimerRef.current) {
             window.clearInterval(recordingTimerRef.current);
@@ -672,7 +618,7 @@ export default function ChatPage() {
       setIsRecording(true);
       setRecordSeconds(0);
       recordingTimerRef.current = window.setInterval(() => {
-        setRecordSeconds((previous) => previous + 1);
+        setRecordSeconds((prev) => prev + 1);
       }, 1000);
     } catch (error) {
       console.error("Không thể bắt đầu ghi âm", error);
@@ -682,17 +628,15 @@ export default function ChatPage() {
 
   const handleCreatePoll = useCallback(async () => {
     const normalizedQuestion = pollQuestion.trim();
-    const normalizedOptions = pollOptions
-      .map((option) => option.trim())
-      .filter(Boolean);
+    const normalizedOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
 
     if (!normalizedQuestion || normalizedOptions.length < 2) {
       alert("Cần nhập câu hỏi và tối thiểu 2 lựa chọn");
       return;
     }
 
-    const options: PollOption[] = normalizedOptions.map((label, index) => ({
-      id: `opt_${index + 1}_${Math.random().toString(36).slice(2, 6)}`,
+    const options: PollOption[] = normalizedOptions.map((label, i) => ({
+      id: `opt_${i + 1}_${Math.random().toString(36).slice(2, 6)}`,
       label,
     }));
 
@@ -708,7 +652,6 @@ export default function ChatPage() {
           createdBy: user?.userId || "",
         },
       });
-
       setPollQuestion("");
       setPollOptions(["", ""]);
       setActivePopup(null);
@@ -723,9 +666,8 @@ export default function ChatPage() {
   const handleVote = useCallback(
     async (pollId: string, optionId: string) => {
       if (!user?.userId) return;
-
       const aggregate = pollAggregates.get(pollId);
-      const voted = aggregate?.votes.find((vote) => vote.userId === user.userId);
+      const voted = aggregate?.votes.find((v) => v.userId === user.userId);
       if (voted?.optionId === optionId) return;
 
       try {
@@ -772,7 +714,6 @@ export default function ChatPage() {
 
   const handleRecall = useCallback(async () => {
     if (!contextMenu || !activeConversationId) return;
-
     try {
       await recallMessage(contextMenu.message._id, activeConversationId);
     } catch (error) {
@@ -785,7 +726,6 @@ export default function ChatPage() {
 
   const handleDeleteForMe = useCallback(async () => {
     if (!contextMenu || !activeConversationId) return;
-
     try {
       await deleteMessageForMe(contextMenu.message._id, activeConversationId);
     } catch (error) {
@@ -799,12 +739,8 @@ export default function ChatPage() {
   const renderLinks = useCallback((text: string) => {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
-
     return parts.map((part, index) => {
-      if (!part.match(urlRegex)) {
-        return <span key={`${part}-${index}`}>{part}</span>;
-      }
-
+      if (!part.match(urlRegex)) return <span key={`${part}-${index}`}>{part}</span>;
       const href = part.startsWith("www.") ? `https://${part}` : part;
       return (
         <a
@@ -819,6 +755,8 @@ export default function ChatPage() {
       );
     });
   }, []);
+
+  // ─── renderStructuredMessage ──────────────────────────────────────────────────
 
   const renderStructuredMessage = useCallback(
     (message: Message) => {
@@ -873,9 +811,9 @@ export default function ChatPage() {
             src={payload.attachment.url}
             alt={payload.attachment.name || "image"}
             style={{ width: "100%", maxWidth: 280, borderRadius: 12, cursor: "zoom-in" }}
-            onClick={(event) => {
-              event.stopPropagation();
-              setImagePreviewUrl(payload.attachment.url);
+            onClick={(e) => {
+              e.stopPropagation();
+              setImagePreviewUrl(payload.attachment!.url);
             }}
           />
         );
@@ -909,9 +847,6 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
-<<<<<<< Updated upstream
-        return <audio controls src={payload.attachment.url} style={{ width: 260 }} />;
-=======
         return (
           <div
             style={{
@@ -924,17 +859,10 @@ export default function ChatPage() {
               minWidth: 220,
             }}
           >
-            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
-              Ghi âm
-            </div>
-            <audio
-              controls
-              src={payload.attachment.url}
-              style={{ width: "100%" }}
-            />
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>Ghi âm</div>
+            <audio controls src={payload.attachment.url} style={{ width: "100%" }} />
           </div>
         );
->>>>>>> Stashed changes
       }
 
       if (payload.kind === "sticker" && payload.stickerUrl) {
@@ -947,169 +875,166 @@ export default function ChatPage() {
         );
       }
 
-      // --- Thay thế logic trong renderStructuredMessage cho phần Poll ---
+      if (payload.kind === "poll" && payload.poll) {
+        const aggregate = pollAggregates.get(payload.poll.id);
+        const votedOption = aggregate?.votes.find((v) => v.userId === user?.userId)?.optionId;
+        const totalVotes = aggregate?.votes.length || 0;
 
-          if (payload.kind === "poll" && payload.poll) {
-  const aggregate = pollAggregates.get(payload.poll.id);
-  const votedOption = aggregate?.votes.find((vote) => vote.userId === user?.userId)?.optionId;
-  const totalVotes = aggregate?.votes.length || 0;
-
-  return (
-    <div style={{ 
-      display: "flex", 
-      flexDirection: "column", 
-      gap: 12, 
-      minWidth: 280, 
-      padding: "14px",
-      background: "#18181b", // Màu nền khung Poll (Zinc 900) - Rất sang và deep
-      borderRadius: "16px",
-      border: "1px solid rgba(255,255,255,0.08)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
-    }}>
-      {/* Tiêu đề cuộc thăm dò */}
-      <div>
-        <div style={{ color: "#fafafa", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-          {payload.poll.question}
-        </div>
-        <div style={{ color: "#71717a", fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '6px' }}>
-            {totalVotes} vote
-          </span>
-          <span>•</span>
-          <span>Chọn một câu trả lời</span>
-        </div>
-      </div>
-
-      {/* Danh sách các lựa chọn */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {payload.poll.options.map((option) => {
-          const voters = aggregate?.votes.filter((vote) => vote.optionId === option.id) || [];
-          const voted = option.id === votedOption;
-          const percent = totalVotes ? Math.round((voters.length / totalVotes) * 100) : 0;
-          
-          const voterProfiles = voters.map((vote) => {
-            const participant = activeConversation?.participants.find((p) => p._id === vote.userId);
-            return {
-              id: vote.userId,
-              name: participant?.displayName || vote.userName || "User",
-              avatarUrl: participant?.avatarUrl || undefined,
-            };
-          });
-
-          return (
-            <button
-              key={option.id}
-              onClick={() => void handleVote(payload.poll!.id, option.id)}
-              style={{
-                position: "relative",
-                width: "100%",
-                border: voted ? "1px solid #6366f1" : "1px solid #27272a",
-                background: voted ? "rgba(99,102,241,0.05)" : "#09090b",
-                borderRadius: "12px",
-                padding: "12px 14px",
-                cursor: "pointer",
-                overflow: "hidden",
-                transition: "all .2s ease",
-                textAlign: "left"
-              }}
-            >
-              {/* Thanh progress bar chạy ngầm - Màu Slate Indigo mờ */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: `${percent}%`,
-                  background: voted ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
-                  transition: "width .4s ease",
-                  zIndex: 0
-                }}
-              />
-
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600, color: voted ? "#818cf8" : "#e4e4e7", fontSize: 14 }}>
-                    {option.label}
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: voted ? "#818cf8" : "#71717a" }}>
-                    {percent}%
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  {/* Avatar Stack xịn xò */}
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    {voterProfiles.slice(0, 3).map((v, i) => (
-                      <div 
-                        key={i} 
-                        style={{ 
-                          width: 20, height: 20, borderRadius: "50%", 
-                          border: "2px solid #18181b", background: "#27272a",
-                          marginLeft: i === 0 ? 0 : -8, overflow: 'hidden'
-                        }}
-                      >
-                        {v.avatarUrl ? (
-                          <img src={v.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <UserIcon size={12} style={{ margin: 'auto', display: 'block', marginTop: 2, color: '#a1a1aa' }} />
-                        )}
-                      </div>
-                    ))}
-                    <span style={{ marginLeft: 8, fontSize: 11, color: "#52525b" }}>
-                      {voterProfiles.length > 0 ? (voterProfiles.length > 3 ? `+${voterProfiles.length - 3}` : "") : ""}
-                    </span>
-                  </div>
-                  
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setVoteViewer({
-                        x: Math.min(rect.left - 18, window.innerWidth - 310),
-                        y: rect.bottom + 10,
-                        optionLabel: option.label,
-                        users: voterProfiles,
-                        totalVotes: voters.length,
-                      });
-                    }}
-                    style={{ fontSize: 11, color: "#6366f1", fontWeight: 600 }}
-                  >
-                    Chi tiết
-                  </span>
-                </div>
+        return (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              minWidth: 280,
+              padding: 14,
+              background: "#18181b",
+              borderRadius: 16,
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div>
+              <div style={{ color: "#fafafa", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+                {payload.poll.question}
               </div>
-            </button>
-          );
-        })}
-      </div>
+              <div style={{ color: "#71717a", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: 6 }}>
+                  {totalVotes} vote
+                </span>
+                <span>•</span>
+                <span>Chọn một câu trả lời</span>
+              </div>
+            </div>
 
-      {/* Nút hành động phía dưới */}
-      {!votedOption && (
-        <button
-          onClick={() => {
-            if (payload.poll?.options[0]) void handleVote(payload.poll.id, payload.poll.options[0].id);
-          }}
-          style={{
-            marginTop: 4,
-            width: "100%",
-            padding: "10px",
-            borderRadius: "10px",
-            border: "none",
-            background: "#6366f1",
-            color: "white",
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: "pointer",
-            transition: 'background 0.2s'
-          }}
-        >
-          Gửi bình chọn
-        </button>
-      )}
-    </div>
-  );
-}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {payload.poll.options.map((option) => {
+                const voters = aggregate?.votes.filter((v) => v.optionId === option.id) || [];
+                const voted = option.id === votedOption;
+                const percent = totalVotes ? Math.round((voters.length / totalVotes) * 100) : 0;
+
+                const voterProfiles = voters.map((v) => {
+                  const participant = activeConversation?.participants.find((p) => p._id === v.userId);
+                  return {
+                    id: v.userId,
+                    name: participant?.displayName || v.userName || "User",
+                    avatarUrl: participant?.avatarUrl || undefined,
+                  };
+                });
+
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => void handleVote(payload.poll!.id, option.id)}
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      border: voted ? "1px solid #6366f1" : "1px solid #27272a",
+                      background: voted ? "rgba(99,102,241,0.05)" : "#09090b",
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      transition: "all .2s ease",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${percent}%`,
+                        background: voted ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+                        transition: "width .4s ease",
+                        zIndex: 0,
+                      }}
+                    />
+                    <div style={{ position: "relative", zIndex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600, color: voted ? "#818cf8" : "#e4e4e7", fontSize: 14 }}>
+                          {option.label}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: voted ? "#818cf8" : "#71717a" }}>
+                          {percent}%
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          {voterProfiles.slice(0, 3).map((v, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                border: "2px solid #18181b",
+                                background: "#27272a",
+                                marginLeft: i === 0 ? 0 : -8,
+                                overflow: "hidden",
+                              }}
+                            >
+                              {v.avatarUrl ? (
+                                <img src={v.avatarUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                              ) : (
+                                <UserIcon size={12} style={{ margin: "auto", display: "block", marginTop: 2, color: "#a1a1aa" }} />
+                              )}
+                            </div>
+                          ))}
+                          {voterProfiles.length > 3 && (
+                            <span style={{ marginLeft: 8, fontSize: 11, color: "#52525b" }}>
+                              +{voterProfiles.length - 3}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setVoteViewer({
+                              x: Math.min(rect.left - 18, window.innerWidth - 310),
+                              y: rect.bottom + 10,
+                              optionLabel: option.label,
+                              users: voterProfiles,
+                              totalVotes: voters.length,
+                            });
+                          }}
+                          style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Chi tiết
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!votedOption && (
+              <button
+                onClick={() => {
+                  if (payload.poll?.options[0]) void handleVote(payload.poll.id, payload.poll.options[0].id);
+                }}
+                style={{
+                  marginTop: 4,
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#6366f1",
+                  color: "white",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Gửi bình chọn
+              </button>
+            )}
+          </div>
+        );
+      }
 
       if (payload.kind === "poll_vote") {
         return <span style={{ color: "#cbd5e1" }}>Đã cập nhật bình chọn</span>;
@@ -1120,9 +1045,10 @@ export default function ChatPage() {
     [activeConversation?.participants, handleVote, pollAggregates, renderLinks, user?.userId],
   );
 
+  // ─── JSX ─────────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ display: "flex", height: "100vh", background: "#040a18" }}>
-      {/* Thêm style tag cho các hiệu ứng hover mượt mà */}
       <style>{`
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
@@ -1156,6 +1082,7 @@ export default function ChatPage() {
       >
         {activeConversation ? (
           <>
+            {/* ── Header ── */}
             <div
               style={{
                 padding: "12px 16px",
@@ -1173,20 +1100,14 @@ export default function ChatPage() {
               </span>
             </div>
 
+            {/* ── Messages ── */}
             <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
               {displayMessages.map((message, index) => {
                 const isMine = message.senderId === user?.userId;
-<<<<<<< Updated upstream
-=======
                 const payload = decodeChatPayload(message.content);
-                const isAttachmentCard =
-                  payload?.kind === "file" || payload?.kind === "audio";
+                const isAttachmentCard = payload?.kind === "file" || payload?.kind === "audio";
                 const useNeutralBubble = message.isRecalled || isAttachmentCard;
-                const isLastRead =
-                  otherLastReadMessageId &&
-                  message._id?.toString() === otherLastReadMessageId.toString();
-                const messageKey =
-                  message._id?.toString() || `${message.createdAt}-${index}`;
+                const messageKey = message._id?.toString() || `${message.createdAt}-${index}`;
                 const isLastMessage = messageKey === lastDisplayMessageKey;
                 const isTimeVisible = isLastMessage || expandedMessageKey === messageKey;
                 const timeLabel =
@@ -1194,18 +1115,18 @@ export default function ChatPage() {
                     ? formatMessageDateTime(message.createdAt)
                     : formatTime(message.createdAt);
 
->>>>>>> Stashed changes
                 return (
                   <div
-                    key={message._id || `${message.createdAt}-${index}`}
+                    key={messageKey}
                     style={{
                       display: "flex",
                       justifyContent: isMine ? "flex-end" : "flex-start",
                       marginBottom: 10,
                       gap: 8,
-                      alignItems: "center",
+                      alignItems: "flex-end",
                     }}
                   >
+                    {/* Context menu trigger — only for own messages */}
                     {isMine && !message.isRecalled && (
                       <button
                         onClick={(event) => handleOpenContextMenu(event, message)}
@@ -1217,36 +1138,11 @@ export default function ChatPage() {
                       </button>
                     )}
 
-                    <div
-                      style={{
-                        maxWidth: "72%",
-                        padding: "10px 12px",
-                        borderRadius: 14,
-                        border: message.isRecalled
-                          ? "1px dashed rgba(148,163,184,.45)"
-                          : "1px solid rgba(148,163,184,.18)",
-                        background: message.isRecalled
-                          ? "rgba(15,23,42,.4)"
-                          : isMine
-                            ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                            : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-                        boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-                      }}
-                    >
-                      {renderStructuredMessage(message)}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", maxWidth: "72%", gap: 4 }}>
+                      {/* Bubble */}
                       <div
                         style={{
-<<<<<<< Updated upstream
-                          marginTop: 4,
-                          fontSize: 11,
-                          color: "#cbd5e1",
-                          textAlign: "right",
-                        }}
-                      >
-                        {formatTime(message.createdAt)}
-=======
-                          maxWidth: "72%",
-                          padding: "10px 12px",
+                          padding: isAttachmentCard ? 0 : "10px 12px",
                           borderRadius: 14,
                           border: isAttachmentCard
                             ? "none"
@@ -1258,69 +1154,42 @@ export default function ChatPage() {
                             : message.isRecalled
                             ? "rgba(15,23,42,.4)"
                             : useNeutralBubble
-                              ? "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)"
-                              : isMine
-                              ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                              : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-                          boxShadow: isAttachmentCard
-                            ? "none"
-                            : "0 8px 20px rgba(0,0,0,.25)",
+                            ? "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)"
+                            : isMine
+                            ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                            : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+                          boxShadow: isAttachmentCard ? "none" : "0 8px 20px rgba(0,0,0,.25)",
                           cursor: "pointer",
                         }}
                         onClick={() => {
-                          setExpandedMessageKey((current) =>
-                            current === messageKey ? null : messageKey,
-                          );
+                          setExpandedMessageKey((cur) => (cur === messageKey ? null : messageKey));
                         }}
                       >
                         {renderStructuredMessage(message)}
->>>>>>> Stashed changes
                       </div>
+
+                      {/* Timestamp */}
+                      {isTimeVisible && (
+                        <span
+                          style={{
+                            fontSize: expandedMessageKey === messageKey ? 12 : 11,
+                            color: useNeutralBubble ? "#94a3b8" : isMine ? "#dbeafe" : "#94a3b8",
+                            lineHeight: 1.3,
+                            padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                          }}
+                        >
+                          {timeLabel}
+                        </span>
+                      )}
                     </div>
 
-<<<<<<< Updated upstream
+                    {/* Context menu trigger — only for other people's messages */}
                     {!isMine && !message.isRecalled && (
                       <button
                         onClick={(event) => handleOpenContextMenu(event, message)}
                         style={actionDotsStyle}
                         className="action-btn"
                         title="Tùy chọn tin nhắn"
-=======
-                    {isTimeVisible && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: isMine ? "flex-end" : "flex-start",
-                          marginTop: 4,
-                          padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: expandedMessageKey === messageKey ? 12 : 11,
-                            color: useNeutralBubble
-                              ? "#94a3b8"
-                              : isMine
-                                ? "#dbeafe"
-                                : "#94a3b8",
-                            lineHeight: 1.3,
-                          }}
-                        >
-                          {timeLabel}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Avatar seen — tin của mình, người kia đã đọc */}
-                    {isMine && !message.isRecalled && isLastRead && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          paddingRight: 4,
-                          marginTop: 2,
-                        }}
->>>>>>> Stashed changes
                       >
                         <Ellipsis size={16} />
                       </button>
@@ -1332,12 +1201,9 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-              }}
-            >
+            {/* ── Input bar ── */}
+            <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+              {/* Reply banner */}
               {replyingTo && (
                 <div
                   style={{
@@ -1355,11 +1221,7 @@ export default function ChatPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 600 }}>
                       Đang trả lời{" "}
-                      {getSenderName(
-                        replyingTo,
-                        user?.userId,
-                        activeConversation.participants,
-                      )}
+                      {getSenderName(replyingTo, user?.userId, activeConversation.participants)}
                     </div>
                     <div
                       style={{
@@ -1373,15 +1235,9 @@ export default function ChatPage() {
                       {getSafeMessagePreview(replyingTo.content)}
                     </div>
                   </div>
-
                   <button
                     onClick={() => setReplyingTo(null)}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "#e2e8f0",
-                      cursor: "pointer",
-                    }}
+                    style={{ border: "none", background: "transparent", color: "#e2e8f0", cursor: "pointer" }}
                     title="Hủy trả lời"
                   >
                     <X size={16} />
@@ -1390,41 +1246,40 @@ export default function ChatPage() {
               )}
 
               <div style={{ position: "relative" }} ref={popupRef}>
+                {/* Media popup */}
                 {activePopup === "media" && (
                   <div style={popupBoxStyle}>
-                    <div style={{ fontWeight: 600, marginBottom: 10, color: '#f1f5f9' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 10, color: "#f1f5f9" }}>
                       Gửi tệp hoặc hình ảnh
                     </div>
                     <div style={{ display: "grid", gap: 8 }}>
-                      <button
-                        style={popupActionStyle}
-                        className="menu-item"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
+                      <button style={popupActionStyle} className="menu-item" onClick={() => fileInputRef.current?.click()}>
                         <FileUp size={16} /> Chọn tệp
                       </button>
                     </div>
                   </div>
                 )}
 
+                {/* Audio popup */}
                 {activePopup === "audio" && (
                   <div style={popupBoxStyle}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-                      <div style={{ fontWeight: 700, color: '#f1f5f9' }}>Ghi âm</div>
-                      <div style={{
-                        fontSize: 12,
-                        color: isRecording ? "#fca5a5" : "#64748b",
-                        background: isRecording ? "rgba(252,165,165,.1)" : "rgba(100,116,139,.1)",
-                        border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
-                        borderRadius: 20,
-                        padding: "4px 10px",
-                      }}>
+                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>Ghi âm</div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: isRecording ? "#fca5a5" : "#64748b",
+                          background: isRecording ? "rgba(252,165,165,.1)" : "rgba(100,116,139,.1)",
+                          border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
+                          borderRadius: 20,
+                          padding: "4px 10px",
+                        }}
+                      >
                         {isRecording
                           ? `● ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")}`
                           : "Sẵn sàng"}
                       </div>
                     </div>
-
                     <div style={{ display: "grid", gap: 8 }}>
                       {!isRecording ? (
                         <button
@@ -1445,19 +1300,19 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Sticker popup */}
                 {activePopup === "sticker" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                      <strong style={{ color: '#f1f5f9' }}>Nhãn dán</strong>
+                      <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
                       <a href="https://chatsticker.com" target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontSize: 12, fontWeight: 500 }}>
                         Xem thêm
                       </a>
                     </div>
-
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                      {CHAT_STICKER_LIST.map((stickerUrl, index) => (
+                      {CHAT_STICKER_LIST.map((stickerUrl, i) => (
                         <button
-                          key={`sticker-${index}`}
+                          key={`sticker-${i}`}
                           className="sticker-btn"
                           onClick={() => {
                             void sendStructuredMessage({ version: 1, kind: "sticker", stickerUrl });
@@ -1469,7 +1324,7 @@ export default function ChatPage() {
                             borderRadius: 12,
                             padding: 6,
                             cursor: "pointer",
-                            transition: "all .2s ease"
+                            transition: "all .2s ease",
                           }}
                         >
                           <img src={stickerUrl} alt="sticker" style={{ width: "100%", height: 80, objectFit: "contain" }} />
@@ -1479,32 +1334,31 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Poll popup */}
                 {activePopup === "poll" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 12, color: '#f1f5f9' }}>Tạo cuộc thăm dò</div>
+                    <div style={{ fontWeight: 600, marginBottom: 12, color: "#f1f5f9" }}>Tạo cuộc thăm dò</div>
                     <input
                       value={pollQuestion}
                       onChange={(e) => setPollQuestion(e.target.value)}
                       placeholder="Câu hỏi bình chọn"
                       style={pollInputStyle}
                     />
-
-                    {pollOptions.map((option, index) => (
+                    {pollOptions.map((option, i) => (
                       <input
-                        key={`poll-opt-${index}`}
+                        key={`poll-opt-${i}`}
                         value={option}
                         onChange={(e) => {
                           const next = [...pollOptions];
-                          next[index] = e.target.value;
+                          next[i] = e.target.value;
                           setPollOptions(next);
                         }}
-                        placeholder={`Lựa chọn ${index + 1}`}
+                        placeholder={`Lựa chọn ${i + 1}`}
                         style={pollInputStyle}
                       />
                     ))}
-
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <button onClick={() => setPollOptions(p => [...p, ""])} style={miniButtonStyle}>
+                      <button onClick={() => setPollOptions((p) => [...p, ""])} style={miniButtonStyle}>
                         + Thêm
                       </button>
                       <button onClick={() => void handleCreatePoll()} style={miniButtonPrimaryStyle}>
@@ -1514,6 +1368,7 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Hidden file inputs */}
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -1525,7 +1380,6 @@ export default function ChatPage() {
                     e.currentTarget.value = "";
                   }}
                 />
-
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1537,6 +1391,7 @@ export default function ChatPage() {
                   }}
                 />
 
+                {/* Input row */}
                 <div
                   style={{
                     display: "flex",
@@ -1553,34 +1408,31 @@ export default function ChatPage() {
                       title="Ảnh / Tệp"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup(p => p === "media" ? null : "media")}
+                      onClick={() => setActivePopup((p) => (p === "media" ? null : "media"))}
                     >
                       <ImagePlus size={18} />
                     </button>
-
                     <button
                       title="Nhãn dán"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup(p => p === "sticker" ? null : "sticker")}
+                      onClick={() => setActivePopup((p) => (p === "sticker" ? null : "sticker"))}
                     >
                       <Sticker size={18} />
                     </button>
-
                     <button
                       title="Ghi âm"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup(p => p === "audio" ? null : "audio")}
+                      onClick={() => setActivePopup((p) => (p === "audio" ? null : "audio"))}
                     >
                       <Mic size={18} />
                     </button>
-
                     <button
                       title="Thăm dò"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup(p => p === "poll" ? null : "poll")}
+                      onClick={() => setActivePopup((p) => (p === "poll" ? null : "poll"))}
                     >
                       <BarChart3 size={18} />
                     </button>
@@ -1588,11 +1440,11 @@ export default function ChatPage() {
 
                   <input
                     value={input}
-                    onChange={(event) => setInput(event.target.value)}
+                    onChange={(e) => setInput(e.target.value)}
                     placeholder="Nhập tin nhắn..."
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
                         void sendTextMessage();
                       }
                     }}
@@ -1607,6 +1459,7 @@ export default function ChatPage() {
                     }}
                   />
 
+                  {/* Emoji picker */}
                   <div style={{ position: "relative", display: "inline-flex" }}>
                     {activePopup === "emoji" && (
                       <div style={{ position: "absolute", right: 0, bottom: 46, zIndex: 40 }}>
@@ -1615,24 +1468,24 @@ export default function ChatPage() {
                           theme="dark"
                           onEmojiSelect={(emoji: EmojiSelectEvent) => {
                             if (!emoji.native) return;
-                            setInput(prev => prev + emoji.native);
+                            setInput((prev) => prev + emoji.native);
                           }}
                           previewPosition="none"
                           skinTonePosition="none"
                         />
                       </div>
                     )}
-
                     <button
                       title="Emoji"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() => setActivePopup(p => p === "emoji" ? null : "emoji")}
+                      onClick={() => setActivePopup((p) => (p === "emoji" ? null : "emoji"))}
                     >
                       <Smile size={18} />
                     </button>
                   </div>
 
+                  {/* Send button */}
                   <button
                     onClick={() => void sendTextMessage()}
                     disabled={sending || !input.trim()}
@@ -1664,6 +1517,7 @@ export default function ChatPage() {
         )}
       </div>
 
+      {/* ── Context menu ── */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -1699,21 +1553,10 @@ export default function ChatPage() {
             </button>
           )}
 
-<<<<<<< Updated upstream
-          {/* Divider trước nút xóa */}
           {!contextMenu.message.isRecalled && canRecall(contextMenu.message) && (
             <div style={{ height: "0.5px", background: "rgba(148,163,184,.1)", margin: "4px 0" }} />
-=======
-          {!contextMenu.message.isRecalled &&
-            canRecall(contextMenu.message) && (
-              <div
-                style={{
-                  height: "0.5px",
-                  background: "rgba(148,163,184,.1)",
-                  margin: "4px 0",
-                }}
-              />
-            )}
+          )}
+
           {!contextMenu.message.isRecalled && (
             <button
               onClick={() => {
@@ -1726,7 +1569,6 @@ export default function ChatPage() {
             >
               <Send size={15} /> Chuyển tiếp
             </button>
->>>>>>> Stashed changes
           )}
 
           {!contextMenu.message.isRecalled && (
@@ -1741,6 +1583,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* ── Vote viewer ── */}
       {voteViewer && (
         <div
           style={{
@@ -1766,7 +1609,6 @@ export default function ChatPage() {
               <X size={18} />
             </button>
           </div>
-
           <div style={{ display: "grid", gap: 8 }}>
             {voteViewer.users.map((person, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(255,255,255,.03)", borderRadius: 12 }}>
@@ -1781,6 +1623,29 @@ export default function ChatPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Image preview lightbox ── */}
+      {imagePreviewUrl && (
+        <div
+          onClick={() => setImagePreviewUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={imagePreviewUrl}
+            alt="preview"
+            style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,.6)" }}
+          />
         </div>
       )}
     </div>
