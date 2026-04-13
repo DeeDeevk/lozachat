@@ -203,6 +203,16 @@ function getSenderName(
   );
 }
 
+function formatMessageDateTime(dateString: string) {
+  return new Date(dateString).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function ChatPage() {
   const {
     conversations,
@@ -216,6 +226,12 @@ export default function ChatPage() {
     recallMessage,
     deleteMessageForMe,
     uploadAttachment,
+<<<<<<< Updated upstream
+=======
+    typingUsersByConv,
+    updateStrangerStatus,
+    forwardMessage,
+>>>>>>> Stashed changes
   } = useChatStore();
 
   const { user, userProfile } = useAuthStore();
@@ -224,6 +240,8 @@ export default function ChatPage() {
   const [activePopup, setActivePopup] = useState<PopupType>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [expandedMessageKey, setExpandedMessageKey] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [voteViewer, setVoteViewer] = useState<{
@@ -249,11 +267,44 @@ export default function ChatPage() {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+<<<<<<< Updated upstream
+=======
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(
+    null,
+  );
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
+<<<<<<< Updated upstream
+=======
+  // ─── Fetch messages when active conversation changes ─────────────────────────
+  useEffect(() => {
+    if (activeConversationId) {
+      fetchMessages(activeConversationId);
+    }
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    setExpandedMessageKey(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    setImagePreviewUrl(null);
+  }, [activeConversationId]);
+
+  // ─── Scroll to bottom on new messages ────────────────────────────────────────
+  useEffect(() => {
+    socketStore.connectSocket();
+  }, []);
+
+>>>>>>> Stashed changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
@@ -424,6 +475,17 @@ export default function ChatPage() {
       .map((item) => item.message);
   }, [currentMessages, pollAggregates]);
 
+<<<<<<< Updated upstream
+=======
+  const lastDisplayMessageKey = useMemo(() => {
+    const lastIndex = displayMessages.length - 1;
+    if (lastIndex < 0) return null;
+    const lastMessage = displayMessages[lastIndex];
+    return lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`;
+  }, [displayMessages]);
+
+  // ─── Callbacks ───────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
   const canRecall = useCallback(
     (message: Message) => {
       if (message.senderId !== user?.userId) return false;
@@ -544,10 +606,22 @@ export default function ChatPage() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+<<<<<<< Updated upstream
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
 
+=======
+      const mimeCandidates = [
+        "audio/mp4;codecs=mp4a.40.2",
+        "audio/mp4",
+        "audio/webm;codecs=opus",
+        "audio/webm",
+      ];
+      const mimeType =
+        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ||
+        "audio/webm";
+>>>>>>> Stashed changes
       const recorder = new MediaRecorder(stream, { mimeType });
       recordingChunksRef.current = [];
       recordingStreamRef.current = stream;
@@ -564,12 +638,18 @@ export default function ChatPage() {
           const blob = new Blob(recordingChunksRef.current, {
             type: recorder.mimeType || "audio/webm",
           });
+<<<<<<< Updated upstream
 
           if (blob.size === 0) {
             return;
           }
 
           const file = new File([blob], `recording-${Date.now()}.webm`, {
+=======
+          if (blob.size === 0) return;
+          const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+          const file = new File([blob], `recording-${Date.now()}.${ext}`, {
+>>>>>>> Stashed changes
             type: blob.type || "audio/webm",
           });
           await sendAttachmentMessage(file, "audio");
@@ -792,26 +872,69 @@ export default function ChatPage() {
           <img
             src={payload.attachment.url}
             alt={payload.attachment.name || "image"}
-            style={{ width: "100%", maxWidth: 280, borderRadius: 12 }}
+            style={{ width: "100%", maxWidth: 280, borderRadius: 12, cursor: "zoom-in" }}
+            onClick={(event) => {
+              event.stopPropagation();
+              setImagePreviewUrl(payload.attachment.url);
+            }}
           />
         );
       }
 
       if (payload.kind === "file" && payload.attachment) {
         return (
-          <a
-            href={payload.attachment.url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "#bfdbfe", textDecoration: "underline" }}
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              background: "rgba(148,163,184,0.1)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
           >
-            Tệp: {payload.attachment.name}
-          </a>
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
+              Tệp đính kèm
+            </div>
+            <a
+              href={payload.attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#e2e8f0", textDecoration: "underline" }}
+            >
+              {payload.attachment.name}
+            </a>
+          </div>
         );
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
+<<<<<<< Updated upstream
         return <audio controls src={payload.attachment.url} style={{ width: 260 }} />;
+=======
+        return (
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              background: "rgba(148,163,184,0.1)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 10,
+              padding: "8px 10px",
+              minWidth: 220,
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
+              Ghi âm
+            </div>
+            <audio
+              controls
+              src={payload.attachment.url}
+              style={{ width: "100%" }}
+            />
+          </div>
+        );
+>>>>>>> Stashed changes
       }
 
       if (payload.kind === "sticker" && payload.stickerUrl) {
@@ -1053,6 +1176,25 @@ export default function ChatPage() {
             <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
               {displayMessages.map((message, index) => {
                 const isMine = message.senderId === user?.userId;
+<<<<<<< Updated upstream
+=======
+                const payload = decodeChatPayload(message.content);
+                const isAttachmentCard =
+                  payload?.kind === "file" || payload?.kind === "audio";
+                const useNeutralBubble = message.isRecalled || isAttachmentCard;
+                const isLastRead =
+                  otherLastReadMessageId &&
+                  message._id?.toString() === otherLastReadMessageId.toString();
+                const messageKey =
+                  message._id?.toString() || `${message.createdAt}-${index}`;
+                const isLastMessage = messageKey === lastDisplayMessageKey;
+                const isTimeVisible = isLastMessage || expandedMessageKey === messageKey;
+                const timeLabel =
+                  expandedMessageKey === messageKey
+                    ? formatMessageDateTime(message.createdAt)
+                    : formatTime(message.createdAt);
+
+>>>>>>> Stashed changes
                 return (
                   <div
                     key={message._id || `${message.createdAt}-${index}`}
@@ -1094,6 +1236,7 @@ export default function ChatPage() {
                       {renderStructuredMessage(message)}
                       <div
                         style={{
+<<<<<<< Updated upstream
                           marginTop: 4,
                           fontSize: 11,
                           color: "#cbd5e1",
@@ -1101,15 +1244,83 @@ export default function ChatPage() {
                         }}
                       >
                         {formatTime(message.createdAt)}
+=======
+                          maxWidth: "72%",
+                          padding: "10px 12px",
+                          borderRadius: 14,
+                          border: isAttachmentCard
+                            ? "none"
+                            : message.isRecalled
+                            ? "1px dashed rgba(148,163,184,.45)"
+                            : "1px solid rgba(148,163,184,.18)",
+                          background: isAttachmentCard
+                            ? "transparent"
+                            : message.isRecalled
+                            ? "rgba(15,23,42,.4)"
+                            : useNeutralBubble
+                              ? "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)"
+                              : isMine
+                              ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                              : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+                          boxShadow: isAttachmentCard
+                            ? "none"
+                            : "0 8px 20px rgba(0,0,0,.25)",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setExpandedMessageKey((current) =>
+                            current === messageKey ? null : messageKey,
+                          );
+                        }}
+                      >
+                        {renderStructuredMessage(message)}
+>>>>>>> Stashed changes
                       </div>
                     </div>
 
+<<<<<<< Updated upstream
                     {!isMine && !message.isRecalled && (
                       <button
                         onClick={(event) => handleOpenContextMenu(event, message)}
                         style={actionDotsStyle}
                         className="action-btn"
                         title="Tùy chọn tin nhắn"
+=======
+                    {isTimeVisible && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: isMine ? "flex-end" : "flex-start",
+                          marginTop: 4,
+                          padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: expandedMessageKey === messageKey ? 12 : 11,
+                            color: useNeutralBubble
+                              ? "#94a3b8"
+                              : isMine
+                                ? "#dbeafe"
+                                : "#94a3b8",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {timeLabel}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Avatar seen — tin của mình, người kia đã đọc */}
+                    {isMine && !message.isRecalled && isLastRead && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          paddingRight: 4,
+                          marginTop: 2,
+                        }}
+>>>>>>> Stashed changes
                       >
                         <Ellipsis size={16} />
                       </button>
@@ -1488,9 +1699,34 @@ export default function ChatPage() {
             </button>
           )}
 
+<<<<<<< Updated upstream
           {/* Divider trước nút xóa */}
           {!contextMenu.message.isRecalled && canRecall(contextMenu.message) && (
             <div style={{ height: "0.5px", background: "rgba(148,163,184,.1)", margin: "4px 0" }} />
+=======
+          {!contextMenu.message.isRecalled &&
+            canRecall(contextMenu.message) && (
+              <div
+                style={{
+                  height: "0.5px",
+                  background: "rgba(148,163,184,.1)",
+                  margin: "4px 0",
+                }}
+              />
+            )}
+          {!contextMenu.message.isRecalled && (
+            <button
+              onClick={() => {
+                setForwardingMessage(contextMenu.message);
+                setIsForwardModalOpen(true);
+                setContextMenu(null);
+              }}
+              style={contextMenuItemStyle}
+              className="menu-item"
+            >
+              <Send size={15} /> Chuyển tiếp
+            </button>
+>>>>>>> Stashed changes
           )}
 
           {!contextMenu.message.isRecalled && (
