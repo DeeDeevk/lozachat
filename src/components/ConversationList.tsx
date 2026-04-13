@@ -7,7 +7,8 @@ import SearchUserModal from "./SearchUserModal";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/stores/useChatStore";
-import '../css/conversationList.css';
+import { getSafeMessagePreview } from "@/utils/chatMessageCodec";
+import "../css/conversationList.css";
 
 // ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {
@@ -43,7 +44,7 @@ export default function ConversationList({
   activeId,
   isOpen,
   onSelectConversation,
-  onClose,
+  onClose: _onClose,
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
@@ -293,6 +294,23 @@ export default function ConversationList({
                     >
                       {name}
                     </span>
+                    {(conv as any).isStranger &&
+                      (conv as any).strangerStatus === "pending" && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            background: "rgba(248,113,113,0.15)",
+                            border: "1px solid rgba(248,113,113,0.3)",
+                            color: "#fca5a5",
+                            borderRadius: 6,
+                            padding: "1px 5px",
+                            flexShrink: 0,
+                            marginLeft: 4,
+                          }}
+                        >
+                          Mới
+                        </span>
+                      )}
                     {conv.lastMessage && (
                       <span
                         style={{
@@ -324,7 +342,10 @@ export default function ConversationList({
                         flex: 1,
                       }}
                     >
-                      {conv.lastMessage?.content || "Chưa có tin nhắn"}
+                      {getSafeMessagePreview(
+                        conv.lastMessage?.content,
+                        "Chưa có tin nhắn",
+                      )}
                     </span>
                     {unread > 0 && (
                       <div className="cl-badge">

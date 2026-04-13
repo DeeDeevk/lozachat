@@ -1,9 +1,21 @@
-import type { User, FriendRequest, Friend } from "../types/user";
+import type { User, FriendRequest, Friend, RequestStatus } from "../types/user";
 import { friendService } from "@/services/friendService";
+import { useAuthStore } from "./useAuthStore";
 import { create } from "zustand";
 
 interface FriendState {
+  handleRealTimeUpdate: (update: {
+    action: string;
+    targetUserId?: string;
+    senderId?: string;
+    receiverId?: string;
+    fromUserId?: string;
+    requestId?: string;
+    newFriend?: Friend;
+  }) => void;
+  targetStatuses: Record<string, RequestStatus>;
   friends: Friend[];
+  newFriendIds: string[];
   loading: boolean;
   receivedList: FriendRequest[];
   sentList: FriendRequest[];
@@ -14,13 +26,18 @@ interface FriendState {
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriendStatus: (targetId: string) => Promise<string | null>;
+  updateFriendStatus: (targetId: string) => Promise<void>;
   getFriends: () => Promise<void>;
   cancelRequest: (requestId: string) => Promise<void>;
   unfriend: (targetId: string) => Promise<void>;
+  addNewFriendId: (friendId: string) => void;
+  clearNewFriends: () => void;
 }
 
 export const useFriendStore = create<FriendState>((set, get) => ({
+  targetStatuses: {},
   friends: [],
+  newFriendIds: [],
   loading: false,
   receivedList: [],
   sentList: [],
@@ -69,6 +86,18 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       set({ loading: true });
       await friendService.acceptRequest(requestId);
 
+      // 👇 Lấy friend ID từ response hoặc từ receivedList
+      const request = get().receivedList.find((r) => r._id === requestId);
+      if (request) {
+        const fromId =
+          typeof request.from === "string"
+            ? request.from
+            : (request.from as Partial<typeof request.from>)?._id || "";
+        if (fromId) {
+          get().addNewFriendId(fromId);
+        }
+      }
+
       set((state) => ({
         receivedList: state.receivedList.filter((r) => r._id !== requestId),
       }));
@@ -98,7 +127,13 @@ export const useFriendStore = create<FriendState>((set, get) => ({
 
       const status = await friendService.getFriendStatus(targetId);
 
-      set({ friendStatus: status });
+      set((state) => ({
+        friendStatus: status,
+        targetStatuses: {
+          ...state.targetStatuses,
+          [targetId]: status as RequestStatus,
+        },
+      }));
 
       return status || null;
     } catch (error) {
@@ -106,6 +141,19 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       return null;
     } finally {
       set({ loading: false });
+    }
+  },
+  updateFriendStatus: async (targetId: string) => {
+    try {
+      const status = await friendService.getFriendStatus(targetId);
+      set((state) => ({
+        targetStatuses: {
+          ...state.targetStatuses,
+          [targetId]: status as RequestStatus,
+        },
+      }));
+    } catch (error) {
+      console.error("Lỗi update friend status", error);
     }
   },
   getFriends: async () => {
@@ -121,35 +169,152 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     }
   },
   cancelRequest: async (requestId) => {
-  try {
-    set({ loading: true });
+    try {
+      set({ loading: true });
 
-    await friendService.cancelRequest(requestId);
+      await friendService.cancelRequest(requestId);
 
-    set((state) => ({
-      sentList: state.sentList.filter((r) => r._id !== requestId),
-    }));
-  } catch (error) {
-    console.error("Lỗi khi huỷ yêu cầu", error);
-  } finally {
-    set({ loading: false });
-  }
-},
-unfriend: async (targetId) => {
-  try {
-    set({ loading: true });
+      set((state) => ({
+        sentList: state.sentList.filter((r) => r._id !== requestId),
+      }));
+    } catch (error) {
+      console.error("Lỗi khi huỷ yêu cầu", error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+  unfriend: async (targetId) => {
+    try {
+      set({ loading: true });
 
-    await friendService.unfriend(targetId);
+      await friendService.unfriend(targetId);
 
-    // 👇 xóa khỏi danh sách bạn
-    set((state) => ({
-      friends: state.friends.filter((f) => f._id !== targetId),
-      friendStatus: "none",
-    }));
-  } catch (error) {
-    console.error("Lỗi khi huỷ kết bạn", error);
-  } finally {
-    set({ loading: false });
-  }
-},
+      // 👇 xóa khỏi danh sách bạn
+      set((state) => ({
+        friends: state.friends.filter((f) => f._id !== targetId),
+        friendStatus: "none",
+      }));
+    } catch (error) {
+      console.error("Lỗi khi huỷ kết bạn", error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+  handleRealTimeUpdate: async (update: {
+    action: string;
+    targetUserId?: string;
+    senderId?: string;
+    receiverId?: string;
+    fromUserId?: string;
+    requestId?: string;
+    request?: FriendRequest;
+    newFriend?: Friend;
+  }) => {
+    const authStore = useAuthStore.getState();
+    const myId = authStore.user?.userId || authStore.userProfile?._id;
+    if (!myId) return;
+
+    if (
+      update.targetUserId === myId ||
+      update.senderId === myId ||
+      update.receiverId === myId ||
+      update.fromUserId === myId
+    ) {
+      console.log("🔥 Real-time friend update:", update.action, update);
+
+      // OPTIMISTIC UPDATES - siêu nhanh UI
+      set((state) => {
+        switch (update.action) {
+          case "request_received":
+            if (
+              update.request &&
+              !state.receivedList.find((r) => r._id === update.request?._id)
+            ) {
+              return {
+                receivedList: [
+                  ...state.receivedList,
+                  update.request as FriendRequest,
+                ],
+              };
+            }
+            break;
+          case "request_sent":
+            if (update.targetUserId) {
+              return {
+                targetStatuses: {
+                  ...state.targetStatuses,
+                  [update.targetUserId]: "sent" as RequestStatus,
+                },
+              };
+            }
+            break;
+          case "request_cancelled":
+          case "request_declined":
+            if (update.requestId) {
+              const newSent = state.sentList.filter(
+                (r) => r._id !== update.requestId,
+              );
+              const newReceived = state.receivedList.filter(
+                (r) => r._id !== update.requestId,
+              );
+              return { sentList: newSent, receivedList: newReceived };
+            }
+            break;
+          case "request_accepted":
+            if (update.newFriend) {
+              const newFriends = state.friends.filter(
+                (f) => f._id !== update.newFriend?._id,
+              );
+              newFriends.unshift(update.newFriend as Friend);
+              return {
+                friends: newFriends,
+                newFriendIds: [...state.newFriendIds, update.newFriend._id],
+                receivedList: state.receivedList.filter(
+                  (r) => r._id !== update.requestId,
+                ),
+                sentList: state.sentList.filter(
+                  (r) => r._id !== update.requestId,
+                ),
+              };
+            }
+            break;
+          case "unfriend":
+            if (update.targetUserId) {
+              return {
+                friends: state.friends.filter(
+                  (f) => f._id !== update.targetUserId,
+                ),
+              };
+            }
+            break;
+        }
+        return state;
+      });
+
+      // FALLBACK: Refetch để sync chính xác
+      const targetIds = [
+        update.targetUserId,
+        update.senderId,
+        update.receiverId,
+        update.fromUserId,
+      ].filter(Boolean) as string[];
+
+      for (const id of targetIds) {
+        await get().updateFriendStatus(id);
+      }
+
+      await Promise.all([get().getAllFriendRequest(), get().getFriends()]);
+    }
+  },
+  addNewFriendId: (friendId: string) => {
+    set((state) => {
+      if (!state.newFriendIds.includes(friendId)) {
+        return { newFriendIds: [...state.newFriendIds, friendId] };
+      }
+      return state;
+    });
+  },
+  clearNewFriends: () => {
+    set({ newFriendIds: [] });
+  },
 }));

@@ -8,6 +8,13 @@ interface FetchMessageProps {
 
 const pageLimit = 50;
 
+export interface UploadAttachmentResponse {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export const chatService = {
   async fetchConversations(): Promise<ConversationResponse> {
     const res = await api.get("/conversations");
@@ -25,7 +32,7 @@ export const chatService = {
   async sendDirecrMessages(
     recipientId: string,
     content: string = "",
-    imgUrl?: string = "",
+    imgUrl: string = "",
     conversationId?: string,
   ) {
     const res = await api.post("/messages/direct", {
@@ -43,7 +50,7 @@ export const chatService = {
     content: string = "",
     imgUrl?: string,
   ) {
-    const res = await api.post("/message/group", {
+    const res = await api.post("/messages/group", {
       conversationId,
       content,
       imgUrl,
@@ -52,20 +59,36 @@ export const chatService = {
     return res.data.message;
   },
 
+  async uploadAttachment(file: File): Promise<UploadAttachmentResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await api.post("/messages/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    return res.data;
+  },
+
   async getOrCreateDirectConversation(targetUserId: string) {
-    const res = await api.get(
-      `/conversations/direct/${targetUserId}`
-    );
+    const res = await api.get(`/conversations/direct/${targetUserId}`);
 
     return res.data.conversation;
   },
   async recallMessage(messageId: string): Promise<void> {
-  await api.patch(`/messages/${messageId}/recall`);
-},
+    await api.patch(`/messages/${messageId}/recall`);
+  },
 
-async deleteMessageForMe(messageId: string): Promise<void> {
-  await api.delete(`/messages/${messageId}`);
-},
+  async deleteMessageForMe(messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}`);
+  },
 
-
+  async updateStrangerStatus(
+    conversationId: string,
+    action: "accepted" | "decline",
+  ): Promise<void> {
+    await api.patch(`/conversations/${conversationId}/stranger-status`, {
+      action,
+    });
+  },
 };

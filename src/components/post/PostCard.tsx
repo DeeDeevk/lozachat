@@ -16,10 +16,14 @@ interface Props {
 
 const getVisibilityInfo = (v: Visibility) => {
   switch (v) {
-    case "public": return { icon: "🌎", label: "Mọi người" };
-    case "friends": return { icon: "👥", label: "Bạn bè" };
-    case "private": return { icon: "🔒", label: "Chỉ mình tôi" };
-    default: return { icon: "🌎", label: "Mọi người" };
+    case "public":
+      return { icon: "🌎", label: "Mọi người" };
+    case "friends":
+      return { icon: "👥", label: "Bạn bè" };
+    case "private":
+      return { icon: "🔒", label: "Chỉ mình tôi" };
+    default:
+      return { icon: "🌎", label: "Mọi người" };
   }
 };
 
@@ -47,7 +51,6 @@ const ImageGrid = ({
     background: "var(--loza-bg-base)",
     transition: "transform 0.2s ease",
   };
-
 
   const cell = (src: string, idx: number, extra?: React.CSSProperties) => (
     <div
@@ -190,6 +193,7 @@ export const PostCard = ({
   const [showEdit, setShowEdit] = useState(false);
   const [detailImg, setDetailImg] = useState<number | null>(null);
   const [showComments, setShowComments] = useState(false);
+  if (!post.author) return null;
 
   const isOwner = post.author._id === currentUserId;
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), {
@@ -243,14 +247,22 @@ export const PostCard = ({
                 {post.author.displayName}
               </p>
               <div className="flex items-center gap-1 mt-0.5">
-              <p className="text-xs" style={{ color: "var(--loza-muted)" }}>
-                {timeAgo}
-              </p>
-              <span className="text-[10px]" style={{ color: "var(--loza-muted)" }}>•</span>
-              <span title={getVisibilityInfo(post.visibility).label} className="text-[10px] cursor-help">
-                {getVisibilityInfo(post.visibility).icon}
-              </span>
-            </div>
+                <p className="text-xs" style={{ color: "var(--loza-muted)" }}>
+                  {timeAgo}
+                </p>
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--loza-muted)" }}
+                >
+                  •
+                </span>
+                <span
+                  title={getVisibilityInfo(post.visibility).label}
+                  className="text-[10px] cursor-help"
+                >
+                  {getVisibilityInfo(post.visibility).icon}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -372,7 +384,7 @@ export const PostCard = ({
             commentsCount={post.commentsCount || 0}
             currentUserId={currentUserId}
             onReact={onReact}
-            showComments={showComments}  
+            showComments={showComments}
             onCommentClick={() => setShowComments(!showComments)} // thêm state showComments
           />
           {showComments && (
