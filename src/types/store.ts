@@ -42,20 +42,23 @@ export interface ChatState {
   //xoa
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
+  updateLastRead: (
+    userId: string,
+    conversationId: string,
+    messageId: string,
+  ) => void;
   deleteMessageForMe: (
     messageId: string,
     conversationId: string,
   ) => Promise<void>;
   addConversation: (conversation: Conversation) => void;
-<<<<<<< Updated upstream
-=======
   typingUsersByConv: Record<string, string[]>;
   addTypingUser: (userId: string, conversationId: string) => void;
   removeTypingUser: (userId: string, conversationId: string) => void;
   clearTypingUsers: (conversationId: string) => void;
   updateStrangerStatus: (
     conversationId: string,
-    action: "accepted" | "declined",
+    action: "accepted" | "decline",
   ) => Promise<void>;
   forwardMessage: (
     message: Message,
@@ -71,21 +74,11 @@ export interface FriendUpdateEvent {
   fromUserId?: string;
   requestId?: string;
   newFriend?: { _id: string; displayName: string; avatarUrl: string };
-  deleteMessageForMe: (
-    messageId: string,
-    conversationId: string,
-  ) => Promise<void>;
-  addConversation: (conversation: Conversation) => void;
-  typingUsersByConv: Record<string, string[]>;
-  addTypingUser: (userId: string, conversationId: string) => void;
-  removeTypingUser: (userId: string, conversationId: string) => void;
-  clearTypingUsers: (conversationId: string) => void;
->>>>>>> Stashed changes
 }
 
 export interface SocketState {
   socket: Socket | null;
-  onlineUsers: String[];
+  onlineUsers: string[];
   connectSocket: () => void;
   disconnectSocket: () => void;
 }

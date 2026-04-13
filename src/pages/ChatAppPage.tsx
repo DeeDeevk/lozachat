@@ -5,7 +5,6 @@ import SideNav from "@/components/SideNav";
 import ConversationList from "@/components/ConversationList";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
-import { useSocketStore } from "@/stores/useSocketStore"; // FIX: import socketStore
 import type {
   ChatStructuredPayload,
   Conversation,
@@ -214,6 +213,13 @@ function formatMessageDateTime(dateString: string) {
   });
 }
 
+function formatAttachmentSize(size?: number) {
+  if (!size || size <= 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ChatPage() {
   const {
     conversations,
@@ -230,7 +236,6 @@ export default function ChatPage() {
     forwardMessage,
   } = useChatStore();
 
-  const { connectSocket } = useSocketStore(); // FIX: destructure from proper store
   const { user, userProfile } = useAuthStore();
 
   const [input, setInput] = useState("");
@@ -265,6 +270,7 @@ export default function ChatPage() {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+  const recordingDiscardRef = useRef(false);
 
   // ─── Effects ─────────────────────────────────────────────────────────────────
 
@@ -285,10 +291,6 @@ export default function ChatPage() {
   useEffect(() => {
     setImagePreviewUrl(null);
   }, [activeConversationId]);
-
-  useEffect(() => {
-    connectSocket(); // FIX: use destructured method
-  }, [connectSocket]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -534,10 +536,15 @@ export default function ChatPage() {
       try {
         setSending(true);
         const uploaded = await uploadAttachment(file);
+        const resolvedKind: "image" | "file" | "audio" =
+          kind === "file" && uploaded.mimeType?.startsWith("image/")
+            ? "image"
+            : kind;
+
         await sendStructuredMessage(
           {
             version: 1,
-            kind,
+            kind: resolvedKind,
             attachment: {
               name: uploaded.fileName,
               url: uploaded.url,
@@ -545,7 +552,7 @@ export default function ChatPage() {
               size: uploaded.size,
             },
           },
-          kind === "image" ? uploaded.url : undefined,
+          resolvedKind === "image" ? uploaded.url : undefined,
         );
       } catch (error) {
         console.error("Upload chat attachment error", error);
@@ -564,6 +571,14 @@ export default function ChatPage() {
       recorder.stop();
     }
   }, []);
+
+  const cancelRecording = useCallback(() => {
+    recordingDiscardRef.current = true;
+    stopRecording();
+    setIsRecording(false);
+    setRecordSeconds(0);
+    setActivePopup(null);
+  }, [stopRecording]);
 
   const startRecording = useCallback(async () => {
     if (isRecording) return;
@@ -590,18 +605,21 @@ export default function ChatPage() {
 
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(recordingChunksRef.current, {
-            type: recorder.mimeType || "audio/webm",
-          });
-          if (blob.size === 0) return;
-          const ext = blob.type.includes("mp4") ? "m4a" : "webm";
-          const file = new File([blob], `recording-${Date.now()}.${ext}`, {
-            type: blob.type || "audio/webm",
-          });
-          await sendAttachmentMessage(file, "audio");
+          if (!recordingDiscardRef.current) {
+            const blob = new Blob(recordingChunksRef.current, {
+              type: recorder.mimeType || "audio/webm",
+            });
+            if (blob.size === 0) return;
+            const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+            const file = new File([blob], `recording-${Date.now()}.${ext}`, {
+              type: blob.type || "audio/webm",
+            });
+            await sendAttachmentMessage(file, "audio");
+          }
         } finally {
           recordingChunksRef.current = [];
           recordingRecorderRef.current = null;
+          recordingDiscardRef.current = false;
           recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
           recordingStreamRef.current = null;
           if (recordingTimerRef.current) {
@@ -805,7 +823,16 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "image" && payload.attachment?.url) {
+      const isImageAttachment =
+        !!payload.attachment?.url &&
+        (payload.kind === "image" ||
+          (payload.kind === "file" &&
+            (payload.attachment?.mimeType?.startsWith("image/") ||
+              /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)$/i.test(
+                payload.attachment?.name || "",
+              ))));
+
+      if (isImageAttachment && payload.attachment?.url) {
         return (
           <img
             src={payload.attachment.url}
@@ -847,20 +874,49 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
+        const fileSize = formatAttachmentSize(payload.attachment.size);
+
         return (
           <div
             style={{
               display: "grid",
-              gap: 6,
-              background: "rgba(148,163,184,0.1)",
-              border: "1px solid rgba(148,163,184,0.3)",
-              borderRadius: 10,
-              padding: "8px 10px",
-              minWidth: 220,
+              gap: 10,
+              background: "linear-gradient(150deg, rgba(15,23,42,.9) 0%, rgba(30,41,59,.86) 100%)",
+              border: "1px solid rgba(148,163,184,0.25)",
+              borderRadius: 14,
+              padding: "10px 12px",
+              width: "min(340px, 100%)",
+              boxShadow: "0 8px 24px rgba(0,0,0,.25)",
             }}
           >
-            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>Ghi âm</div>
-            <audio controls src={payload.attachment.url} style={{ width: "100%" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: "rgba(37,99,235,.2)",
+                    color: "#93c5fd",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Mic size={14} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 700 }}>Tin nhắn thoại</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {payload.attachment.name || "Audio"}
+                  </div>
+                </div>
+              </div>
+              {fileSize && <div style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>{fileSize}</div>}
+            </div>
+
+            <audio className="chat-audio-player" controls preload="metadata" src={payload.attachment.url} />
           </div>
         );
       }
@@ -1053,6 +1109,31 @@ export default function ChatPage() {
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
         .menu-item:hover { background: rgba(148,163,184,0.12) !important; }
+        .chat-audio-player {
+          width: min(340px, 100%);
+          min-width: 220px;
+          max-width: 100%;
+          height: 42px;
+          border-radius: 999px;
+          color-scheme: dark;
+          background: rgba(15,23,42,.9);
+        }
+        .chat-audio-player::-webkit-media-controls-panel {
+          background: linear-gradient(145deg, #0b1220 0%, #172554 100%);
+        }
+        .chat-audio-player::-webkit-media-controls-current-time-display,
+        .chat-audio-player::-webkit-media-controls-time-remaining-display {
+          color: #dbeafe;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        @media (max-width: 640px) {
+          .chat-audio-player {
+            min-width: 0;
+            width: 100%;
+            height: 40px;
+          }
+        }
       `}</style>
 
       <SideNav onNewMessage={() => undefined} />
@@ -1105,7 +1186,13 @@ export default function ChatPage() {
               {displayMessages.map((message, index) => {
                 const isMine = message.senderId === user?.userId;
                 const payload = decodeChatPayload(message.content);
-                const isAttachmentCard = payload?.kind === "file" || payload?.kind === "audio";
+                const isAttachmentCard =
+                  payload?.kind === "file" ||
+                  payload?.kind === "audio" ||
+                  payload?.kind === "image" ||
+                  payload?.kind === "poll" ||
+                  payload?.kind === "poll_vote" ||
+                  (!!message.imgUrl && !payload);
                 const useNeutralBubble = message.isRecalled || isAttachmentCard;
                 const messageKey = message._id?.toString() || `${message.createdAt}-${index}`;
                 const isLastMessage = messageKey === lastDisplayMessageKey;
@@ -1296,6 +1383,12 @@ export default function ChatPage() {
                           <Mic size={16} /> Dừng và gửi
                         </button>
                       )}
+                      <button
+                        style={{ ...popupActionStyle, borderColor: "rgba(148,163,184,.22)", background: "rgba(255,255,255,.03)" }}
+                        onClick={() => cancelRecording()}
+                      >
+                        <X size={16} /> Hủy
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1646,6 +1739,121 @@ export default function ChatPage() {
             alt="preview"
             style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,.6)" }}
           />
+        </div>
+      )}
+      {isForwardModalOpen && forwardingMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              width: 400,
+              borderRadius: 16,
+              padding: 20,
+            }}
+          >
+            <h3 style={{ color: "white", marginBottom: 15 }}>
+              Chuyển tiếp tin nhắn
+            </h3>
+            <input
+              placeholder="Tìm hội thoại..."
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+              style={pollInputStyle}
+            />
+            <div style={{ maxHeight: 300, overflowY: "auto", marginTop: 15 }}>
+              {conversations
+                .filter((c) => {
+                  const name =
+                    c.group?.name ||
+                    c.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Người dùng";
+                  return name
+                    .toLowerCase()
+                    .includes(forwardSearch.toLowerCase());
+                })
+                .map((conv) => {
+                  const isSelected = selectedConvs.includes(conv._id);
+                  const chatName =
+                    conv.group?.name ||
+                    conv.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Đoạn chat";
+
+                  return (
+                    <label
+                      key={conv._id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        background: isSelected
+                          ? "rgba(37,99,235,0.1)"
+                          : "transparent", // Highlight khi chọn
+                        borderRadius: 8,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedConvs((prev) => [...prev, conv._id]);
+                          } else {
+                            setSelectedConvs((prev) =>
+                              prev.filter((id) => id !== conv._id),
+                            );
+                          }
+                        }}
+                      />
+                      <span style={{ color: "white", fontSize: 14 }}>
+                        {chatName}
+                        </span>
+                    </label>
+                  );
+                })}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => {
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                }}
+                style={miniButtonStyle}
+              >
+                Hủy
+              </button>
+              <button
+                disabled={selectedConvs.length === 0 || sending}
+                onClick={async () => {
+                  setSending(true);
+                  await forwardMessage(forwardingMessage, selectedConvs);
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                  setForwardingMessage(null);
+                  setSending(false);
+                }}
+                style={miniButtonPrimaryStyle}
+              >
+                Gửi ({selectedConvs.length})
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

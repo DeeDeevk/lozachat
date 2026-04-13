@@ -130,8 +130,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
 
-    // ← Nếu socket cũ còn sống thì dùng lại, chỉ register events
-    if (existingSocket?.connected) {
+    // Reuse existing socket when it is connected or still connecting.
+    if (existingSocket && !existingSocket.disconnected) {
       registerSocketEvents(existingSocket, set);
       return;
     }
