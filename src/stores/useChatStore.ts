@@ -3,7 +3,7 @@ import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
-import type { Participant } from "@/types/chat";
+import type { Message, Participant } from "@/types/chat";
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -87,19 +87,22 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      sendDirectMessage: async (recipientId, payload) => {
+      sendDirectMessage: async (recipientId, payload, conversationId) => {
         try {
-          const { activeConversationId } = get();
+          // Nếu có conversationId truyền vào (khi forward) thì dùng,
+          // không thì mới lấy activeConversationId từ store
+          const targetConvId = conversationId ?? get().activeConversationId;
+
           await chatService.sendDirecrMessages(
             recipientId,
             payload?.content || "",
             payload?.imgUrl || "",
-            activeConversationId || undefined,
+            targetConvId || undefined, // Truyền ID chuẩn vào đây
           );
 
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === activeConversationId ? { ...c, seenBy: [] } : c,
+              c._id === targetConvId ? { ...c, seenBy: [] } : c,
             ),
           }));
         } catch (error) {
@@ -360,6 +363,33 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           console.log("Lỗi khi update trạng thái người lạ: ", error);
           throw error;
+        }
+      },
+      forwardMessage: async (message, targetConversationIds) => {
+        const { sendDirectMessage, sendGroupMessage, conversations } = get();
+        const { user } = useAuthStore.getState();
+        const myId = user?.userId;
+
+        for (const convId of targetConversationIds) {
+          const targetConv = conversations.find((c) => c._id === convId);
+          if (!targetConv) continue;
+
+          const payload = {
+            content: message.content,
+            imgUrl: message.imgUrl || undefined,
+          };
+
+          if (targetConv.type === "group") {
+            await sendGroupMessage(convId, payload);
+          } else {
+            const recipient = targetConv.participants.find(
+              (p) => p._id !== myId,
+            );
+            if (recipient) {
+              // QUAN TRỌNG: Truyền convId vào tham số thứ 3
+              await sendDirectMessage(recipient._id, payload, convId);
+            }
+          }
         }
       },
     }),
