@@ -3,15 +3,25 @@ import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
-import type { Participant } from "@/types/chat";
+import type { Message } from "@/types/chat";
+
+const dedupeMessages = (items: Message[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item._id || `${item.conversationId}-${item.senderId}-${item.createdAt}-${item.content}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
       conversations: [],
       messages: {},
-      activeConversationId: null,
       typingUsersByConv: {},
+      activeConversationId: null,
       convoLoading: false,
       messageLoading: false,
       setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -19,10 +29,10 @@ export const useChatStore = create<ChatState>()(
         set({
           conversations: [],
           messages: {},
+          typingUsersByConv: {},
           activeConversationId: null,
           convoLoading: false,
           messageLoading: false,
-          typingUsersByConv: {},
         });
       },
       fetchConversations: async () => {
@@ -64,17 +74,15 @@ export const useChatStore = create<ChatState>()(
 
           set((state) => {
             const prev = state.messages[convoId]?.items ?? [];
-
-            // 🔥 lọc trùng theo _id
-            const existingIds = new Set(prev.map((m) => m._id));
-
-            const filtered = processed.filter((m) => !existingIds.has(m._id));
+            const merged = dedupeMessages(
+              prev.length > 0 ? [...processed, ...prev] : processed,
+            );
 
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  items: [...filtered, ...prev],
+                  items: merged,
                   hasMore: !!cursor,
                   nextCursor: cursor ?? null,
                 },
@@ -87,19 +95,22 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      sendDirectMessage: async (recipientId, payload) => {
+      sendDirectMessage: async (recipientId, payload, conversationId) => {
         try {
-          const { activeConversationId } = get();
+          // Nếu có conversationId truyền vào (khi forward) thì dùng,
+          // không thì mới lấy activeConversationId từ store
+          const targetConvId = conversationId ?? get().activeConversationId;
+
           await chatService.sendDirecrMessages(
             recipientId,
             payload?.content || "",
             payload?.imgUrl || "",
-            activeConversationId || undefined,
+            targetConvId || undefined, // Truyền ID chuẩn vào đây
           );
 
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === activeConversationId ? { ...c, seenBy: [] } : c,
+              c._id === targetConvId ? { ...c, seenBy: [] } : c,
             ),
           }));
         } catch (error) {
@@ -138,20 +149,31 @@ export const useChatStore = create<ChatState>()(
 
           const convoId = message.conversationId;
 
-          set((state) => {
-            const prev = state.messages[convoId]?.items ?? [];
+          let prevItems = get().messages[convoId]?.items ?? [];
+          if (prevItems.length === 0) {
+            await fetchMessages(message.conversationId);
+            prevItems = get().messages[convoId]?.items ?? [];
+          }
 
-            // 🔥 nếu đã có thì skip luôn
-            if (prev.some((m) => m._id === message._id)) {
+          set((state) => {
+            const existingItems = state.messages[convoId]?.items ?? prevItems;
+            if (existingItems.some((m) => m._id === message._id)) {
               return state;
             }
+
+            const currentConvoState = state.messages[convoId] ?? {
+              items: [],
+              hasMore: false,
+              nextCursor: undefined,
+            };
 
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  ...state.messages[convoId],
-                  items: [...prev, message],
+                  items: dedupeMessages([...existingItems, message]),
+                  hasMore: currentConvoState.hasMore,
+                  nextCursor: currentConvoState.nextCursor ?? undefined,
                 },
               },
             };
@@ -162,33 +184,9 @@ export const useChatStore = create<ChatState>()(
       },
       updateConversation: (conversation) => {
         set((state) => ({
-          conversations: state.conversations.map((c) => {
-            if (c._id !== conversation._id) return c;
-
-            // Giữ lại lastReadMessageId từ store, không để socket overwrite
-            const mergedParticipants = conversation.participants
-              ? (conversation.participants.map((incoming) => {
-                  const existing = c.participants?.find(
-                    (p) => p._id === incoming._id,
-                  );
-                  return {
-                    ...existing,
-                    ...incoming,
-                    // Ưu tiên giá trị mới nếu có, không thì giữ cũ
-                    lastReadMessageId:
-                      incoming.lastReadMessageId ??
-                      existing?.lastReadMessageId ??
-                      null,
-                  };
-                }) as Participant[])
-              : c.participants;
-
-            return {
-              ...c,
-              ...conversation,
-              participants: mergedParticipants,
-            };
-          }),
+          conversations: state.conversations.map((c) =>
+            c._id === conversation._id ? { ...c, ...conversation } : c,
+          ),
         }));
       },
       addConversation: (conversation) => {
@@ -215,29 +213,7 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
-      updateLastRead: (
-        userId: string,
-        conversationId: string,
-        lastReadMessageId: string,
-      ) => {
-        set((state) => {
-          const newConversations = state.conversations.map((conv) => {
-            if (conv._id !== conversationId) return conv;
 
-            return {
-              ...conv,
-              participants: conv.participants.map((p) => {
-                if (p._id === userId) {
-                  return { ...p, lastReadMessageId };
-                }
-                return { ...p };
-              }),
-            };
-          });
-
-          return { conversations: newConversations };
-        });
-      },
       deleteMessageForMe: async (messageId: string, conversationId: string) => {
         try {
           await chatService.deleteMessageForMe(messageId);
@@ -297,6 +273,23 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+      updateLastRead: (userId: string, conversationId: string, messageId: string) => {
+        set((state) => ({
+          conversations: state.conversations.map((conversation) => {
+            if (conversation._id !== conversationId) return conversation;
+
+            return {
+              ...conversation,
+              participants: conversation.participants.map((participant) =>
+                participant._id === userId
+                  ? { ...participant, lastReadMessageId: messageId }
+                  : participant,
+              ),
+            };
+          }),
+        }));
+      },
+
       addTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           console.log("📝 addTypingUser called:", userId, conversationId);
@@ -338,7 +331,7 @@ export const useChatStore = create<ChatState>()(
       updateStrangerStatus: async (conversationId, action) => {
         try {
           await chatService.updateStrangerStatus(conversationId, action);
-          if (action === "declined") {
+          if (action === "decline") {
             set((state) => ({
               conversations: state.conversations.filter(
                 (c) => c._id !== conversationId,
@@ -362,14 +355,37 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
-    }),
+      forwardMessage: async (message, targetConversationIds) => {
+        const { sendDirectMessage, sendGroupMessage, conversations } = get();
+        const { user } = useAuthStore.getState();
+        const myId = user?.userId;
 
+        for (const convId of targetConversationIds) {
+          const targetConv = conversations.find((c) => c._id === convId);
+          if (!targetConv) continue;
+
+          const payload = {
+            content: message.content ?? undefined,
+            imgUrl: message.imgUrl || undefined,
+          };
+
+          if (targetConv.type === "group") {
+            await sendGroupMessage(convId, payload);
+          } else {
+            const recipient = targetConv.participants.find(
+              (p) => p._id !== myId,
+            );
+            if (recipient) {
+              // QUAN TRỌNG: Truyền convId vào tham số thứ 3
+              await sendDirectMessage(recipient._id, payload, convId);
+            }
+          }
+        }
+      },
+    }),
     {
       name: "chat-storage",
-      partialize: (state) => ({
-        conversations: state.conversations,
-        activeConversationId: state.activeConversationId,
-      }),
+      partialize: (state) => ({ conversations: state.conversations }),
     },
   ),
 );

@@ -1,11 +1,10 @@
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 import SideNav from "@/components/SideNav";
 import ConversationList from "@/components/ConversationList";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
-import { useSocketStore } from "@/stores/useSocketStore";
 import type {
   ChatStructuredPayload,
   Conversation,
@@ -57,17 +56,20 @@ interface EmojiSelectEvent {
 
 interface ConversationListItem {
   _id: string;
-  group?: { name: string };
+  group?: {
+    name: string;
+  };
   participants: {
     _id: string;
     displayName: string;
     avatarUrl?: string;
   }[];
-  lastMessage?: { content: string; createdAt: string };
+  lastMessage?: {
+    content: string;
+    createdAt: string;
+  };
   unread?: number;
   pinned?: boolean;
-  isStranger: string;
-  strangerStatus: string;
 }
 
 const CHAT_STICKER_LIST = [
@@ -196,9 +198,26 @@ function getSenderName(
 ) {
   if (message.senderId === myId) return "Bạn";
   return (
-    participants.find((p) => p._id === message.senderId)?.displayName ||
-    "Người dùng"
+    participants.find((participant) => participant._id === message.senderId)
+      ?.displayName || "Người dùng"
   );
+}
+
+function formatMessageDateTime(dateString: string) {
+  return new Date(dateString).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatAttachmentSize(size?: number) {
+  if (!size || size <= 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function ChatPage() {
@@ -214,22 +233,18 @@ export default function ChatPage() {
     recallMessage,
     deleteMessageForMe,
     uploadAttachment,
-    typingUsersByConv,
-    updateStrangerStatus,
+    forwardMessage,
   } = useChatStore();
 
-  const socketStore = useSocketStore();
+  const { user, userProfile } = useAuthStore();
 
   const [input, setInput] = useState("");
-  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const { user, userProfile } = useAuthStore();
-  const { socket } = useSocketStore();
   const [sending, setSending] = useState(false);
   const [activePopup, setActivePopup] = useState<PopupType>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [expandedMessageKey, setExpandedMessageKey] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [voteViewer, setVoteViewer] = useState<{
@@ -241,7 +256,12 @@ export default function ChatPage() {
   } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -250,30 +270,32 @@ export default function ChatPage() {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingDiscardRef = useRef(false);
 
-  // ─── Fetch conversations on mount ───────────────────────────────────────────
+  // ─── Effects ─────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // ─── Fetch messages when active conversation changes ─────────────────────────
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
     }
+  }, [activeConversationId, fetchMessages]);
+
+  useEffect(() => {
+    setExpandedMessageKey(null);
   }, [activeConversationId]);
 
-  // ─── Scroll to bottom on new messages ────────────────────────────────────────
   useEffect(() => {
-    socketStore.connectSocket();
-  }, []);
+    setImagePreviewUrl(null);
+  }, [activeConversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
 
-  // ─── Click outside to close menus ────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -289,101 +311,70 @@ export default function ChatPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ─── Cleanup recording on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (recordingTimerRef.current)
+      if (recordingTimerRef.current) {
         window.clearInterval(recordingTimerRef.current);
-      recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
+      }
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
-  // ─── Mark last message as read via socket ────────────────────────────────────
-  useEffect(() => {
-    if (!activeConversationId || !socket) return;
-    const items = messages[activeConversationId]?.items ?? [];
-    if (items.length === 0) return;
-    const lastMsg = items.at(-1);
-    if (!lastMsg || lastMsg.senderId === user?.userId) return;
-    socket.emit("mark-read", {
-      conversationId: activeConversationId,
-      messageId: lastMsg._id,
-    });
-  }, [activeConversationId, messages, socket, user?.userId]);
+  // ─── Derived state ────────────────────────────────────────────────────────────
 
-  // ─── Memos ───────────────────────────────────────────────────────────────────
   const activeConversation = useMemo(
     () => conversations.find((c) => c._id === activeConversationId),
     [conversations, activeConversationId],
   );
 
   const otherUser = useMemo(
-    () => activeConversation?.participants.find((p) => p._id !== user?.userId),
-    [activeConversation, user?.userId],
-  );
-
-  const otherAvatar = otherUser?.avatarUrl || "/miku.png";
-
-  const currentMessages = useMemo(() => {
-    if (!activeConversationId) return [];
-    const data = messages[activeConversationId];
-    if (!data) return [];
-    return Array.isArray(data) ? data : (data.items ?? []);
-  }, [messages, activeConversationId]);
-
-  // lastReadMessageId của người kia (để hiện avatar seen dưới tin của mình)
-  const otherLastReadMessageId = useMemo(
     () =>
-      activeConversation?.participants.find((p) => p._id !== user?.userId)
-        ?.lastReadMessageId ?? null,
+      activeConversation?.participants.find((p) => p._id !== user?.userId),
     [activeConversation, user?.userId],
   );
 
-  const typingUsers = useMemo(() => {
-    if (!activeConversationId) return [];
-    return (typingUsersByConv[activeConversationId] || []).filter(
-      (id) => id !== user?.userId,
-    );
-  }, [typingUsersByConv, activeConversationId, user?.userId]);
+  const currentMessages = activeConversationId
+    ? messages[activeConversationId]?.items || []
+    : [];
 
   const conversationListItems: ConversationListItem[] = useMemo(
     () =>
-      conversations.map((c: Conversation) => ({
-        _id: c._id,
-        group: c.group,
-        participants: c.participants.map((p) => ({
+      conversations.map((conversation: Conversation) => ({
+        _id: conversation._id,
+        group: conversation.group,
+        participants: conversation.participants.map((p) => ({
           _id: p._id,
           displayName: p.displayName,
           avatarUrl: p.avatarUrl || undefined,
         })),
-        lastMessage: c.lastMessage
+        lastMessage: conversation.lastMessage
           ? {
-              content: c.lastMessage.content,
-              createdAt: c.lastMessage.createdAt,
+              content: conversation.lastMessage.content,
+              createdAt: conversation.lastMessage.createdAt,
             }
           : undefined,
-        unread: c.unreadCounts?.[user?.userId || ""] || 0,
+        unread: conversation.unreadCounts?.[user?.userId || ""] || 0,
         pinned: false,
-        isStranger: c.isStranger,
-        strangerStatus: c.strangerStatus,
       })),
     [conversations, user?.userId],
   );
 
   const pollAggregates = useMemo(() => {
     const map = new Map<string, PollAggregate>();
+
     currentMessages.forEach((message) => {
       const payload = decodeChatPayload(message.content);
       if (!payload) return;
 
       if (payload.kind === "poll" && payload.poll) {
         const existing = map.get(payload.poll.id);
-        const latestActivityAt = existing?.latestActivityAt
-          ? new Date(existing.latestActivityAt).getTime() >
-            new Date(message.createdAt).getTime()
-            ? existing.latestActivityAt
-            : message.createdAt
-          : message.createdAt;
+        const latestActivityAt =
+          existing?.latestActivityAt
+            ? new Date(existing.latestActivityAt).getTime() >
+              new Date(message.createdAt).getTime()
+              ? existing.latestActivityAt
+              : message.createdAt
+            : message.createdAt;
         map.set(payload.poll.id, {
           question: payload.poll.question,
           options: payload.poll.options,
@@ -401,68 +392,80 @@ export default function ChatPage() {
           votes: [],
           latestActivityAt: message.createdAt,
         };
+
         const voteIndex = aggregate.votes.findIndex(
           (v) => v.userId === payload.pollVote?.userId,
         );
         const nextVote = { ...payload.pollVote, createdAt: message.createdAt };
+
         if (voteIndex >= 0) {
-          const oldTime = new Date(
-            aggregate.votes[voteIndex].createdAt,
-          ).getTime();
+          const oldTime = new Date(aggregate.votes[voteIndex].createdAt).getTime();
           const newTime = new Date(message.createdAt).getTime();
-          if (newTime >= oldTime) aggregate.votes[voteIndex] = nextVote;
+          if (newTime >= oldTime) {
+            aggregate.votes[voteIndex] = nextVote;
+          }
         } else {
           aggregate.votes.push(nextVote);
         }
-        aggregate.latestActivityAt = new Date(
-          Math.max(
-            new Date(aggregate.latestActivityAt).getTime(),
-            new Date(message.createdAt).getTime(),
-          ),
-        ).toISOString();
+
+        const latestActivityTime = Math.max(
+          new Date(aggregate.latestActivityAt).getTime(),
+          new Date(message.createdAt).getTime(),
+        );
+        aggregate.latestActivityAt = new Date(latestActivityTime).toISOString();
         map.set(payload.pollVote.pollId, aggregate);
       }
     });
+
     return map;
   }, [currentMessages]);
 
   const displayMessages = useMemo(() => {
     const pollActivityOrder = new Map<string, number>();
-    pollAggregates.forEach((agg, pollId) => {
-      pollActivityOrder.set(pollId, new Date(agg.latestActivityAt).getTime());
+    pollAggregates.forEach((aggregate, pollId) => {
+      pollActivityOrder.set(pollId, new Date(aggregate.latestActivityAt).getTime());
     });
 
     return currentMessages
-      .filter((m) => {
-        const payload = decodeChatPayload(m.content);
+      .filter((message) => {
+        const payload = decodeChatPayload(message.content);
         return payload?.kind !== "poll_vote";
       })
-      .map((m, index) => {
-        const payload = decodeChatPayload(m.content);
-        let displayTime = new Date(m.createdAt).getTime();
+      .map((message, index) => {
+        const payload = decodeChatPayload(message.content);
+        let displayTime = new Date(message.createdAt).getTime();
+
         if (payload?.kind === "poll" && payload.poll) {
-          const latest = pollActivityOrder.get(payload.poll.id);
-          if (latest) displayTime = Math.max(displayTime, latest);
+          const latestPollActivity = pollActivityOrder.get(payload.poll.id);
+          if (latestPollActivity) {
+            displayTime = Math.max(displayTime, latestPollActivity);
+          }
         }
-        return { message: m, index, displayTime };
+
+        return { message, index, displayTime };
       })
-      .sort((a, b) =>
-        a.displayTime !== b.displayTime
-          ? a.displayTime - b.displayTime
-          : a.index - b.index,
-      )
+      .sort((a, b) => {
+        if (a.displayTime !== b.displayTime) return a.displayTime - b.displayTime;
+        return a.index - b.index;
+      })
       .map((item) => item.message);
   }, [currentMessages, pollAggregates]);
 
+  const lastDisplayMessageKey = useMemo(() => {
+    const lastIndex = displayMessages.length - 1;
+    if (lastIndex < 0) return null;
+    const last = displayMessages[lastIndex];
+    return last._id?.toString() || `${last.createdAt}-${lastIndex}`;
+  }, [displayMessages]);
+
   // ─── Callbacks ───────────────────────────────────────────────────────────────
+
   const canRecall = useCallback(
     (message: Message) => {
       if (message.senderId !== user?.userId) return false;
       if (message.isRecalled) return false;
-      return (
-        Date.now() - new Date(message.createdAt).getTime() <=
-        24 * 60 * 60 * 1000
-      );
+      const age = Date.now() - new Date(message.createdAt).getTime();
+      return age <= 24 * 60 * 60 * 1000;
     },
     [user?.userId],
   );
@@ -472,10 +475,7 @@ export default function ChatPage() {
       if (!activeConversationId) return;
       const encoded = encodeChatPayload(payload);
       if (activeConversation?.group) {
-        await sendGroupMessage(activeConversationId, {
-          content: encoded,
-          imgUrl,
-        });
+        await sendGroupMessage(activeConversationId, { content: encoded, imgUrl });
       } else {
         if (!otherUser?._id) return;
         await sendDirectMessage(otherUser._id, { content: encoded, imgUrl });
@@ -492,6 +492,7 @@ export default function ChatPage() {
 
   const sendTextMessage = useCallback(async () => {
     if (!input.trim() || !activeConversationId || sending) return;
+
     try {
       setSending(true);
       const payload: ChatStructuredPayload = {
@@ -510,13 +511,10 @@ export default function ChatPage() {
             }
           : undefined,
       };
+
       await sendStructuredMessage(payload);
       setInput("");
       setReplyingTo(null);
-      // Stop typing indicator
-      if (socket?.connected) {
-        socket.emit("stop-typing", { conversationId: activeConversationId });
-      }
     } catch (error) {
       console.error("Send message error", error);
       alert("Không thể gửi tin nhắn");
@@ -530,7 +528,6 @@ export default function ChatPage() {
     replyingTo,
     sendStructuredMessage,
     sending,
-    socket,
     user?.userId,
   ]);
 
@@ -539,10 +536,15 @@ export default function ChatPage() {
       try {
         setSending(true);
         const uploaded = await uploadAttachment(file);
+        const resolvedKind: "image" | "file" | "audio" =
+          kind === "file" && uploaded.mimeType?.startsWith("image/")
+            ? "image"
+            : kind;
+
         await sendStructuredMessage(
           {
             version: 1,
-            kind,
+            kind: resolvedKind,
             attachment: {
               name: uploaded.fileName,
               url: uploaded.url,
@@ -550,7 +552,7 @@ export default function ChatPage() {
               size: uploaded.size,
             },
           },
-          kind === "image" ? uploaded.url : undefined,
+          resolvedKind === "image" ? uploaded.url : undefined,
         );
       } catch (error) {
         console.error("Upload chat attachment error", error);
@@ -565,37 +567,59 @@ export default function ChatPage() {
 
   const stopRecording = useCallback(() => {
     const recorder = recordingRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") recorder.stop();
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
   }, []);
+
+  const cancelRecording = useCallback(() => {
+    recordingDiscardRef.current = true;
+    stopRecording();
+    setIsRecording(false);
+    setRecordSeconds(0);
+    setActivePopup(null);
+  }, [stopRecording]);
 
   const startRecording = useCallback(async () => {
     if (isRecording) return;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
+      const mimeCandidates = [
+        "audio/mp4;codecs=mp4a.40.2",
+        "audio/mp4",
+        "audio/webm;codecs=opus",
+        "audio/webm",
+      ];
+      const mimeType =
+        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType });
+
       recordingChunksRef.current = [];
       recordingStreamRef.current = stream;
       recordingRecorderRef.current = recorder;
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordingChunksRef.current.push(e.data);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordingChunksRef.current.push(event.data);
       };
+
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(recordingChunksRef.current, {
-            type: recorder.mimeType || "audio/webm",
-          });
-          if (blob.size === 0) return;
-          const file = new File([blob], `recording-${Date.now()}.webm`, {
-            type: blob.type || "audio/webm",
-          });
-          await sendAttachmentMessage(file, "audio");
+          if (!recordingDiscardRef.current) {
+            const blob = new Blob(recordingChunksRef.current, {
+              type: recorder.mimeType || "audio/webm",
+            });
+            if (blob.size === 0) return;
+            const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+            const file = new File([blob], `recording-${Date.now()}.${ext}`, {
+              type: blob.type || "audio/webm",
+            });
+            await sendAttachmentMessage(file, "audio");
+          }
         } finally {
           recordingChunksRef.current = [];
           recordingRecorderRef.current = null;
+          recordingDiscardRef.current = false;
           recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
           recordingStreamRef.current = null;
           if (recordingTimerRef.current) {
@@ -621,16 +645,19 @@ export default function ChatPage() {
   }, [isRecording, sendAttachmentMessage]);
 
   const handleCreatePoll = useCallback(async () => {
-    const q = pollQuestion.trim();
-    const opts = pollOptions.map((o) => o.trim()).filter(Boolean);
-    if (!q || opts.length < 2) {
+    const normalizedQuestion = pollQuestion.trim();
+    const normalizedOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+
+    if (!normalizedQuestion || normalizedOptions.length < 2) {
       alert("Cần nhập câu hỏi và tối thiểu 2 lựa chọn");
       return;
     }
-    const options: PollOption[] = opts.map((label, i) => ({
+
+    const options: PollOption[] = normalizedOptions.map((label, i) => ({
       id: `opt_${i + 1}_${Math.random().toString(36).slice(2, 6)}`,
       label,
     }));
+
     try {
       setSending(true);
       await sendStructuredMessage({
@@ -638,7 +665,7 @@ export default function ChatPage() {
         kind: "poll",
         poll: {
           id: createPollId(),
-          question: q,
+          question: normalizedQuestion,
           options,
           createdBy: user?.userId || "",
         },
@@ -660,6 +687,7 @@ export default function ChatPage() {
       const aggregate = pollAggregates.get(pollId);
       const voted = aggregate?.votes.find((v) => v.userId === user.userId);
       if (voted?.optionId === optionId) return;
+
       try {
         await sendStructuredMessage({
           version: 1,
@@ -676,31 +704,27 @@ export default function ChatPage() {
         alert("Không thể gửi bình chọn");
       }
     },
-    [
-      pollAggregates,
-      sendStructuredMessage,
-      user?.userId,
-      user?.username,
-      userProfile?.displayName,
-    ],
+    [pollAggregates, sendStructuredMessage, user?.userId, user?.username, userProfile?.displayName],
   );
 
   const handleOpenContextMenu = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>, message: Message) => {
       event.stopPropagation();
       event.preventDefault();
+
       const rect = event.currentTarget.getBoundingClientRect();
       const isMine = message.senderId === user?.userId;
       const menuWidth = 220;
       const menuHeight = 172;
+
       let x = isMine ? rect.left - menuWidth - 6 : rect.right + 6;
       let y = rect.bottom + 4;
-      if (x + menuWidth > window.innerWidth - 6)
-        x = window.innerWidth - menuWidth - 6;
+
+      if (x + menuWidth > window.innerWidth - 6) x = window.innerWidth - menuWidth - 6;
       if (x < 6) x = 6;
-      if (y + menuHeight > window.innerHeight - 6)
-        y = window.innerHeight - menuHeight - 6;
+      if (y + menuHeight > window.innerHeight - 6) y = window.innerHeight - menuHeight - 6;
       if (y < 6) y = 6;
+
       setContextMenu({ x, y, message });
     },
     [user?.userId],
@@ -734,8 +758,7 @@ export default function ChatPage() {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
     return parts.map((part, index) => {
-      if (!part.match(urlRegex))
-        return <span key={`${part}-${index}`}>{part}</span>;
+      if (!part.match(urlRegex)) return <span key={`${part}-${index}`}>{part}</span>;
       const href = part.startsWith("www.") ? `https://${part}` : part;
       return (
         <a
@@ -751,6 +774,8 @@ export default function ChatPage() {
     });
   }, []);
 
+  // ─── renderStructuredMessage ──────────────────────────────────────────────────
+
   const renderStructuredMessage = useCallback(
     (message: Message) => {
       if (message.isRecalled) {
@@ -760,8 +785,11 @@ export default function ChatPage() {
           </span>
         );
       }
+
       const payload = decodeChatPayload(message.content);
-      if (!payload) return <span>{renderLinks(message.content || "")}</span>;
+      if (!payload) {
+        return <span>{renderLinks(message.content || "")}</span>;
+      }
 
       if (payload.kind === "reply") {
         return (
@@ -795,32 +823,101 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "image" && payload.attachment?.url) {
+      const isImageAttachment =
+        !!payload.attachment?.url &&
+        (payload.kind === "image" ||
+          (payload.kind === "file" &&
+            (payload.attachment?.mimeType?.startsWith("image/") ||
+              /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)$/i.test(
+                payload.attachment?.name || "",
+              ))));
+
+      if (isImageAttachment && payload.attachment?.url) {
         return (
           <img
             src={payload.attachment.url}
             alt={payload.attachment.name || "image"}
-            style={{ width: "100%", maxWidth: 280, borderRadius: 12 }}
+            style={{ width: "100%", maxWidth: 280, borderRadius: 12, cursor: "zoom-in" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setImagePreviewUrl(payload.attachment!.url);
+            }}
           />
         );
       }
 
       if (payload.kind === "file" && payload.attachment) {
         return (
-          <a
-            href={payload.attachment.url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "#bfdbfe", textDecoration: "underline" }}
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              background: "rgba(148,163,184,0.1)",
+              border: "1px solid rgba(148,163,184,0.3)",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
           >
-            Tệp: {payload.attachment.name}
-          </a>
+            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
+              Tệp đính kèm
+            </div>
+            <a
+              href={payload.attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#e2e8f0", textDecoration: "underline" }}
+            >
+              {payload.attachment.name}
+            </a>
+          </div>
         );
       }
 
       if (payload.kind === "audio" && payload.attachment?.url) {
+        const fileSize = formatAttachmentSize(payload.attachment.size);
+
         return (
-          <audio controls src={payload.attachment.url} style={{ width: 260 }} />
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              background: "linear-gradient(150deg, rgba(15,23,42,.9) 0%, rgba(30,41,59,.86) 100%)",
+              border: "1px solid rgba(148,163,184,0.25)",
+              borderRadius: 14,
+              padding: "10px 12px",
+              width: "min(340px, 100%)",
+              boxShadow: "0 8px 24px rgba(0,0,0,.25)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: "rgba(37,99,235,.2)",
+                    color: "#93c5fd",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Mic size={14} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 700 }}>Tin nhắn thoại</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {payload.attachment.name || "Audio"}
+                  </div>
+                </div>
+              </div>
+              {fileSize && <div style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>{fileSize}</div>}
+            </div>
+
+            <audio className="chat-audio-player" controls preload="metadata" src={payload.attachment.url} />
+          </div>
         );
       }
 
@@ -829,21 +926,14 @@ export default function ChatPage() {
           <img
             src={payload.stickerUrl}
             alt="sticker"
-            style={{
-              width: 148,
-              height: 148,
-              objectFit: "contain",
-              borderRadius: 14,
-            }}
+            style={{ width: 148, height: 148, objectFit: "contain", borderRadius: 14 }}
           />
         );
       }
 
       if (payload.kind === "poll" && payload.poll) {
         const aggregate = pollAggregates.get(payload.poll.id);
-        const votedOption = aggregate?.votes.find(
-          (v) => v.userId === user?.userId,
-        )?.optionId;
+        const votedOption = aggregate?.votes.find((v) => v.userId === user?.userId)?.optionId;
         const totalVotes = aggregate?.votes.length || 0;
 
         return (
@@ -853,40 +943,19 @@ export default function ChatPage() {
               flexDirection: "column",
               gap: 12,
               minWidth: 280,
-              padding: "14px",
+              padding: 14,
               background: "#18181b",
-              borderRadius: "16px",
+              borderRadius: 16,
               border: "1px solid rgba(255,255,255,0.08)",
               boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
             }}
           >
             <div>
-              <div
-                style={{
-                  color: "#fafafa",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  marginBottom: 4,
-                }}
-              >
+              <div style={{ color: "#fafafa", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
                 {payload.poll.question}
               </div>
-              <div
-                style={{
-                  color: "#71717a",
-                  fontSize: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    padding: "2px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
+              <div style={{ color: "#71717a", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: 6 }}>
                   {totalVotes} vote
                 </span>
                 <span>•</span>
@@ -896,17 +965,12 @@ export default function ChatPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {payload.poll.options.map((option) => {
-                const voters =
-                  aggregate?.votes.filter((v) => v.optionId === option.id) ||
-                  [];
+                const voters = aggregate?.votes.filter((v) => v.optionId === option.id) || [];
                 const voted = option.id === votedOption;
-                const percent = totalVotes
-                  ? Math.round((voters.length / totalVotes) * 100)
-                  : 0;
+                const percent = totalVotes ? Math.round((voters.length / totalVotes) * 100) : 0;
+
                 const voterProfiles = voters.map((v) => {
-                  const participant = activeConversation?.participants.find(
-                    (p) => p._id === v.userId,
-                  );
+                  const participant = activeConversation?.participants.find((p) => p._id === v.userId);
                   return {
                     id: v.userId,
                     name: participant?.displayName || v.userName || "User",
@@ -923,7 +987,7 @@ export default function ChatPage() {
                       width: "100%",
                       border: voted ? "1px solid #6366f1" : "1px solid #27272a",
                       background: voted ? "rgba(99,102,241,0.05)" : "#09090b",
-                      borderRadius: "12px",
+                      borderRadius: 12,
                       padding: "12px 14px",
                       cursor: "pointer",
                       overflow: "hidden",
@@ -938,48 +1002,21 @@ export default function ChatPage() {
                         top: 0,
                         bottom: 0,
                         width: `${percent}%`,
-                        background: voted
-                          ? "rgba(99,102,241,0.15)"
-                          : "rgba(255,255,255,0.03)",
+                        background: voted ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
                         transition: "width .4s ease",
                         zIndex: 0,
                       }}
                     />
                     <div style={{ position: "relative", zIndex: 1 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 4,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            color: voted ? "#818cf8" : "#e4e4e7",
-                            fontSize: 14,
-                          }}
-                        >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600, color: voted ? "#818cf8" : "#e4e4e7", fontSize: 14 }}>
                           {option.label}
                         </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: voted ? "#818cf8" : "#71717a",
-                          }}
-                        >
+                        <span style={{ fontSize: 12, fontWeight: 700, color: voted ? "#818cf8" : "#71717a" }}>
                           {percent}%
                         </span>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <div style={{ display: "flex", alignItems: "center" }}>
                           {voterProfiles.slice(0, 3).map((v, i) => (
                             <div
@@ -995,35 +1032,14 @@ export default function ChatPage() {
                               }}
                             >
                               {v.avatarUrl ? (
-                                <img
-                                  src={v.avatarUrl}
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                />
+                                <img src={v.avatarUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
                               ) : (
-                                <UserIcon
-                                  size={12}
-                                  style={{
-                                    margin: "auto",
-                                    display: "block",
-                                    marginTop: 2,
-                                    color: "#a1a1aa",
-                                  }}
-                                />
+                                <UserIcon size={12} style={{ margin: "auto", display: "block", marginTop: 2, color: "#a1a1aa" }} />
                               )}
                             </div>
                           ))}
                           {voterProfiles.length > 3 && (
-                            <span
-                              style={{
-                                marginLeft: 8,
-                                fontSize: 11,
-                                color: "#52525b",
-                              }}
-                            >
+                            <span style={{ marginLeft: 8, fontSize: 11, color: "#52525b" }}>
                               +{voterProfiles.length - 3}
                             </span>
                           )}
@@ -1031,25 +1047,16 @@ export default function ChatPage() {
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
-                            const rect =
-                              e.currentTarget.getBoundingClientRect();
+                            const rect = e.currentTarget.getBoundingClientRect();
                             setVoteViewer({
-                              x: Math.min(
-                                rect.left - 18,
-                                window.innerWidth - 310,
-                              ),
+                              x: Math.min(rect.left - 18, window.innerWidth - 310),
                               y: rect.bottom + 10,
                               optionLabel: option.label,
                               users: voterProfiles,
                               totalVotes: voters.length,
                             });
                           }}
-                          style={{
-                            fontSize: 11,
-                            color: "#6366f1",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
+                          style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, cursor: "pointer" }}
                         >
                           Chi tiết
                         </span>
@@ -1063,17 +1070,13 @@ export default function ChatPage() {
             {!votedOption && (
               <button
                 onClick={() => {
-                  if (payload.poll?.options[0])
-                    void handleVote(
-                      payload.poll.id,
-                      payload.poll.options[0].id,
-                    );
+                  if (payload.poll?.options[0]) void handleVote(payload.poll.id, payload.poll.options[0].id);
                 }}
                 style={{
                   marginTop: 4,
                   width: "100%",
-                  padding: "10px",
-                  borderRadius: "10px",
+                  padding: 10,
+                  borderRadius: 10,
                   border: "none",
                   background: "#6366f1",
                   color: "white",
@@ -1093,28 +1096,44 @@ export default function ChatPage() {
         return <span style={{ color: "#cbd5e1" }}>Đã cập nhật bình chọn</span>;
       }
 
-      return (
-        <span>
-          {renderLinks(payload.text || payload.emoji || message.content || "")}
-        </span>
-      );
+      return <span>{renderLinks(payload.text || payload.emoji || message.content || "")}</span>;
     },
-    [
-      activeConversation?.participants,
-      handleVote,
-      pollAggregates,
-      renderLinks,
-      user?.userId,
-    ],
+    [activeConversation?.participants, handleVote, pollAggregates, renderLinks, user?.userId],
   );
 
-  // ─── RENDER ──────────────────────────────────────────────────────────────────
+  // ─── JSX ─────────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ display: "flex", height: "100vh", background: "#040a18" }}>
       <style>{`
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
         .menu-item:hover { background: rgba(148,163,184,0.12) !important; }
+        .chat-audio-player {
+          width: min(340px, 100%);
+          min-width: 220px;
+          max-width: 100%;
+          height: 42px;
+          border-radius: 999px;
+          color-scheme: dark;
+          background: rgba(15,23,42,.9);
+        }
+        .chat-audio-player::-webkit-media-controls-panel {
+          background: linear-gradient(145deg, #0b1220 0%, #172554 100%);
+        }
+        .chat-audio-player::-webkit-media-controls-current-time-display,
+        .chat-audio-player::-webkit-media-controls-time-remaining-display {
+          color: #dbeafe;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        @media (max-width: 640px) {
+          .chat-audio-player {
+            min-width: 0;
+            width: 100%;
+            height: 40px;
+          }
+        }
       `}</style>
 
       <SideNav onNewMessage={() => undefined} />
@@ -1144,7 +1163,7 @@ export default function ChatPage() {
       >
         {activeConversation ? (
           <>
-            {/* Header */}
+            {/* ── Header ── */}
             <div
               style={{
                 padding: "12px 16px",
@@ -1154,347 +1173,123 @@ export default function ChatPage() {
                 justifyContent: "space-between",
               }}
             >
-              {/* Cột trái: tên + badge người lạ */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <strong style={{ color: "#f1f5f9", fontSize: 15 }}>
-                  {activeConversation.group?.name ||
-                    otherUser?.displayName ||
-                    "Đoạn chat"}
-                </strong>
-
-                {activeConversation.strangerStatus === "accepted" &&
-                  activeConversation.isStranger === true && (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        width: "fit-content",
-                        background: "rgba(148,163,184,0.1)",
-                        border: "1px solid rgba(148,163,184,0.2)",
-                        borderRadius: 20,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        color: "#94a3b8",
-                      }}
-                    >
-                      <UserIcon size={15} /> Người lạ
-                    </span>
-                  )}
-              </div>
-
-              {/* Cột phải: số tin nhắn */}
+              <strong>
+                {activeConversation.group?.name || otherUser?.displayName || "Đoạn chat"}
+              </strong>
               <span style={{ color: "#94a3b8", fontSize: 13 }}>
                 {displayMessages.length} tin nhắn
               </span>
             </div>
 
-            {/* Messages */}
+            {/* ── Messages ── */}
             <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
               {displayMessages.map((message, index) => {
                 const isMine = message.senderId === user?.userId;
-                const isLastRead =
-                  otherLastReadMessageId &&
-                  message._id?.toString() === otherLastReadMessageId.toString();
+                const payload = decodeChatPayload(message.content);
+                const isAttachmentCard =
+                  payload?.kind === "file" ||
+                  payload?.kind === "audio" ||
+                  payload?.kind === "image" ||
+                  payload?.kind === "poll" ||
+                  payload?.kind === "poll_vote" ||
+                  (!!message.imgUrl && !payload);
+                const useNeutralBubble = message.isRecalled || isAttachmentCard;
+                const messageKey = message._id?.toString() || `${message.createdAt}-${index}`;
+                const isLastMessage = messageKey === lastDisplayMessageKey;
+                const isTimeVisible = isLastMessage || expandedMessageKey === messageKey;
+                const timeLabel =
+                  expandedMessageKey === messageKey
+                    ? formatMessageDateTime(message.createdAt)
+                    : formatTime(message.createdAt);
 
                 return (
                   <div
-                    key={message._id || `${message.createdAt}-${index}`}
+                    key={messageKey}
                     style={{
                       display: "flex",
-                      flexDirection: "column",
+                      justifyContent: isMine ? "flex-end" : "flex-start",
                       marginBottom: 10,
+                      gap: 8,
+                      alignItems: "flex-end",
                     }}
                   >
-                    {/* Bubble row */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: isMine ? "flex-end" : "flex-start",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
-                      {isMine && !message.isRecalled && (
-                        <button
-                          onClick={(e) => handleOpenContextMenu(e, message)}
-                          style={actionDotsStyle}
-                          className="action-btn"
-                          title="Tùy chọn tin nhắn"
-                        >
-                          <Ellipsis size={16} />
-                        </button>
-                      )}
+                    {/* Context menu trigger — only for own messages */}
+                    {isMine && !message.isRecalled && (
+                      <button
+                        onClick={(event) => handleOpenContextMenu(event, message)}
+                        style={actionDotsStyle}
+                        className="action-btn"
+                        title="Tùy chọn tin nhắn"
+                      >
+                        <Ellipsis size={16} />
+                      </button>
+                    )}
 
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", maxWidth: "72%", gap: 4 }}>
+                      {/* Bubble */}
                       <div
                         style={{
-                          maxWidth: "72%",
-                          padding: "10px 12px",
+                          padding: isAttachmentCard ? 0 : "10px 12px",
                           borderRadius: 14,
-                          border: message.isRecalled
+                          border: isAttachmentCard
+                            ? "none"
+                            : message.isRecalled
                             ? "1px dashed rgba(148,163,184,.45)"
                             : "1px solid rgba(148,163,184,.18)",
-                          background: message.isRecalled
+                          background: isAttachmentCard
+                            ? "transparent"
+                            : message.isRecalled
                             ? "rgba(15,23,42,.4)"
+                            : useNeutralBubble
+                            ? "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)"
                             : isMine
-                              ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                              : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-                          boxShadow: "0 8px 20px rgba(0,0,0,.25)",
+                            ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                            : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+                          boxShadow: isAttachmentCard ? "none" : "0 8px 20px rgba(0,0,0,.25)",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setExpandedMessageKey((cur) => (cur === messageKey ? null : messageKey));
                         }}
                       >
                         {renderStructuredMessage(message)}
-                        <div
-                          style={{
-                            marginTop: 4,
-                            fontSize: 11,
-                            color: "#cbd5e1",
-                            textAlign: "right",
-                          }}
-                        >
-                          {formatTime(message.createdAt)}
-                        </div>
                       </div>
 
-                      {!isMine && !message.isRecalled && (
-                        <button
-                          onClick={(e) => handleOpenContextMenu(e, message)}
-                          style={actionDotsStyle}
-                          className="action-btn"
-                          title="Tùy chọn tin nhắn"
+                      {/* Timestamp */}
+                      {isTimeVisible && (
+                        <span
+                          style={{
+                            fontSize: expandedMessageKey === messageKey ? 12 : 11,
+                            color: useNeutralBubble ? "#94a3b8" : isMine ? "#dbeafe" : "#94a3b8",
+                            lineHeight: 1.3,
+                            padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                          }}
                         >
-                          <Ellipsis size={16} />
-                        </button>
+                          {timeLabel}
+                        </span>
                       )}
                     </div>
 
-                    {/* Avatar seen — tin của mình, người kia đã đọc */}
-                    {isMine && !message.isRecalled && isLastRead && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          paddingRight: 4,
-                          marginTop: 2,
-                        }}
+                    {/* Context menu trigger — only for other people's messages */}
+                    {!isMine && !message.isRecalled && (
+                      <button
+                        onClick={(event) => handleOpenContextMenu(event, message)}
+                        style={actionDotsStyle}
+                        className="action-btn"
+                        title="Tùy chọn tin nhắn"
                       >
-                        <img
-                          src={otherAvatar}
-                          alt="seen"
-                          style={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: "50%",
-                            border: "1.5px solid #60a5fa",
-                          }}
-                          title={`${otherUser?.displayName} đã xem`}
-                        />
-                      </div>
+                        <Ellipsis size={16} />
+                      </button>
                     )}
                   </div>
                 );
               })}
+
               <div ref={messagesEndRef} />
             </div>
-            {activeConversation.isStranger &&
-              activeConversation.strangerStatus === "pending" &&
-              activeConversation.initiatorId === user?.userId && ( // ✅ người gửi
-                <div
-                  style={{
-                    margin: "0 16px 8px",
-                    padding: "10px 14px",
-                    background: "rgba(37,99,235,0.08)",
-                    border: "1px solid rgba(37,99,235,0.2)",
-                    borderRadius: 12,
-                    color: "#94a3b8",
-                    fontSize: 13,
-                    textAlign: "center",
-                  }}
-                >
-                  ⏳ Đang chờ{" "}
-                  <strong style={{ color: "#f1f5f9" }}>
-                    {otherUser?.displayName}
-                  </strong>{" "}
-                  chấp nhận tin nhắn của bạn
-                </div>
-              )}
 
-            {activeConversation.isStranger &&
-              activeConversation.strangerStatus === "pending" &&
-              activeConversation.initiatorId !== user?.userId && (
-                <div
-                  style={{
-                    margin: "0 16px 8px",
-                    background: "rgba(30,41,59,0.9)",
-                    border: "1px solid rgba(148,163,184,0.2)",
-                    borderRadius: 14,
-                    padding: "14px 16px",
-                  }}
-                >
-                  {/* Avatar + tên người gửi */}
-                  {(() => {
-                    const sender = activeConversation.participants.find(
-                      (p) => p._id !== user?.userId,
-                    );
-                    return (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          marginBottom: 10,
-                        }}
-                      >
-                        {sender?.avatarUrl ? (
-                          <img
-                            src={sender.avatarUrl}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              background: "#2563eb",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#fff",
-                              fontWeight: 700,
-                              fontSize: 14,
-                            }}
-                          >
-                            {sender?.displayName?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div
-                            style={{
-                              color: "#f1f5f9",
-                              fontWeight: 600,
-                              fontSize: 14,
-                            }}
-                          >
-                            {sender?.displayName}
-                          </div>
-                          <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                            Muốn nhắn tin với bạn
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <p
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: 13,
-                      marginBottom: 12,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin nhắn
-                    từ họ không?
-                  </p>
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() =>
-                        updateStrangerStatus(activeConversation._id, "accepted")
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 10,
-                        border: "none",
-                        background: "#2563eb",
-                        color: "#fff",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✓ Chấp nhận
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateStrangerStatus(activeConversation._id, "declined")
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 10,
-                        border: "1px solid rgba(248,113,113,0.4)",
-                        background: "rgba(248,113,113,0.1)",
-                        color: "#fca5a5",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✗ Từ chối
-                    </button>
-                  </div>
-                </div>
-              )}
-
-            {/* Input area — disable nếu stranger pending
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-                // ✅ Mờ đi khi chưa accept
-                opacity:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? 0.4
-                    : 1,
-                pointerEvents:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? "none"
-                    : "auto",
-              }}
-            ></div> */}
-
-            {/* Typing indicator */}
-            <div
-              style={{
-                fontSize: 12,
-                color: "#94a3b8",
-                height: 18,
-                marginBottom: 4,
-                paddingLeft: 16,
-              }}
-            >
-              {typingUsers.length > 0 && (
-                <span>
-                  {typingUsers
-                    .map(
-                      (id) =>
-                        activeConversation.participants.find(
-                          (p) => p._id === id,
-                        )?.displayName,
-                    )
-                    .filter(Boolean)
-                    .join(", ")}{" "}
-                  đang soạn...
-                </span>
-              )}
-            </div>
-
-            {/* Input area */}
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-              }}
-            >
+            {/* ── Input bar ── */}
+            <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
               {/* Reply banner */}
               {replyingTo && (
                 <div
@@ -1511,19 +1306,9 @@ export default function ChatPage() {
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        color: "#bfdbfe",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
+                    <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 600 }}>
                       Đang trả lời{" "}
-                      {getSenderName(
-                        replyingTo,
-                        user?.userId,
-                        activeConversation.participants,
-                      )}
+                      {getSenderName(replyingTo, user?.userId, activeConversation.participants)}
                     </div>
                     <div
                       style={{
@@ -1539,12 +1324,8 @@ export default function ChatPage() {
                   </div>
                   <button
                     onClick={() => setReplyingTo(null)}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "#e2e8f0",
-                      cursor: "pointer",
-                    }}
+                    style={{ border: "none", background: "transparent", color: "#e2e8f0", cursor: "pointer" }}
+                    title="Hủy trả lời"
                   >
                     <X size={16} />
                   </button>
@@ -1555,28 +1336,11 @@ export default function ChatPage() {
                 {/* Media popup */}
                 {activePopup === "media" && (
                   <div style={popupBoxStyle}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        marginBottom: 10,
-                        color: "#f1f5f9",
-                      }}
-                    >
+                    <div style={{ fontWeight: 600, marginBottom: 10, color: "#f1f5f9" }}>
                       Gửi tệp hoặc hình ảnh
                     </div>
                     <div style={{ display: "grid", gap: 8 }}>
-                      <button
-                        style={popupActionStyle}
-                        className="menu-item"
-                        onClick={() => imageInputRef.current?.click()}
-                      >
-                        <ImagePlus size={16} /> Chọn ảnh
-                      </button>
-                      <button
-                        style={popupActionStyle}
-                        className="menu-item"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
+                      <button style={popupActionStyle} className="menu-item" onClick={() => fileInputRef.current?.click()}>
                         <FileUp size={16} /> Chọn tệp
                       </button>
                     </div>
@@ -1586,25 +1350,13 @@ export default function ChatPage() {
                 {/* Audio popup */}
                 {activePopup === "audio" && (
                   <div style={popupBoxStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
-                        Ghi âm
-                      </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>Ghi âm</div>
                       <div
                         style={{
                           fontSize: 12,
                           color: isRecording ? "#fca5a5" : "#64748b",
-                          background: isRecording
-                            ? "rgba(252,165,165,.1)"
-                            : "rgba(100,116,139,.1)",
+                          background: isRecording ? "rgba(252,165,165,.1)" : "rgba(100,116,139,.1)",
                           border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
                           borderRadius: 20,
                           padding: "4px 10px",
@@ -1618,27 +1370,25 @@ export default function ChatPage() {
                     <div style={{ display: "grid", gap: 8 }}>
                       {!isRecording ? (
                         <button
-                          style={{
-                            ...popupActionStyle,
-                            borderColor: "rgba(37,99,235,.45)",
-                            background: "rgba(37,99,235,.1)",
-                          }}
+                          style={{ ...popupActionStyle, borderColor: "rgba(37,99,235,.45)", background: "rgba(37,99,235,.1)" }}
                           onClick={() => void startRecording()}
                         >
                           <Mic size={16} /> Bắt đầu ghi âm
                         </button>
                       ) : (
                         <button
-                          style={{
-                            ...popupActionStyle,
-                            borderColor: "rgba(248,113,113,.45)",
-                            background: "rgba(248,113,113,.15)",
-                          }}
+                          style={{ ...popupActionStyle, borderColor: "rgba(248,113,113,.45)", background: "rgba(248,113,113,.15)" }}
                           onClick={() => stopRecording()}
                         >
                           <Mic size={16} /> Dừng và gửi
                         </button>
                       )}
+                      <button
+                        style={{ ...popupActionStyle, borderColor: "rgba(148,163,184,.22)", background: "rgba(255,255,255,.03)" }}
+                        onClick={() => cancelRecording()}
+                      >
+                        <X size={16} /> Hủy
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1646,45 +1396,19 @@ export default function ChatPage() {
                 {/* Sticker popup */}
                 {activePopup === "sticker" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 12,
-                      }}
-                    >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                       <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
-                      <a
-                        href="https://chatsticker.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "#3b82f6",
-                          fontSize: 12,
-                          fontWeight: 500,
-                        }}
-                      >
+                      <a href="https://chatsticker.com" target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontSize: 12, fontWeight: 500 }}>
                         Xem thêm
                       </a>
                     </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: 10,
-                      }}
-                    >
-                      {CHAT_STICKER_LIST.map((stickerUrl, index) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                      {CHAT_STICKER_LIST.map((stickerUrl, i) => (
                         <button
-                          key={`sticker-${index}`}
+                          key={`sticker-${i}`}
                           className="sticker-btn"
                           onClick={() => {
-                            void sendStructuredMessage({
-                              version: 1,
-                              kind: "sticker",
-                              stickerUrl,
-                            });
+                            void sendStructuredMessage({ version: 1, kind: "sticker", stickerUrl });
                             setActivePopup(null);
                           }}
                           style={{
@@ -1696,15 +1420,7 @@ export default function ChatPage() {
                             transition: "all .2s ease",
                           }}
                         >
-                          <img
-                            src={stickerUrl}
-                            alt="sticker"
-                            style={{
-                              width: "100%",
-                              height: 80,
-                              objectFit: "contain",
-                            }}
-                          />
+                          <img src={stickerUrl} alt="sticker" style={{ width: "100%", height: 80, objectFit: "contain" }} />
                         </button>
                       ))}
                     </div>
@@ -1714,45 +1430,31 @@ export default function ChatPage() {
                 {/* Poll popup */}
                 {activePopup === "poll" && (
                   <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        marginBottom: 12,
-                        color: "#f1f5f9",
-                      }}
-                    >
-                      Tạo cuộc thăm dò
-                    </div>
+                    <div style={{ fontWeight: 600, marginBottom: 12, color: "#f1f5f9" }}>Tạo cuộc thăm dò</div>
                     <input
                       value={pollQuestion}
                       onChange={(e) => setPollQuestion(e.target.value)}
                       placeholder="Câu hỏi bình chọn"
                       style={pollInputStyle}
                     />
-                    {pollOptions.map((option, index) => (
+                    {pollOptions.map((option, i) => (
                       <input
-                        key={`poll-opt-${index}`}
+                        key={`poll-opt-${i}`}
                         value={option}
                         onChange={(e) => {
                           const next = [...pollOptions];
-                          next[index] = e.target.value;
+                          next[i] = e.target.value;
                           setPollOptions(next);
                         }}
-                        placeholder={`Lựa chọn ${index + 1}`}
+                        placeholder={`Lựa chọn ${i + 1}`}
                         style={pollInputStyle}
                       />
                     ))}
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <button
-                        onClick={() => setPollOptions((p) => [...p, ""])}
-                        style={miniButtonStyle}
-                      >
+                      <button onClick={() => setPollOptions((p) => [...p, ""])} style={miniButtonStyle}>
                         + Thêm
                       </button>
-                      <button
-                        onClick={() => void handleCreatePoll()}
-                        style={miniButtonPrimaryStyle}
-                      >
+                      <button onClick={() => void handleCreatePoll()} style={miniButtonPrimaryStyle}>
                         Tạo bình chọn
                       </button>
                     </div>
@@ -1782,7 +1484,7 @@ export default function ChatPage() {
                   }}
                 />
 
-                {/* Input bar */}
+                {/* Input row */}
                 <div
                   style={{
                     display: "flex",
@@ -1794,22 +1496,12 @@ export default function ChatPage() {
                     padding: "6px 10px",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                      paddingRight: 4,
-                      borderRight: "1px solid rgba(148,163,184,.12)",
-                    }}
-                  >
+                  <div style={{ display: "flex", alignItems: "center", gap: 2, paddingRight: 4, borderRight: "1px solid rgba(148,163,184,.12)" }}>
                     <button
                       title="Ảnh / Tệp"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "media" ? null : "media"))
-                      }
+                      onClick={() => setActivePopup((p) => (p === "media" ? null : "media"))}
                     >
                       <ImagePlus size={18} />
                     </button>
@@ -1817,11 +1509,7 @@ export default function ChatPage() {
                       title="Nhãn dán"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) =>
-                          p === "sticker" ? null : "sticker",
-                        )
-                      }
+                      onClick={() => setActivePopup((p) => (p === "sticker" ? null : "sticker"))}
                     >
                       <Sticker size={18} />
                     </button>
@@ -1829,9 +1517,7 @@ export default function ChatPage() {
                       title="Ghi âm"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "audio" ? null : "audio"))
-                      }
+                      onClick={() => setActivePopup((p) => (p === "audio" ? null : "audio"))}
                     >
                       <Mic size={18} />
                     </button>
@@ -1839,9 +1525,7 @@ export default function ChatPage() {
                       title="Thăm dò"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "poll" ? null : "poll"))
-                      }
+                      onClick={() => setActivePopup((p) => (p === "poll" ? null : "poll"))}
                     >
                       <BarChart3 size={18} />
                     </button>
@@ -1849,26 +1533,11 @@ export default function ChatPage() {
 
                   <input
                     value={input}
-                    onChange={(event) => {
-                      setInput(event.target.value);
-                      // Typing indicator
-                      if (socket?.connected && activeConversationId) {
-                        socket.emit("typing", {
-                          conversationId: activeConversationId,
-                        });
-                        if (typingTimeoutRef.current)
-                          clearTimeout(typingTimeoutRef.current);
-                        typingTimeoutRef.current = setTimeout(() => {
-                          socket.emit("stop-typing", {
-                            conversationId: activeConversationId,
-                          });
-                        }, 1200);
-                      }
-                    }}
+                    onChange={(e) => setInput(e.target.value)}
                     placeholder="Nhập tin nhắn..."
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
                         void sendTextMessage();
                       }
                     }}
@@ -1886,14 +1555,7 @@ export default function ChatPage() {
                   {/* Emoji picker */}
                   <div style={{ position: "relative", display: "inline-flex" }}>
                     {activePopup === "emoji" && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          right: 0,
-                          bottom: 46,
-                          zIndex: 40,
-                        }}
-                      >
+                      <div style={{ position: "absolute", right: 0, bottom: 46, zIndex: 40 }}>
                         <Picker
                           data={data}
                           theme="dark"
@@ -1910,9 +1572,7 @@ export default function ChatPage() {
                       title="Emoji"
                       style={actionIconStyle}
                       className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "emoji" ? null : "emoji"))
-                      }
+                      onClick={() => setActivePopup((p) => (p === "emoji" ? null : "emoji"))}
                     >
                       <Smile size={18} />
                     </button>
@@ -1927,11 +1587,9 @@ export default function ChatPage() {
                       borderRadius: 12,
                       width: 38,
                       height: 38,
-                      background:
-                        sending || !input.trim() ? "#334155" : "#2563eb",
+                      background: sending || !input.trim() ? "#334155" : "#2563eb",
                       color: "white",
-                      cursor:
-                        sending || !input.trim() ? "not-allowed" : "pointer",
+                      cursor: sending || !input.trim() ? "not-allowed" : "pointer",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1946,22 +1604,13 @@ export default function ChatPage() {
             </div>
           </>
         ) : (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              color: "#94a3b8",
-              fontWeight: 500,
-            }}
-          >
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", color: "#94a3b8", fontWeight: 500 }}>
             Chọn cuộc trò chuyện để bắt đầu
           </div>
         )}
       </div>
 
-      {/* Context menu */}
+      {/* ── Context menu ── */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -1992,25 +1641,28 @@ export default function ChatPage() {
           )}
 
           {canRecall(contextMenu.message) && (
-            <button
-              onClick={() => void handleRecall()}
-              style={contextMenuItemStyle}
-              className="menu-item"
-            >
+            <button onClick={() => void handleRecall()} style={contextMenuItemStyle} className="menu-item">
               <RotateCcw size={15} /> Thu hồi
             </button>
           )}
 
-          {!contextMenu.message.isRecalled &&
-            canRecall(contextMenu.message) && (
-              <div
-                style={{
-                  height: "0.5px",
-                  background: "rgba(148,163,184,.1)",
-                  margin: "4px 0",
-                }}
-              />
-            )}
+          {!contextMenu.message.isRecalled && canRecall(contextMenu.message) && (
+            <div style={{ height: "0.5px", background: "rgba(148,163,184,.1)", margin: "4px 0" }} />
+          )}
+
+          {!contextMenu.message.isRecalled && (
+            <button
+              onClick={() => {
+                setForwardingMessage(contextMenu.message);
+                setIsForwardModalOpen(true);
+                setContextMenu(null);
+              }}
+              style={contextMenuItemStyle}
+              className="menu-item"
+            >
+              <Send size={15} /> Chuyển tiếp
+            </button>
+          )}
 
           {!contextMenu.message.isRecalled && (
             <button
@@ -2024,7 +1676,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Vote viewer popup */}
+      {/* ── Vote viewer ── */}
       {voteViewer && (
         <div
           style={{
@@ -2041,72 +1693,166 @@ export default function ChatPage() {
             padding: 14,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: 14,
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
             <div>
-              <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14 }}>
-                {voteViewer.optionLabel}
-              </div>
-              <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                {voteViewer.totalVotes} lượt bình chọn
-              </div>
+              <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14 }}>{voteViewer.optionLabel}</div>
+              <div style={{ color: "#94a3b8", fontSize: 12 }}>{voteViewer.totalVotes} lượt bình chọn</div>
             </div>
-            <button
-              onClick={() => setVoteViewer(null)}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "#94a3b8",
-                cursor: "pointer",
-              }}
-            >
+            <button onClick={() => setVoteViewer(null)} style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer" }}>
               <X size={18} />
             </button>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             {voteViewer.users.map((person, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  background: "rgba(255,255,255,.03)",
-                  borderRadius: 12,
-                }}
-              >
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(255,255,255,.03)", borderRadius: 12 }}>
                 {person.avatarUrl ? (
-                  <img
-                    src={person.avatarUrl}
-                    style={{ width: 28, height: 28, borderRadius: "50%" }}
-                    alt=""
-                  />
+                  <img src={person.avatarUrl} style={{ width: 28, height: 28, borderRadius: "50%" }} alt="" />
                 ) : (
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "50%",
-                      background: "#1e293b",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <UserIcon size={14} />
                   </div>
                 )}
-                <span style={{ fontSize: 13, color: "#e2e8f0" }}>
-                  {person.name}
-                </span>
+                <span style={{ fontSize: 13, color: "#e2e8f0" }}>{person.name}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Image preview lightbox ── */}
+      {imagePreviewUrl && (
+        <div
+          onClick={() => setImagePreviewUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={imagePreviewUrl}
+            alt="preview"
+            style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,.6)" }}
+          />
+        </div>
+      )}
+      {isForwardModalOpen && forwardingMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: "#1e293b",
+              width: 400,
+              borderRadius: 16,
+              padding: 20,
+            }}
+          >
+            <h3 style={{ color: "white", marginBottom: 15 }}>
+              Chuyển tiếp tin nhắn
+            </h3>
+            <input
+              placeholder="Tìm hội thoại..."
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+              style={pollInputStyle}
+            />
+            <div style={{ maxHeight: 300, overflowY: "auto", marginTop: 15 }}>
+              {conversations
+                .filter((c) => {
+                  const name =
+                    c.group?.name ||
+                    c.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Người dùng";
+                  return name
+                    .toLowerCase()
+                    .includes(forwardSearch.toLowerCase());
+                })
+                .map((conv) => {
+                  const isSelected = selectedConvs.includes(conv._id);
+                  const chatName =
+                    conv.group?.name ||
+                    conv.participants.find((p) => p._id !== user?.userId)
+                      ?.displayName ||
+                    "Đoạn chat";
+
+                  return (
+                    <label
+                      key={conv._id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        background: isSelected
+                          ? "rgba(37,99,235,0.1)"
+                          : "transparent", // Highlight khi chọn
+                        borderRadius: 8,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedConvs((prev) => [...prev, conv._id]);
+                          } else {
+                            setSelectedConvs((prev) =>
+                              prev.filter((id) => id !== conv._id),
+                            );
+                          }
+                        }}
+                      />
+                      <span style={{ color: "white", fontSize: 14 }}>
+                        {chatName}
+                        </span>
+                    </label>
+                  );
+                })}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => {
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                }}
+                style={miniButtonStyle}
+              >
+                Hủy
+              </button>
+              <button
+                disabled={selectedConvs.length === 0 || sending}
+                onClick={async () => {
+                  setSending(true);
+                  await forwardMessage(forwardingMessage, selectedConvs);
+                  setIsForwardModalOpen(false);
+                  setSelectedConvs([]);
+                  setForwardingMessage(null);
+                  setSending(false);
+                }}
+                style={miniButtonPrimaryStyle}
+              >
+                Gửi ({selectedConvs.length})
+              </button>
+            </div>
           </div>
         </div>
       )}
