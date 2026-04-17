@@ -3,15 +3,27 @@ import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
-import type { Message, Participant } from "@/types/chat";
+import type { Message } from "@/types/chat";
+
+const dedupeMessages = (items: Message[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key =
+      item._id ||
+      `${item.conversationId}-${item.senderId}-${item.createdAt}-${item.content}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
       conversations: [],
       messages: {},
-      activeConversationId: null,
       typingUsersByConv: {},
+      activeConversationId: null,
       convoLoading: false,
       messageLoading: false,
       setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -19,10 +31,10 @@ export const useChatStore = create<ChatState>()(
         set({
           conversations: [],
           messages: {},
+          typingUsersByConv: {},
           activeConversationId: null,
           convoLoading: false,
           messageLoading: false,
-          typingUsersByConv: {},
         });
       },
       fetchConversations: async () => {
@@ -64,17 +76,15 @@ export const useChatStore = create<ChatState>()(
 
           set((state) => {
             const prev = state.messages[convoId]?.items ?? [];
-
-            // 🔥 lọc trùng theo _id
-            const existingIds = new Set(prev.map((m) => m._id));
-
-            const filtered = processed.filter((m) => !existingIds.has(m._id));
+            const merged = dedupeMessages(
+              prev.length > 0 ? [...processed, ...prev] : processed,
+            );
 
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  items: [...filtered, ...prev],
+                  items: merged,
                   hasMore: !!cursor,
                   nextCursor: cursor ?? null,
                 },
@@ -141,20 +151,31 @@ export const useChatStore = create<ChatState>()(
 
           const convoId = message.conversationId;
 
-          set((state) => {
-            const prev = state.messages[convoId]?.items ?? [];
+          let prevItems = get().messages[convoId]?.items ?? [];
+          if (prevItems.length === 0) {
+            await fetchMessages(message.conversationId);
+            prevItems = get().messages[convoId]?.items ?? [];
+          }
 
-            // 🔥 nếu đã có thì skip luôn
-            if (prev.some((m) => m._id === message._id)) {
+          set((state) => {
+            const existingItems = state.messages[convoId]?.items ?? prevItems;
+            if (existingItems.some((m) => m._id === message._id)) {
               return state;
             }
+
+            const currentConvoState = state.messages[convoId] ?? {
+              items: [],
+              hasMore: false,
+              nextCursor: undefined,
+            };
 
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  ...state.messages[convoId],
-                  items: [...prev, message],
+                  items: dedupeMessages([...existingItems, message]),
+                  hasMore: currentConvoState.hasMore,
+                  nextCursor: currentConvoState.nextCursor ?? undefined,
                 },
               },
             };
@@ -165,33 +186,9 @@ export const useChatStore = create<ChatState>()(
       },
       updateConversation: (conversation) => {
         set((state) => ({
-          conversations: state.conversations.map((c) => {
-            if (c._id !== conversation._id) return c;
-
-            // Giữ lại lastReadMessageId từ store, không để socket overwrite
-            const mergedParticipants = conversation.participants
-              ? (conversation.participants.map((incoming) => {
-                  const existing = c.participants?.find(
-                    (p) => p._id === incoming._id,
-                  );
-                  return {
-                    ...existing,
-                    ...incoming,
-                    // Ưu tiên giá trị mới nếu có, không thì giữ cũ
-                    lastReadMessageId:
-                      incoming.lastReadMessageId ??
-                      existing?.lastReadMessageId ??
-                      null,
-                  };
-                }) as Participant[])
-              : c.participants;
-
-            return {
-              ...c,
-              ...conversation,
-              participants: mergedParticipants,
-            };
-          }),
+          conversations: state.conversations.map((c) =>
+            c._id === conversation._id ? { ...c, ...conversation } : c,
+          ),
         }));
       },
       addConversation: (conversation) => {
@@ -218,29 +215,7 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
-      updateLastRead: (
-        userId: string,
-        conversationId: string,
-        lastReadMessageId: string,
-      ) => {
-        set((state) => {
-          const newConversations = state.conversations.map((conv) => {
-            if (conv._id !== conversationId) return conv;
 
-            return {
-              ...conv,
-              participants: conv.participants.map((p) => {
-                if (p._id === userId) {
-                  return { ...p, lastReadMessageId };
-                }
-                return { ...p };
-              }),
-            };
-          });
-
-          return { conversations: newConversations };
-        });
-      },
       deleteMessageForMe: async (messageId: string, conversationId: string) => {
         try {
           await chatService.deleteMessageForMe(messageId);
@@ -300,6 +275,27 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+      updateLastRead: (
+        userId: string,
+        conversationId: string,
+        messageId: string,
+      ) => {
+        set((state) => ({
+          conversations: state.conversations.map((conversation) => {
+            if (conversation._id !== conversationId) return conversation;
+
+            return {
+              ...conversation,
+              participants: conversation.participants.map((participant) =>
+                participant._id === userId
+                  ? { ...participant, lastReadMessageId: messageId }
+                  : participant,
+              ),
+            };
+          }),
+        }));
+      },
+
       addTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           console.log("📝 addTypingUser called:", userId, conversationId);
@@ -341,7 +337,7 @@ export const useChatStore = create<ChatState>()(
       updateStrangerStatus: async (conversationId, action) => {
         try {
           await chatService.updateStrangerStatus(conversationId, action);
-          if (action === "declined") {
+          if (action === "decline") {
             set((state) => ({
               conversations: state.conversations.filter(
                 (c) => c._id !== conversationId,
@@ -375,7 +371,7 @@ export const useChatStore = create<ChatState>()(
           if (!targetConv) continue;
 
           const payload = {
-            content: message.content,
+            content: message.content ?? undefined,
             imgUrl: message.imgUrl || undefined,
           };
 
@@ -392,14 +388,58 @@ export const useChatStore = create<ChatState>()(
           }
         }
       },
-    }),
+      createConversation: async (payload) => {
+        try {
+          set({ convoLoading: true });
 
+          // Gọi API tạo cuộc hội thoại
+          const newConvoRaw = await chatService.createConversation(payload);
+
+          // XỬ LÝ LỖI ĐỒNG BỘ DỮ LIỆU BACKEND:
+          // Backend trả về participants có cấu trúc { userId: { _id, displayName... } }
+          // Nhưng Store đang dùng cấu trúc phẳng { _id, displayName... } (đã format ở getConversation)
+          // Nên ta cần format lại ở đây để UI không bị văng lỗi khi render danh sách thành viên
+          const formattedParticipants = (newConvoRaw.participants || []).map(
+            (p: any) => ({
+              _id: p.userId?._id,
+              displayName: p.userId?.displayName,
+              avatarUrl: p.userId?.avatarUrl ?? null,
+              joinedAt: p.joinedAt,
+              lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+            }),
+          );
+
+          const formattedConvo = {
+            ...newConvoRaw,
+            participants: formattedParticipants,
+            unreadCounts: newConvoRaw.unreadCounts || {},
+          };
+
+          set((state) => {
+            // Check trùng lặp (phòng trường hợp socket trả data về trước khi API resolve)
+            const exists = state.conversations.some(
+              (c) => c._id === formattedConvo._id,
+            );
+            if (exists) return state;
+
+            return {
+              // Thêm nhóm mới lên đầu danh sách
+              conversations: [formattedConvo, ...state.conversations],
+              // Tự động nhảy vào đoạn chat mới tạo luôn
+              activeConversationId: formattedConvo._id,
+            };
+          });
+        } catch (error) {
+          console.error("Lỗi khi tạo conversation:", error);
+          throw error;
+        } finally {
+          set({ convoLoading: false });
+        }
+      },
+    }),
     {
       name: "chat-storage",
-      partialize: (state) => ({
-        conversations: state.conversations,
-        activeConversationId: state.activeConversationId,
-      }),
+      partialize: (state) => ({ conversations: state.conversations }),
     },
   ),
 );

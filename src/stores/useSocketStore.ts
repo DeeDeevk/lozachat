@@ -22,6 +22,7 @@ const registerSocketEvents = (
   socket.off("stranger-accepted");
   socket.off("stranger-request");
   socket.off("stranger-removed");
+  socket.off("new-group-created");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -119,6 +120,26 @@ const registerSocketEvents = (
       ),
     }));
   });
+  socket.on("new-group-created", (conversation) => {
+    const formattedParticipants = (conversation.participants || []).map(
+      (p: any) => ({
+        // Thêm || p._id và || p.displayName để dự phòng
+        _id: p.userId?._id || p._id,
+        displayName: p.userId?.displayName || p.displayName,
+        avatarUrl: p.userId?.avatarUrl || p.avatarUrl || null,
+        joinedAt: p.joinedAt,
+        lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+      }),
+    );
+
+    const formattedConvo = {
+      ...conversation,
+      participants: formattedParticipants,
+      unreadCounts: conversation.unreadCounts || {},
+    };
+    useChatStore.getState().addConversation(formattedConvo);
+    socket.emit("join-conversation", { conversationId: conversation._id });
+  });
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({
@@ -130,8 +151,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
 
-    // ← Nếu socket cũ còn sống thì dùng lại, chỉ register events
-    if (existingSocket?.connected) {
+    // Reuse existing socket when it is connected or still connecting.
+    if (existingSocket && !existingSocket.disconnected) {
       registerSocketEvents(existingSocket, set);
       return;
     }
