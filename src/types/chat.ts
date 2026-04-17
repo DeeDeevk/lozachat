@@ -60,6 +60,8 @@ export interface Message {
   isRecalled?: boolean;
   recalledAt?: string;
   deletedFor?: string[];
+  isEdited?: boolean;
+  editedAt?: string;
 }
 
 export type ChatMessageKind =

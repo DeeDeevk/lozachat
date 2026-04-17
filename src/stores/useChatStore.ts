@@ -314,7 +314,60 @@ export const useChatStore = create<ChatState>()(
             },
           };
         }),
+      editMessage: async (
+        messageId: string,
+        conversationId: string,
+        content: string,
+      ) => {
+        try {
+          await chatService.editMessage(messageId, content);
+          get().applyEditMessage(
+            messageId,
+            conversationId,
+            content,
+            new Date().toISOString(),
+          );
+        } catch (error) {
+          console.error("Lỗi khi sửa tin nhắn:", error);
+          throw error;
+        }
+      },
 
+      applyEditMessage: (
+        messageId: string,
+        conversationId: string,
+        newContent: string,
+        editedAt: string,
+      ) => {
+        set((state) => {
+          const convo = state.messages[conversationId];
+          if (!convo) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...convo,
+                items: convo.items.map((m) =>
+                  m._id === messageId
+                    ? { ...m, content: newContent, isEdited: true, editedAt }
+                    : m,
+                ),
+              },
+            },
+
+            // Cập nhật lastMessage nếu tin nhắn đó là tin cuối cùng
+            conversations: state.conversations.map((c) =>
+              c._id === conversationId && c.lastMessage?._id === messageId
+                ? {
+                    ...c,
+                    lastMessage: { ...c.lastMessage, content: newContent },
+                  }
+                : c,
+            ),
+          };
+        });
+      },
       removeTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           const current = state.typingUsersByConv[conversationId] || [];

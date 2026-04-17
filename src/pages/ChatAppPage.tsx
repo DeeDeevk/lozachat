@@ -33,6 +33,7 @@ import {
   Trash2,
   User as UserIcon,
   X,
+  Pencil,
 } from "lucide-react";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
@@ -271,6 +272,10 @@ export default function ChatPage() {
   );
   const [forwardSearch, setForwardSearch] = useState("");
   const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
+  //edit
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [editInput, setEditInput] = useState("");
+  const { editMessage } = useChatStore();
 
   // ─── Fetch conversations on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -787,6 +792,26 @@ export default function ChatPage() {
     }
   }, [activeConversationId, contextMenu, deleteMessageForMe]);
 
+  const handleEdit = useCallback(async () => {
+    if (!editingMessage || !activeConversationId || !editInput.trim()) return;
+    if (editInput.trim() === editingMessage.content) {
+      setEditingMessage(null);
+      return;
+    }
+    try {
+      await editMessage(
+        editingMessage._id,
+        activeConversationId,
+        editInput.trim(),
+      );
+    } catch {
+      alert("Không thể sửa tin nhắn");
+    } finally {
+      setEditingMessage(null);
+      setEditInput("");
+    }
+  }, [editingMessage, activeConversationId, editInput, editMessage]);
+
   const renderLinks = useCallback((text: string) => {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
@@ -818,7 +843,9 @@ export default function ChatPage() {
         );
       }
       const payload = decodeChatPayload(message.content);
-      if (!payload) return <span>{renderLinks(message.content || "")}</span>;
+      if (!payload) {
+        return <div>{renderLinks(message.content || "")}</div>;
+      }
 
       if (payload.kind === "reply") {
         return (
@@ -1196,9 +1223,11 @@ export default function ChatPage() {
       }
 
       return (
-        <span>
-          {renderLinks(payload.text || payload.emoji || message.content || "")}
-        </span>
+        <div>
+          {renderLinks(
+            payload?.text || payload?.emoji || message.content || "",
+          )}
+        </div>
       );
     },
     [
@@ -1311,6 +1340,18 @@ export default function ChatPage() {
                   expandedMessageKey === messageKey
                     ? formatMessageDateTime(message.createdAt)
                     : formatTime(message.createdAt);
+                const editedLabel =
+                  message.isEdited && !message.isRecalled ? (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#94a3b8",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      (đã chỉnh sửa)
+                    </span>
+                  ) : null;
 
                 return (
                   <div
@@ -1322,87 +1363,138 @@ export default function ChatPage() {
                     }}
                   >
                     {/* Bubble row */}
+
                     <div
                       style={{
                         display: "flex",
                         justifyContent: isMine ? "flex-end" : "flex-start",
-                        gap: 8,
-                        alignItems: "center",
+                        padding: "2px 2px",
                       }}
                     >
-                      {isMine && !message.isRecalled && (
-                        <button
-                          onClick={(e) => handleOpenContextMenu(e, message)}
-                          style={actionDotsStyle}
-                          className="action-btn"
-                          title="Tùy chọn tin nhắn"
-                        >
-                          <Ellipsis size={16} />
-                        </button>
-                      )}
-
                       <div
-                        onClick={() =>
-                          setExpandedMessageKey((prev) =>
-                            prev === messageKey ? null : messageKey,
-                          )
-                        }
                         style={{
-                          maxWidth: "72%",
-                          borderRadius: 14,
-                          cursor: "pointer",
-
-                          padding:
-                            payload?.kind === "image" ||
-                            payload?.kind === "file" ||
-                            payload?.kind === "poll"
-                              ? 0
-                              : "10px 12px",
-                          background:
-                            payload?.kind === "image" ||
-                            payload?.kind === "file" ||
-                            payload?.kind === "poll"
-                              ? "transparent"
-                              : message.isRecalled
-                                ? "rgba(15,23,42,.4)"
-                                : isMine
-                                  ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                                  : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-
-                          // ✅ 3. Xóa viền nếu là Ảnh, File, hoặc Poll
-                          border:
-                            payload?.kind === "image" ||
-                            payload?.kind === "file" ||
-                            payload?.kind === "poll"
-                              ? "none"
-                              : isMine
-                                ? "none"
-                                : "1px solid rgba(148,163,184,.18)",
-
-                          // ✅ 4. Xóa bóng đổ nếu là Ảnh, File, hoặc Poll
-                          boxShadow:
-                            payload?.kind === "image" ||
-                            payload?.kind === "file" ||
-                            payload?.kind === "poll"
-                              ? "none"
-                              : "0 8px 20px rgba(0,0,0,.25)",
-
-                          overflow: "hidden",
+                          display: "flex",
+                          justifyContent: isMine ? "flex-end" : "flex-start",
+                          
                         }}
                       >
-                        {renderStructuredMessage(message)}
-                      </div>
-
-                      {!isMine && !message.isRecalled && (
-                        <button
-                          onClick={(e) => handleOpenContextMenu(e, message)}
-                          style={actionDotsStyle}
-                          className="action-btn"
-                          title="Tùy chọn tin nhắn"
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
                         >
-                          <Ellipsis size={16} />
-                        </button>
-                      )}
+                          {isMine &&
+                            message.isEdited &&
+                            !message.isRecalled && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "#94a3b8",
+                                  fontStyle: "italic",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                (đã chỉnh sửa)
+                              </span>
+                            )}
+                          {isMine && !message.isRecalled && (
+                            <button
+                              onClick={(e) => handleOpenContextMenu(e, message)}
+                              style={{
+                                ...actionDotsStyle,
+                                opacity: 0.7,
+                              }}
+                              className="action-btn"
+                            >
+                              <Ellipsis size={16} />
+                            </button>
+                          )}
+
+                          {/* 👉 BUBBLE (dùng chung, giữ nguyên style cũ) */}
+                          <div
+                            onClick={() =>
+                              setExpandedMessageKey((prev) =>
+                                prev === messageKey ? null : messageKey,
+                              )
+                            }
+                            style={{
+                              maxWidth: "90%",
+                              borderRadius: 14,
+                              cursor: "pointer",
+
+                              padding:
+                                payload?.kind === "image" ||
+                                payload?.kind === "file" ||
+                                payload?.kind === "poll"
+                                  ? 0
+                                  : "10px 12px",
+
+                              background:
+                                payload?.kind === "image" ||
+                                payload?.kind === "file" ||
+                                payload?.kind === "poll"
+                                  ? "transparent"
+                                  : message.isRecalled
+                                    ? "rgba(15,23,42,.4)"
+                                    : isMine
+                                      ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                                      : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+
+                              border:
+                                payload?.kind === "image" ||
+                                payload?.kind === "file" ||
+                                payload?.kind === "poll"
+                                  ? "none"
+                                  : isMine
+                                    ? "none"
+                                    : "1px solid rgba(148,163,184,.18)",
+
+                              boxShadow:
+                                payload?.kind === "image" ||
+                                payload?.kind === "file" ||
+                                payload?.kind === "poll"
+                                  ? "none"
+                                  : "0 8px 20px rgba(0,0,0,.25)",
+
+                              overflow: "hidden",
+                            }}
+                          >
+                            {renderStructuredMessage(message)}
+                          </div>
+
+                          {/* 👉 BÊN NGƯỜI KHÁC: button */}
+                          {!isMine && !message.isRecalled && (
+                            <button
+                              onClick={(e) => handleOpenContextMenu(e, message)}
+                              style={{
+                                ...actionDotsStyle,
+                                opacity: 0.7,
+                              }}
+                              className="action-btn"
+                            >
+                              <Ellipsis size={16} />
+                            </button>
+                          )}
+
+                          {/* 👉 BÊN NGƯỜI KHÁC: edited */}
+                          {!isMine &&
+                            message.isEdited &&
+                            !message.isRecalled && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "#94a3b8",
+                                  fontStyle: "italic",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                (đã chỉnh sửa)
+                              </span>
+                            )}
+                        </div>
+                      </div>
                     </div>
                     {/* Chỉ hiện thời gian KHI VÀ CHỈ KHI tin nhắn được nhấn vào (expanded) */}
                     {expandedMessageKey === messageKey && (
@@ -1708,6 +1800,91 @@ export default function ChatPage() {
                   >
                     <X size={16} />
                   </button>
+                </div>
+              )}
+              {editingMessage && (
+                <div
+                  style={{
+                    marginBottom: 8,
+                    background: "rgba(234,179,8,.1)",
+                    border: "1px solid rgba(234,179,8,.35)",
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#fde047",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      ✏️ Đang chỉnh sửa tin nhắn
+                    </span>
+                    <button
+                      onClick={() => {
+                        setEditingMessage(null);
+                        setEditInput("");
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#94a3b8",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      value={editInput}
+                      onChange={(e) => setEditInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleEdit();
+                        }
+                      }}
+                      autoFocus
+                      style={{
+                        flex: 1,
+                        border: "0.5px solid rgba(234,179,8,.4)",
+                        background: "rgba(234,179,8,.05)",
+                        color: "#f1f5f9",
+                        borderRadius: 10,
+                        padding: "7px 10px",
+                        outline: "none",
+                        fontSize: 14,
+                      }}
+                    />
+                    <button
+                      onClick={() => void handleEdit()}
+                      disabled={!editInput.trim()}
+                      style={{
+                        border: "none",
+                        borderRadius: 10,
+                        padding: "7px 14px",
+                        background: editInput.trim() ? "#ca8a04" : "#334155",
+                        color: "white",
+                        cursor: editInput.trim() ? "pointer" : "not-allowed",
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      Lưu
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -2151,7 +2328,27 @@ export default function ChatPage() {
               <Reply size={15} /> Trả lời
             </button>
           )}
-
+          {contextMenu.message.senderId === user?.userId &&
+            !contextMenu.message.isRecalled &&
+            canRecall(contextMenu.message) && (
+              <button
+                onClick={() => {
+                  // Decode để lấy text gốc nếu là structured message
+                  const payload = decodeChatPayload(
+                    contextMenu.message.content,
+                  );
+                  const currentText =
+                    payload?.text || contextMenu.message.content || "";
+                  setEditInput(currentText);
+                  setEditingMessage(contextMenu.message);
+                  setContextMenu(null);
+                }}
+                style={contextMenuItemStyle}
+                className="menu-item"
+              >
+                <Pencil size={15} /> Chỉnh sửa
+              </button>
+            )}
           {canRecall(contextMenu.message) && (
             <button
               onClick={() => void handleRecall()}

@@ -16,6 +16,7 @@ const registerSocketEvents = (
   socket.off("new-message");
   socket.off("message-recalled");
   socket.off("message-read");
+  socket.off("message-edited");
   socket.off("user-typing");
   socket.off("user-stop-typing");
   socket.off("stranger-declined");
@@ -43,6 +44,9 @@ const registerSocketEvents = (
   socket.on("user-stop-typing", ({ userId, conversationId }) => {
     useChatStore.getState().removeTypingUser(userId, conversationId);
   });
+  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
+  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
+});
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     useChatStore.getState().addMessage(message);
