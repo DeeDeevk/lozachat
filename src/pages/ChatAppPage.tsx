@@ -43,6 +43,7 @@ import {
   PanelRight,
   PanelRightClose,
 } from "lucide-react";
+import { chatService } from "@/services/chatService";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -236,6 +237,7 @@ export default function ChatPage() {
     typingUsersByConv,
     updateStrangerStatus,
     forwardMessage,
+    updateMemberRole,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -1559,7 +1561,38 @@ export default function ChatPage() {
                     expandedMessageKey === messageKey
                       ? formatMessageDateTime(message.createdAt)
                       : formatTime(message.createdAt);
-
+                  if (
+                    message.type === "system" ||
+                    message.content?.startsWith("{{system}}")
+                  ) {
+                    const text = message.content.replace("{{system}}", "");
+                    return (
+                      <div
+                        key={messageKey}
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "#94a3b8",
+                            background: "rgba(148,163,184,0.1)",
+                            border: "1px solid rgba(148,163,184,0.15)",
+                            borderRadius: 20,
+                            padding: "4px 14px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {text}
+                        </span>
+                      </div>
+                    );
+                  }
                   return (
                     <div
                       key={message._id || `${message.createdAt}-${index}`}
@@ -2408,6 +2441,19 @@ export default function ChatPage() {
                   (c) => c._id !== activeConversationId,
                 );
                 alert("Bạn đã rời khỏi nhóm");
+              }}
+              onUpdateMemberRole={async (targetUserId, role) => {
+                if (!activeConversationId) return;
+                try {
+                  await chatService.updateMemberRole(
+                    activeConversationId,
+                    targetUserId,
+                    role,
+                  );
+                } catch (error) {
+                  console.error("Lỗi khi cập nhật role:", error);
+                  alert("Không thể cập nhật quyền thành viên");
+                }
               }}
             />
           ) : (
