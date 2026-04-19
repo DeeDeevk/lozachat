@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import type { Message } from "@/types/chat";
+import { useSocketStore } from "./useSocketStore";
 
 const dedupeMessages = (items: Message[]) => {
   const seen = new Set<string>();
@@ -429,6 +430,13 @@ export const useChatStore = create<ChatState>()(
               activeConversationId: formattedConvo._id,
             };
           });
+
+          const socket = useSocketStore.getState().socket;
+          if (socket?.connected) {
+            socket.emit("join-conversation", {
+              conversationId: formattedConvo._id,
+            });
+          }
         } catch (error) {
           console.error("Lỗi khi tạo conversation:", error);
           throw error;
