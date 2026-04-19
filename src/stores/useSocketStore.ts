@@ -22,6 +22,7 @@ const registerSocketEvents = (
   socket.off("stranger-accepted");
   socket.off("stranger-request");
   socket.off("stranger-removed");
+  socket.off("new-group-created");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -118,6 +119,26 @@ const registerSocketEvents = (
         c._id === conversationId ? { ...c, isStranger: false } : c,
       ),
     }));
+  });
+  socket.on("new-group-created", (conversation) => {
+    const formattedParticipants = (conversation.participants || []).map(
+      (p: any) => ({
+        // Thêm || p._id và || p.displayName để dự phòng
+        _id: p.userId?._id || p._id,
+        displayName: p.userId?.displayName || p.displayName,
+        avatarUrl: p.userId?.avatarUrl || p.avatarUrl || null,
+        joinedAt: p.joinedAt,
+        lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+      }),
+    );
+
+    const formattedConvo = {
+      ...conversation,
+      participants: formattedParticipants,
+      unreadCounts: conversation.unreadCounts || {},
+    };
+    useChatStore.getState().addConversation(formattedConvo);
+    socket.emit("join-conversation", { conversationId: conversation._id });
   });
 };
 

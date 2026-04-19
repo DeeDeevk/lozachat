@@ -9,6 +9,8 @@ import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/stores/useChatStore";
 import { getSafeMessagePreview } from "@/utils/chatMessageCodec";
 import "../css/conversationList.css";
+import CreateGroupModal from "./CreateGroupModal";
+import MiniAvatar from "./MiniAvatar";
 
 // ── Types (match BE) ─────────────────────────────────────────
 export interface Conversation {
@@ -49,6 +51,7 @@ export default function ConversationList({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "direct" | "group">("all");
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
@@ -114,6 +117,17 @@ export default function ConversationList({
     return colors[Math.abs(hash) % colors.length];
   };
 
+  const getDisplayParticipants = (conv: Conversation) => {
+    if (!user?.userId) return [];
+    if (!conv.group) {
+      const other = getOtherUser(conv);
+      return other ? [other] : [];
+    }
+    return (conv.participants || [])
+      .filter((p) => String(p._id) !== String(user.userId))
+      .slice(0, 3);
+  };
+
   // ── Filter ───────────────────────────────────────────────────────────────
   const filteredConvs = conversations.filter((c) => {
     const matchesSearch = getName(c)
@@ -164,6 +178,7 @@ export default function ConversationList({
                 className="cl-icon-btn"
                 aria-label="Tạo nhóm chat"
                 title="Tạo nhóm chat"
+                onClick={() => setShowCreateGroupModal(true)}
               >
                 <UsersRound size={16} />
               </button>
@@ -220,6 +235,8 @@ export default function ConversationList({
             const online = isOnline(conv);
             const color = getAvatarColor(conv);
             const unread = conv.unread ?? 0;
+            const displayParticipants = getDisplayParticipants(conv);
+            const count = displayParticipants.length;
 
             return (
               <div
@@ -228,51 +245,128 @@ export default function ConversationList({
                 onClick={() => onSelectConversation(conv._id)}
               >
                 {/* Avatar */}
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 14,
-                      overflow: "hidden",
-                      background: color,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow:
-                        conv._id === activeId
-                          ? `0 4px 12px ${color}55`
-                          : "none",
-                    }}
-                  >
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt={name}
+                <div
+                  style={{
+                    position: "relative",
+                    flexShrink: 0,
+                    width: 44,
+                    height: 44,
+                  }}
+                >
+                  {count <= 1 ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        boxShadow:
+                          conv._id === activeId
+                            ? "0 4px 12px rgba(59,130,246,0.5)"
+                            : "none",
+                      }}
+                    >
+                      {count === 1 ? (
+                        <MiniAvatar p={displayParticipants[0]} fontSize={14} />
+                      ) : (
+                        // Fallback cho nhóm chưa có thành viên nào khác
+                        <MiniAvatar p={{ displayName: name }} fontSize={14} />
+                      )}
+                    </div>
+                  ) : count === 2 ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        position: "relative",
+                      }}
+                    >
+                      <div
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          color: "white",
-                          fontWeight: 700,
-                          fontSize: 13,
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          overflow: "hidden",
                         }}
                       >
-                        {getAvatarText(conv)}
-                      </span>
-                    )}
-                  </div>
-                  {/* Online/offline dot */}
-                  {online ? (
-                    <div className="cl-online-dot" />
+                        <MiniAvatar p={displayParticipants[0]} fontSize={10} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 2,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[1]} fontSize={10} />
+                      </div>
+                    </div>
                   ) : (
-                    <div className="cl-offline-dot" />
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        position: "relative",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 8,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          zIndex: 1,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[0]} fontSize={9} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: 0,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 2,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[1]} fontSize={9} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 3,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[2]} fontSize={9} />
+                      </div>
+                    </div>
                   )}
+
+                  {/* Dot Online: Chỉ hiện khi chat 1-1 */}
+                  {online && count <= 1 && <div className="cl-online-dot" />}
                 </div>
 
                 {/* Info */}
@@ -388,6 +482,11 @@ export default function ConversationList({
       <SearchUserModal
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
+      />
+      {/* ── Create Group Modal ──  */}
+      <CreateGroupModal
+        isOpen={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
       />
     </>
   );

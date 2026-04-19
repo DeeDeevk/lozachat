@@ -64,6 +64,11 @@ export interface ChatState {
     message: Message,
     targetConversationIds: string[],
   ) => Promise<void>;
+  createConversation: (patload: {
+    type: "group" | "direct";
+    name?: string;
+    memberIds: string[];
+  }) => Promise<void>;
 }
 
 export interface FriendUpdateEvent {

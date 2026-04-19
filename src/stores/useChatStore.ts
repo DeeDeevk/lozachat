@@ -8,7 +8,9 @@ import type { Message } from "@/types/chat";
 const dedupeMessages = (items: Message[]) => {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = item._id || `${item.conversationId}-${item.senderId}-${item.createdAt}-${item.content}`;
+    const key =
+      item._id ||
+      `${item.conversationId}-${item.senderId}-${item.createdAt}-${item.content}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -273,7 +275,11 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
-      updateLastRead: (userId: string, conversationId: string, messageId: string) => {
+      updateLastRead: (
+        userId: string,
+        conversationId: string,
+        messageId: string,
+      ) => {
         set((state) => ({
           conversations: state.conversations.map((conversation) => {
             if (conversation._id !== conversationId) return conversation;
@@ -380,6 +386,54 @@ export const useChatStore = create<ChatState>()(
               await sendDirectMessage(recipient._id, payload, convId);
             }
           }
+        }
+      },
+      createConversation: async (payload) => {
+        try {
+          set({ convoLoading: true });
+
+          // Gọi API tạo cuộc hội thoại
+          const newConvoRaw = await chatService.createConversation(payload);
+
+          // XỬ LÝ LỖI ĐỒNG BỘ DỮ LIỆU BACKEND:
+          // Backend trả về participants có cấu trúc { userId: { _id, displayName... } }
+          // Nhưng Store đang dùng cấu trúc phẳng { _id, displayName... } (đã format ở getConversation)
+          // Nên ta cần format lại ở đây để UI không bị văng lỗi khi render danh sách thành viên
+          const formattedParticipants = (newConvoRaw.participants || []).map(
+            (p: any) => ({
+              _id: p.userId?._id,
+              displayName: p.userId?.displayName,
+              avatarUrl: p.userId?.avatarUrl ?? null,
+              joinedAt: p.joinedAt,
+              lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+            }),
+          );
+
+          const formattedConvo = {
+            ...newConvoRaw,
+            participants: formattedParticipants,
+            unreadCounts: newConvoRaw.unreadCounts || {},
+          };
+
+          set((state) => {
+            // Check trùng lặp (phòng trường hợp socket trả data về trước khi API resolve)
+            const exists = state.conversations.some(
+              (c) => c._id === formattedConvo._id,
+            );
+            if (exists) return state;
+
+            return {
+              // Thêm nhóm mới lên đầu danh sách
+              conversations: [formattedConvo, ...state.conversations],
+              // Tự động nhảy vào đoạn chat mới tạo luôn
+              activeConversationId: formattedConvo._id,
+            };
+          });
+        } catch (error) {
+          console.error("Lỗi khi tạo conversation:", error);
+          throw error;
+        } finally {
+          set({ convoLoading: false });
         }
       },
     }),
