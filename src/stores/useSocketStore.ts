@@ -45,9 +45,14 @@ const registerSocketEvents = (
   socket.on("user-stop-typing", ({ userId, conversationId }) => {
     useChatStore.getState().removeTypingUser(userId, conversationId);
   });
-  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
-  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
-});
+  socket.on(
+    "message-edited",
+    ({ messageId, conversationId, newContent, editedAt }) => {
+      useChatStore
+        .getState()
+        .applyEditMessage(messageId, conversationId, newContent, editedAt);
+    },
+  );
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     useChatStore.getState().addMessage(message);
@@ -134,6 +139,7 @@ const registerSocketEvents = (
         avatarUrl: p.userId?.avatarUrl || p.avatarUrl || null,
         joinedAt: p.joinedAt,
         lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+        role: p.role,
       }),
     );
 
