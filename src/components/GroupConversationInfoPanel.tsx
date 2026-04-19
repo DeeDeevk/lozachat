@@ -4,13 +4,11 @@ import {
   File,
   Link as LinkIcon,
   Trash2,
-  X,
   Bell,
   LogOut,
   Pin,
   Search,
   Settings,
-  ImagePlus,
   Edit,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
@@ -140,6 +138,7 @@ export default function GroupConversationInfoPanel({
     links: true,
   });
   const [searchMember, setSearchMember] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Helper: Get display participants (first 3)
   const getDisplayParticipants = useMemo(() => {
@@ -324,65 +323,79 @@ export default function GroupConversationInfoPanel({
         }}
       >
         {/* Avatar - Group with 2-3 members */}
-        <div
-          style={{
-            position: "relative",
-            width: 80,
-            height: 80,
-          }}
-        >
-          {getDisplayParticipants.slice(0, 3).map((p, idx) => {
-            const size = 80;
-            const positions = [
-              { top: 0, left: 0, zIndex: 3 },
-              { top: 0, right: 0, zIndex: 2 },
-              {
-                bottom: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 1,
-              },
-            ];
-            const pos = positions[idx];
+        <div style={{ position: "relative", width: 80, height: 80 }}>
+          {conversation.group?.avatar ? (
+            // ✅ Có ảnh nhóm → hiện ảnh nhóm
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                overflow: "hidden",
+                border: "2px solid rgba(99,102,241,0.3)",
+                boxShadow: "0 0 0 3px rgba(99,102,241,0.1)",
+              }}
+            >
+              <img
+                src={conversation.group.avatar}
+                alt={conversation.group?.name || "Nhóm"}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+          ) : (
+            // ❌ Không có ảnh nhóm → hiện cluster participants như cũ
+            getDisplayParticipants.slice(0, 3).map((p, idx) => {
+              const positions = [
+                { top: 0, left: 0, zIndex: 3 },
+                { top: 0, right: 0, zIndex: 2 },
+                {
+                  bottom: 0,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  zIndex: 1,
+                },
+              ];
+              const pos = positions[idx];
 
-            return (
-              <div
-                key={p._id}
-                style={{
-                  position: "absolute",
-                  width: idx === 0 ? 50 : 40,
-                  height: idx === 0 ? 50 : 40,
-                  borderRadius: "50%",
-                  border: "2px solid #0f172a",
-                  overflow: "hidden",
-                  background: p.avatarUrl
-                    ? undefined
-                    : getAvatarColor(p.displayName),
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: idx === 0 ? 16 : 12,
-                  ...pos,
-                }}
-              >
-                {p.avatarUrl ? (
-                  <img
-                    src={p.avatarUrl}
-                    alt={p.displayName}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  p.displayName?.slice(0, 2).toUpperCase()
-                )}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={p._id}
+                  style={{
+                    position: "absolute",
+                    width: idx === 0 ? 50 : 40,
+                    height: idx === 0 ? 50 : 40,
+                    borderRadius: "50%",
+                    border: "2px solid #0f172a",
+                    overflow: "hidden",
+                    background: p.avatarUrl
+                      ? undefined
+                      : getAvatarColor(p.displayName),
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: idx === 0 ? 16 : 12,
+                    ...pos,
+                  }}
+                >
+                  {p.avatarUrl ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt={p.displayName}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    p.displayName?.slice(0, 2).toUpperCase()
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Name + Edit button */}
@@ -658,6 +671,9 @@ export default function GroupConversationInfoPanel({
           {mediaFilesDisplay.map((media, index) => (
             <div
               key={index}
+              onClick={() => {
+                if (media.type === "image") setSelectedImage(media.url);
+              }}
               style={{
                 width: "100%",
                 paddingBottom: "100%",
@@ -876,6 +892,79 @@ export default function GroupConversationInfoPanel({
           Xóa lịch sử trò chuyện
         </button>
       </div>
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+            padding: "20px",
+          }}
+          onClick={() => setSelectedImage(null)}
+        >
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedImage}
+              alt="Preview"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "90vh",
+                width: "auto",
+                height: "auto",
+                borderRadius: 16,
+                border: "2px solid rgba(148,163,184,0.3)",
+                boxShadow: "0 0 60px rgba(0,0,0,0.8)",
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => setSelectedImage(null)}
+            style={{
+              position: "fixed",
+              top: 20,
+              right: 20,
+              background: "rgba(0,0,0,0.6)",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              fontSize: 20,
+              lineHeight: 1,
+              transition: "background 0.2s",
+              zIndex: 201,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,0,0,0.85)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,0,0,0.6)";
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

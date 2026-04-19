@@ -23,6 +23,7 @@ const registerSocketEvents = (
   socket.off("stranger-request");
   socket.off("stranger-removed");
   socket.off("new-group-created");
+  socket.off("group-updated");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -139,6 +140,9 @@ const registerSocketEvents = (
     };
     useChatStore.getState().addConversation(formattedConvo);
     socket.emit("join-conversation", { conversationId: conversation._id });
+  });
+  socket.on("group-updated", (updatedConversation) => {
+    useChatStore.getState().updateConversation(updatedConversation);
   });
 };
 

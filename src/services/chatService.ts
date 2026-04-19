@@ -99,4 +99,14 @@ export const chatService = {
     const res = await api.post("/conversations", payload);
     return res.data.conversation;
   },
+
+  async updateGroupInfo(
+  conversationId: string,
+  formData: FormData,
+): Promise<{ message: string; conversation: any }> {
+  const res = await api.patch(`/conversations/${conversationId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+},
 };

@@ -43,6 +43,7 @@ import {
   PanelRight,
   PanelRightClose,
 } from "lucide-react";
+import EditGroupModal from "@/components/EditGroupModal";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -261,6 +262,7 @@ export default function ChatPage() {
   } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [showEditModal, setShowEditModal] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1283,84 +1285,106 @@ export default function ChatPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   {/* Avatar */}
                   {activeConversation.group ? (
-                    <div
-                      style={{
-                        position: "relative",
-                        width: 40,
-                        height: 40,
-                      }}
-                    >
-                      {activeConversation.participants
-                        .slice(0, 3)
-                        .map((p, idx) => {
-                          const positions = [
-                            { top: 0, left: 0, zIndex: 3 },
-                            { top: 0, right: 0, zIndex: 2 },
-                            {
-                              bottom: 0,
-                              left: "50%",
-                              transform: "translateX(-50%)",
-                              zIndex: 1,
-                            },
-                          ];
-                          const pos = positions[idx];
-                          const colors = [
-                            "#3b82f6",
-                            "#10b981",
-                            "#8b5cf6",
-                            "#f59e0b",
-                            "#ef4444",
-                            "#06b6d4",
-                            "#ec4899",
-                          ];
-                          let hash = 0;
-                          for (let i = 0; i < p.displayName.length; i++)
-                            hash =
-                              p.displayName.charCodeAt(i) +
-                              ((hash << 5) - hash);
-                          const avatarColor =
-                            colors[Math.abs(hash) % colors.length];
+                    // ✅ Ưu tiên group.avatar nếu có
+                    activeConversation.group.avatar ? (
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(99,102,241,0.3)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={activeConversation.group.avatar}
+                          alt={activeConversation.group.name || "Nhóm"}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      // Fallback: cluster participants như cũ
+                      <div
+                        style={{ position: "relative", width: 40, height: 40 }}
+                      >
+                        {activeConversation.participants
+                          .slice(0, 3)
+                          .map((p, idx) => {
+                            const positions = [
+                              { top: 0, left: 0, zIndex: 3 },
+                              { top: 0, right: 0, zIndex: 2 },
+                              {
+                                bottom: 0,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                zIndex: 1,
+                              },
+                            ];
+                            const pos = positions[idx];
+                            const colors = [
+                              "#3b82f6",
+                              "#10b981",
+                              "#8b5cf6",
+                              "#f59e0b",
+                              "#ef4444",
+                              "#06b6d4",
+                              "#ec4899",
+                            ];
+                            let hash = 0;
+                            for (let i = 0; i < p.displayName.length; i++)
+                              hash =
+                                p.displayName.charCodeAt(i) +
+                                ((hash << 5) - hash);
+                            const avatarColor =
+                              colors[Math.abs(hash) % colors.length];
 
-                          return (
-                            <div
-                              key={p._id}
-                              style={{
-                                position: "absolute",
-                                width: idx === 0 ? 28 : 22,
-                                height: idx === 0 ? 28 : 22,
-                                borderRadius: "50%",
-                                border: "2px solid #0f172a",
-                                overflow: "hidden",
-                                background: p.avatarUrl
-                                  ? undefined
-                                  : avatarColor,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "white",
-                                fontWeight: 700,
-                                fontSize: idx === 0 ? 10 : 8,
-                                ...pos,
-                              }}
-                            >
-                              {p.avatarUrl ? (
-                                <img
-                                  src={p.avatarUrl}
-                                  alt={p.displayName}
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                />
-                              ) : (
-                                p.displayName?.slice(0, 2).toUpperCase()
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
+                            return (
+                              <div
+                                key={p._id}
+                                style={{
+                                  position: "absolute",
+                                  width: idx === 0 ? 28 : 22,
+                                  height: idx === 0 ? 28 : 22,
+                                  borderRadius: "50%",
+                                  border: "2px solid #0f172a",
+                                  overflow: "hidden",
+                                  background: p.avatarUrl
+                                    ? undefined
+                                    : avatarColor,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "white",
+                                  fontWeight: 700,
+                                  fontSize: idx === 0 ? 10 : 8,
+                                  ...pos,
+                                }}
+                              >
+                                {p.avatarUrl ? (
+                                  <img
+                                    src={p.avatarUrl}
+                                    alt={p.displayName}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
+                                  p.displayName?.slice(0, 2).toUpperCase()
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )
                   ) : (
+                    // Direct message avatar — giữ nguyên như cũ
                     <div
                       style={{
                         width: 40,
@@ -2400,7 +2424,7 @@ export default function ChatPage() {
                 alert("Xóa lịch sử trò chuyện thành công");
               }}
               onManageGroup={() => {
-                alert("Tính năng quản lý nhóm sẽ được triển khai");
+                setShowEditModal(true);
               }}
               onLeaveGroup={() => {
                 setActiveConversation(null);
@@ -2424,6 +2448,12 @@ export default function ChatPage() {
               }}
             />
           ))}
+        {showEditModal && activeConversation && (
+          <EditGroupModal
+            conversation={activeConversation}
+            onClose={() => setShowEditModal(false)}
+          />
+        )}
       </div>
 
       {/* Context menu */}
