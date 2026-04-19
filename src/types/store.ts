@@ -61,7 +61,7 @@ export interface ChatState {
   clearTypingUsers: (conversationId: string) => void;
   updateStrangerStatus: (
     conversationId: string,
-    action: "accepted" | "decline",
+    action: "accepted" | "declined",
   ) => Promise<void>;
   forwardMessage: (
     message: Message,

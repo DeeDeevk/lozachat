@@ -43,6 +43,15 @@ export const useChatStore = create<ChatState>()(
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
           set({ conversations, convoLoading: false });
+
+          const socket = useSocketStore.getState().socket;
+          if (socket?.connected) {
+            conversations.forEach((conversation) => {
+              socket.emit("join-conversation", {
+                conversationId: conversation._id,
+              });
+            });
+          }
         } catch (error) {
           console.error("Lỗi xảy ra khi fetchConversations: ", error);
           set({ convoLoading: false });
@@ -391,7 +400,7 @@ export const useChatStore = create<ChatState>()(
       updateStrangerStatus: async (conversationId, action) => {
         try {
           await chatService.updateStrangerStatus(conversationId, action);
-          if (action === "decline") {
+          if (action === "declined") {
             set((state) => ({
               conversations: state.conversations.filter(
                 (c) => c._id !== conversationId,
@@ -453,8 +462,17 @@ export const useChatStore = create<ChatState>()(
           // Backend trả về participants có cấu trúc { userId: { _id, displayName... } }
           // Nhưng Store đang dùng cấu trúc phẳng { _id, displayName... } (đã format ở getConversation)
           // Nên ta cần format lại ở đây để UI không bị văng lỗi khi render danh sách thành viên
+          type RawParticipant = {
+            userId?: {
+              _id?: string;
+              displayName?: string;
+              avatarUrl?: string | null;
+            };
+            joinedAt?: string;
+            lastReadMessageId?: string | null;
+          };
           const formattedParticipants = (newConvoRaw.participants || []).map(
-            (p: any) => ({
+            (p: RawParticipant) => ({
               _id: p.userId?._id,
               displayName: p.userId?.displayName,
               avatarUrl: p.userId?.avatarUrl ?? null,

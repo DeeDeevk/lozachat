@@ -72,6 +72,7 @@ export type ChatMessageKind =
   | "file"
   | "audio"
   | "sticker"
+  | "call"
   | "poll"
   | "poll_vote";
 
@@ -100,6 +101,18 @@ export interface ReplyMeta {
   preview: string;
 }
 
+export interface CallMeta {
+  callType: "voice" | "video";
+  status: "ended";
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  initiatedBy: string;
+  endedBy?: string;
+  upgradedFrom?: "voice" | "video";
+  upgradedTo?: "voice" | "video";
+}
+
 export interface ChatStructuredPayload {
   version: 1;
   kind: ChatMessageKind;
@@ -109,6 +122,7 @@ export interface ChatStructuredPayload {
   attachments?: ChatAttachment[];
   stickerUrl?: string;
   reply?: ReplyMeta;
+  call?: CallMeta;
   poll?: {
     id: string;
     question: string;

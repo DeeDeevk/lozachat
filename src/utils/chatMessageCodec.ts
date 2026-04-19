@@ -43,6 +43,15 @@ export const getSafeMessagePreview = (content?: string | null, fallback = "Tin n
       return "Da gui am thanh";
     case "sticker":
       return "Da gui nhan dan";
+    case "call": {
+      const duration = payload.call?.durationSeconds ?? 0;
+      const minutes = Math.floor(duration / 60)
+        .toString()
+        .padStart(2, "0");
+      const seconds = (duration % 60).toString().padStart(2, "0");
+      const label = payload.call?.callType === "video" ? "video" : "voice";
+      return `Cuoc goi ${label} ${minutes}:${seconds}`;
+    }
     case "poll":
       return `Da tao binh chon: ${payload.poll?.question || "Binh chon"}`;
     case "poll_vote":

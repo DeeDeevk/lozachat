@@ -122,6 +122,8 @@ const registerSocketEvents = (
       console.log("New conversation from socket:", conversation);
       useChatStore.getState().addConversation(conversation);
     }
+
+    socket.emit("join-conversation", { conversationId: conversation.id });
   });
   socket.on("stranger-removed", ({ conversationId }) => {
     useChatStore.setState((state) => ({
