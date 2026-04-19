@@ -511,6 +511,10 @@ export default function ChatPage() {
   const [incomingCallerName, setIncomingCallerName] = useState<string>("");
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+  const [isVideoPiPActive, setIsVideoPiPActive] = useState(false);
+  const [isUpgradeRequestPending, setIsUpgradeRequestPending] = useState(false);
+  const [isUpgradeRequestIncoming, setIsUpgradeRequestIncoming] = useState(false);
+  const [upgradeRequesterName, setUpgradeRequesterName] = useState("");
   const [callConnectedAt, setCallConnectedAt] = useState<number | null>(null);
   const [callElapsedSeconds, setCallElapsedSeconds] = useState(0);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -708,6 +712,10 @@ export default function ChatPage() {
     setIncomingCallerName("");
     setIsMicMuted(false);
     setIsCameraOff(false);
+    setIsVideoPiPActive(false);
+    setIsUpgradeRequestPending(false);
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
     setCallConnectedAt(null);
     setCallElapsedSeconds(0);
   }, []);
@@ -902,49 +910,121 @@ export default function ChatPage() {
     setIsCameraOff(nextOff);
   }, [isCameraOff]);
 
+  const sendUpgradeOffer = useCallback(async () => {
+    if (!callConversationId || !socket) return;
+
+    const stream = await ensureLocalStream("video");
+    const peer = peerRef.current;
+    if (!peer) return;
+
+    const videoTracks = stream.getVideoTracks();
+    if (videoTracks.length === 0) {
+      throw new Error("No camera track available");
+    }
+
+    setCallKind("video");
+    setIsCameraOff(false);
+
+    videoTracks.forEach((track) => {
+      const alreadySent = peer
+        .getSenders()
+        .some((sender) => sender.track?.id === track.id);
+      if (!alreadySent) {
+        peer.addTrack(track, stream);
+      }
+    });
+
+    const offer = await peer.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true,
+    });
+    await peer.setLocalDescription(offer);
+
+    socket.emit("call:upgrade-offer", {
+      conversationId: callConversationId,
+      kind: "video",
+      offer,
+    });
+  }, [callConversationId, ensureLocalStream, socket]);
+
   const upgradeVoiceToVideo = useCallback(async () => {
-    if (callStatus !== "in-call" || callKind !== "voice" || !callConversationId || !socket) {
+    if (
+      callStatus !== "in-call" ||
+      callKind !== "voice" ||
+      !callConversationId ||
+      !socket ||
+      isUpgradeRequestPending
+    ) {
+      return;
+    }
+
+    socket.emit("call:upgrade-request", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    setIsUpgradeRequestPending(true);
+    toast("Đã gửi yêu cầu nâng cấp video");
+  }, [
+    callConversationId,
+    callKind,
+    callStatus,
+    isUpgradeRequestPending,
+    socket,
+  ]);
+
+  const acceptUpgradeRequest = useCallback(() => {
+    if (!callConversationId || !socket) return;
+    socket.emit("call:upgrade-accept", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
+  }, [callConversationId, socket]);
+
+  const rejectUpgradeRequest = useCallback(() => {
+    if (!callConversationId || !socket) return;
+    socket.emit("call:upgrade-reject", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
+  }, [callConversationId, socket]);
+
+  const toggleVideoPiP = useCallback(async () => {
+    const videoEl = remoteVideoRef.current;
+    if (!videoEl) {
+      toast.error("Chưa có video đối phương để bật cửa sổ nổi");
       return;
     }
 
     try {
-      const stream = await ensureLocalStream("video");
-      const peer = peerRef.current;
-      if (!peer) return;
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsVideoPiPActive(false);
+        return;
+      }
 
-      setCallKind("video");
-      setIsCameraOff(false);
+      if (!document.pictureInPictureEnabled || !videoEl.requestPictureInPicture) {
+        toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
+        return;
+      }
 
-      const existingVideoTracks = stream.getVideoTracks();
-      existingVideoTracks.forEach((track) => {
-        const alreadySent = peer.getSenders().some((sender) => sender.track?.id === track.id);
-        if (!alreadySent) {
-          peer.addTrack(track, stream);
-        }
-      });
-
-      const offer = await peer.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await peer.setLocalDescription(offer);
-      socket.emit("call:upgrade-offer", {
-        conversationId: callConversationId,
-        kind: "video",
-        offer,
-      });
+      await videoEl.requestPictureInPicture();
+      setIsVideoPiPActive(true);
     } catch (error) {
-      console.error("upgradeVoiceToVideo error", error);
-      toast.error("Không thể nâng cấp lên video");
+      console.error("toggleVideoPiP error", error);
+      toast.error("Không thể bật cửa sổ nổi video");
     }
-  }, [callConversationId, callKind, callStatus, ensureLocalStream, socket]);
+  }, []);
 
   useEffect(() => {
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = localStreamState;
       void localVideoRef.current.play().catch(() => undefined);
     }
-  }, [localStreamState]);
+  }, [localStreamState, callKind]);
 
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -955,7 +1035,18 @@ export default function ChatPage() {
       remoteAudioRef.current.srcObject = remoteStream;
       void remoteAudioRef.current.play().catch(() => undefined);
     }
-  }, [remoteStream]);
+  }, [remoteStream, callKind]);
+
+  useEffect(() => {
+    if (callKind === "video") return;
+    if (!document.pictureInPictureElement) {
+      setIsVideoPiPActive(false);
+      return;
+    }
+
+    void document.exitPictureInPicture().catch(() => undefined);
+    setIsVideoPiPActive(false);
+  }, [callKind]);
 
   useEffect(() => {
     if (!socket) return;
@@ -1009,8 +1100,15 @@ export default function ChatPage() {
       try {
         if (!peerRef.current) return;
         setCallStatus("connecting");
-        setCallKind(payload.kind);
         const stream = await ensureLocalStream(payload.kind);
+        if (payload.kind === "video" && stream.getVideoTracks().length === 0) {
+          toast.error("Không thể mở camera để nhận nâng cấp video");
+          setCallStatus("in-call");
+          return;
+        }
+        setIsUpgradeRequestIncoming(false);
+        setUpgradeRequesterName("");
+        setCallKind(payload.kind);
         if (payload.kind === "video") {
           const peer = peerRef.current;
           stream.getVideoTracks().forEach((track) => {
@@ -1044,11 +1142,55 @@ export default function ChatPage() {
       try {
         if (!peerRef.current) return;
         await peerRef.current.setRemoteDescription(payload.answer);
+        setIsUpgradeRequestPending(false);
         setCallKind("video");
         setCallStatus("in-call");
       } catch (error) {
         console.error("onUpgradeAnswer error", error);
       }
+    };
+
+    const onUpgradeRequest = (payload: {
+      conversationId: string;
+      kind: CallKind;
+      fromDisplayName?: string;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      if (callStatus !== "in-call" || callKind !== "voice") {
+        socket.emit("call:upgrade-reject", {
+          conversationId: payload.conversationId,
+          kind: payload.kind,
+        });
+        return;
+      }
+
+      setIsUpgradeRequestIncoming(true);
+      setUpgradeRequesterName(payload.fromDisplayName || "Người dùng");
+      toast("Bạn nhận được yêu cầu nâng cấp video");
+    };
+
+    const onUpgradeAccepted = async (payload: {
+      conversationId: string;
+      kind: CallKind;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+
+      try {
+        await sendUpgradeOffer();
+      } catch (error) {
+        setIsUpgradeRequestPending(false);
+        console.error("onUpgradeAccepted error", error);
+        toast.error("Không thể bắt đầu nâng cấp video");
+      }
+    };
+
+    const onUpgradeRejected = (payload: {
+      conversationId: string;
+      kind: CallKind;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      setIsUpgradeRequestPending(false);
+      toast("Đối phương đã từ chối nâng cấp video");
     };
 
     const onIceCandidate = async (payload: {
@@ -1071,6 +1213,9 @@ export default function ChatPage() {
     socket.on("call:accepted", onAccepted);
     socket.on("call:rejected", onRejected);
     socket.on("call:answer", onAnswer);
+    socket.on("call:upgrade-request", onUpgradeRequest);
+    socket.on("call:upgrade-accept", onUpgradeAccepted);
+    socket.on("call:upgrade-reject", onUpgradeRejected);
     socket.on("call:upgrade-offer", onUpgradeOffer);
     socket.on("call:upgrade-answer", onUpgradeAnswer);
     socket.on("call:ice-candidate", onIceCandidate);
@@ -1081,12 +1226,23 @@ export default function ChatPage() {
       socket.off("call:accepted", onAccepted);
       socket.off("call:rejected", onRejected);
       socket.off("call:answer", onAnswer);
+      socket.off("call:upgrade-request", onUpgradeRequest);
+      socket.off("call:upgrade-accept", onUpgradeAccepted);
+      socket.off("call:upgrade-reject", onUpgradeRejected);
       socket.off("call:upgrade-offer", onUpgradeOffer);
       socket.off("call:upgrade-answer", onUpgradeAnswer);
       socket.off("call:ice-candidate", onIceCandidate);
       socket.off("call:ended", onEnded);
     };
-  }, [callStatus, cleanupCall, socket]);
+  }, [
+    callConversationId,
+    callKind,
+    callStatus,
+    cleanupCall,
+    ensureLocalStream,
+    sendUpgradeOffer,
+    socket,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1821,6 +1977,12 @@ export default function ChatPage() {
 
         return (
           <div
+            onClick={(event) => {
+              event.stopPropagation();
+              void startCall(
+                payload.call?.callType === "video" ? "video" : "voice",
+              );
+            }}
             style={{
               minWidth: 250,
               padding: "12px 14px",
@@ -1831,7 +1993,9 @@ export default function ChatPage() {
               display: "flex",
               alignItems: "center",
               gap: 12,
+              cursor: "pointer",
             }}
+            title="Nhấn để gọi lại bằng thoại"
           >
             <div
               style={{
@@ -1859,6 +2023,9 @@ export default function ChatPage() {
               </div>
               <div style={{ color: "#cbd5e1", fontSize: 12 }}>
                 {formatCallDuration(payload.call.durationSeconds || 0)} • {finishedAt}
+              </div>
+              <div style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
+                Nhấn để gọi lại bằng thoại
               </div>
               {payload.call.upgradedFrom === "voice" && payload.call.upgradedTo === "video" && (
                 <div style={{ color: "#93c5fd", fontSize: 11 }}>
@@ -2137,6 +2304,7 @@ export default function ChatPage() {
       handleVote,
       pollAggregates,
       renderLinks,
+      startCall,
       user?.userId,
     ],
   );
@@ -3545,186 +3713,407 @@ export default function ChatPage() {
       </div>
 
       {callStatus !== "idle" && (
-        <div
-          style={{
-            position: "fixed",
-            right: 18,
-            bottom: 18,
-            width: 340,
-            borderRadius: 16,
-            border: "1px solid rgba(148,163,184,.32)",
-            background: "linear-gradient(165deg, #0b1220 0%, #16243f 100%)",
-            boxShadow: "0 20px 48px rgba(0,0,0,.55)",
-            padding: 14,
-            zIndex: 60,
-            color: "#e2e8f0",
-          }}
-        >
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            {callStatus === "incoming"
-              ? `${incomingCallerName || "Người dùng"} đang gọi`
-              : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
-          </div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
-            {callKind === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại"} •{" "}
-            {callStatus === "outgoing"
-              ? "Đang đổ chuông"
-              : callStatus === "connecting"
-                ? "Đang kết nối"
-                : callStatus === "in-call"
-                  ? "Đang trong cuộc gọi"
-                  : "Đang chờ phản hồi"}
-          </div>
-          {callStatus === "in-call" && (
-            <div style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}>
-              Thời lượng: {formatCallDuration(callElapsedSeconds)}
-            </div>
-          )}
-
-          {callKind === "video" && (
+        <>
+          {callKind === "video" ? (
             <div
               style={{
-                position: "relative",
-                height: 180,
-                borderRadius: 12,
-                overflow: "hidden",
-                border: "1px solid rgba(148,163,184,.25)",
-                background: "#020617",
-                marginBottom: 10,
+                position: "fixed",
+                inset: 0,
+                zIndex: 72,
+                background: "radial-gradient(circle at 25% 20%, rgba(30,64,175,.35), rgba(2,6,23,.92) 60%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "24px",
               }}
             >
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
+              <div
                 style={{
-                  position: "absolute",
-                  width: 110,
-                  height: 74,
-                  right: 10,
-                  bottom: 10,
-                  borderRadius: 10,
-                  objectFit: "cover",
-                  border: "1px solid rgba(148,163,184,.35)",
-                  background: "#0f172a",
+                  width: "min(1200px, 95vw)",
+                  height: "min(760px, 92vh)",
+                  borderRadius: 24,
+                  overflow: "hidden",
+                  border: "1px solid rgba(148,163,184,.24)",
+                  background: "#020617",
+                  boxShadow: "0 40px 80px rgba(2,6,23,.7)",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
                 }}
-              />
+              >
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    position: "absolute",
+                    inset: 0,
+                  }}
+                />
+
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "linear-gradient(180deg, rgba(2,6,23,.72) 0%, rgba(2,6,23,.04) 24%, rgba(2,6,23,.58) 100%)",
+                    pointerEvents: "none",
+                  }}
+                />
+
+                <div
+                  style={{
+                    position: "relative",
+                    zIndex: 1,
+                    padding: "18px 20px 12px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    color: "#e2e8f0",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 18 }}>
+                      {callStatus === "incoming"
+                        ? `${incomingCallerName || "Người dùng"} đang gọi video`
+                        : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2 }}>
+                      {callStatus === "outgoing"
+                        ? "Đang đổ chuông"
+                        : callStatus === "connecting"
+                          ? "Đang kết nối video"
+                          : callStatus === "in-call"
+                            ? `Đang trong cuộc gọi • ${formatCallDuration(callElapsedSeconds)}`
+                            : "Đang chờ phản hồi"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => void toggleVideoPiP()}
+                    style={{
+                      border: "1px solid rgba(148,163,184,.35)",
+                      background: isVideoPiPActive
+                        ? "rgba(96,165,250,.22)"
+                        : "rgba(15,23,42,.45)",
+                      color: "#e2e8f0",
+                      borderRadius: 999,
+                      padding: "7px 13px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"}
+                  </button>
+                </div>
+
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    position: "absolute",
+                    width: 220,
+                    height: 140,
+                    right: 20,
+                    bottom: 88,
+                    borderRadius: 16,
+                    objectFit: "cover",
+                    border: "1px solid rgba(148,163,184,.38)",
+                    boxShadow: "0 12px 30px rgba(2,6,23,.5)",
+                    background: "#0f172a",
+                    zIndex: 2,
+                  }}
+                />
+
+                <div
+                  style={{
+                    marginTop: "auto",
+                    padding: "12px 18px 18px",
+                    position: "relative",
+                    zIndex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {callStatus === "incoming" ? (
+                    <>
+                      <button
+                        onClick={rejectIncomingCall}
+                        style={{
+                          border: "1px solid rgba(248,113,113,.4)",
+                          background: "rgba(248,113,113,.16)",
+                          color: "#fecaca",
+                          borderRadius: 12,
+                          padding: "10px 16px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Từ chối
+                      </button>
+                      <button
+                        onClick={() => void acceptIncomingCall()}
+                        style={{
+                          border: "none",
+                          background: "#2563eb",
+                          color: "white",
+                          borderRadius: 12,
+                          padding: "10px 16px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Nhận cuộc gọi
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {callStatus === "in-call" && (
+                        <>
+                          <button
+                            onClick={toggleMic}
+                            style={{
+                              border: "1px solid rgba(148,163,184,.35)",
+                              background: "rgba(148,163,184,.16)",
+                              color: "#e2e8f0",
+                              borderRadius: 12,
+                              padding: "10px 14px",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isMicMuted ? "Bật mic" : "Tắt mic"}
+                          </button>
+                          <button
+                            onClick={toggleCamera}
+                            style={{
+                              border: "1px solid rgba(148,163,184,.35)",
+                              background: "rgba(148,163,184,.16)",
+                              color: "#e2e8f0",
+                              borderRadius: 12,
+                              padding: "10px 14px",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isCameraOff ? "Bật cam" : "Tắt cam"}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={endCall}
+                        style={{
+                          border: "none",
+                          background: "#dc2626",
+                          color: "white",
+                          borderRadius: 12,
+                          padding: "10px 16px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Kết thúc
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
+          ) : (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                bottom: 18,
+                width: 340,
+                borderRadius: 18,
+                border: "1px solid rgba(148,163,184,.32)",
+                background: "linear-gradient(165deg, #0b1220 0%, #16243f 100%)",
+                boxShadow: "0 20px 48px rgba(0,0,0,.55)",
+                padding: 14,
+                zIndex: 71,
+                color: "#e2e8f0",
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {callStatus === "incoming"
+                  ? `${incomingCallerName || "Người dùng"} đang gọi`
+                  : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
+                Cuộc gọi thoại • {callStatus === "outgoing"
+                  ? "Đang đổ chuông"
+                  : callStatus === "connecting"
+                    ? "Đang kết nối"
+                    : callStatus === "in-call"
+                      ? "Đang trong cuộc gọi"
+                      : "Đang chờ phản hồi"}
+              </div>
+              {callStatus === "in-call" && (
+                <div style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}>
+                  Thời lượng: {formatCallDuration(callElapsedSeconds)}
+                </div>
+              )}
 
-          {callKind === "voice" && (
-            <audio ref={remoteAudioRef} autoPlay />
-          )}
-
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            {callStatus === "incoming" ? (
-              <>
-                <button
-                  onClick={rejectIncomingCall}
+              {callStatus === "in-call" && callKind === "voice" && isUpgradeRequestIncoming && (
+                <div
                   style={{
-                    border: "1px solid rgba(248,113,113,.35)",
-                    background: "rgba(248,113,113,.12)",
-                    color: "#fca5a5",
+                    marginBottom: 10,
                     borderRadius: 10,
-                    padding: "7px 12px",
-                    cursor: "pointer",
-                    fontWeight: 600,
+                    border: "1px solid rgba(96,165,250,.35)",
+                    background: "rgba(59,130,246,.12)",
+                    padding: "8px 10px",
                   }}
                 >
-                  Từ chối
-                </button>
-                <button
-                  onClick={() => void acceptIncomingCall()}
-                  style={{
-                    border: "none",
-                    background: "#2563eb",
-                    color: "white",
-                    borderRadius: 10,
-                    padding: "7px 12px",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  Nhận
-                </button>
-              </>
-            ) : (
-              <>
-                {callStatus === "in-call" && (
-                  <>
+                  <div style={{ fontSize: 12, color: "#dbeafe", marginBottom: 8 }}>
+                    {upgradeRequesterName || "Đối phương"} muốn nâng cấp lên video.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button
-                      onClick={toggleMic}
+                      onClick={rejectUpgradeRequest}
                       style={{
-                        border: "1px solid rgba(148,163,184,.3)",
-                        background: "rgba(148,163,184,.12)",
-                        color: "#e2e8f0",
-                        borderRadius: 10,
-                        padding: "7px 10px",
+                        border: "1px solid rgba(248,113,113,.35)",
+                        background: "rgba(248,113,113,.12)",
+                        color: "#fecaca",
+                        borderRadius: 8,
+                        padding: "6px 10px",
                         cursor: "pointer",
                         fontWeight: 600,
                       }}
                     >
-                      {isMicMuted ? "Bật mic" : "Tắt mic"}
+                      Từ chối
                     </button>
-                    {callKind === "video" && (
-                      <button
-                        onClick={toggleCamera}
-                        style={{
-                          border: "1px solid rgba(148,163,184,.3)",
-                          background: "rgba(148,163,184,.12)",
-                          color: "#e2e8f0",
-                          borderRadius: 10,
-                          padding: "7px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {isCameraOff ? "Bật cam" : "Tắt cam"}
-                      </button>
+                    <button
+                      onClick={acceptUpgradeRequest}
+                      style={{
+                        border: "none",
+                        background: "#2563eb",
+                        color: "white",
+                        borderRadius: 8,
+                        padding: "6px 10px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Chấp nhận
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {callStatus === "in-call" && callKind === "voice" && isUpgradeRequestPending && (
+                <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 10 }}>
+                  Đang chờ đối phương chấp nhận nâng cấp video...
+                </div>
+              )}
+
+              <audio ref={remoteAudioRef} autoPlay />
+
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                {callStatus === "incoming" ? (
+                  <>
+                    <button
+                      onClick={rejectIncomingCall}
+                      style={{
+                        border: "1px solid rgba(248,113,113,.35)",
+                        background: "rgba(248,113,113,.12)",
+                        color: "#fca5a5",
+                        borderRadius: 10,
+                        padding: "7px 12px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Từ chối
+                    </button>
+                    <button
+                      onClick={() => void acceptIncomingCall()}
+                      style={{
+                        border: "none",
+                        background: "#2563eb",
+                        color: "white",
+                        borderRadius: 10,
+                        padding: "7px 12px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Nhận
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {callStatus === "in-call" && (
+                      <>
+                        <button
+                          onClick={toggleMic}
+                          style={{
+                            border: "1px solid rgba(148,163,184,.3)",
+                            background: "rgba(148,163,184,.12)",
+                            color: "#e2e8f0",
+                            borderRadius: 10,
+                            padding: "7px 10px",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isMicMuted ? "Bật mic" : "Tắt mic"}
+                        </button>
+                        <button
+                          onClick={() => void upgradeVoiceToVideo()}
+                          disabled={isUpgradeRequestPending || isUpgradeRequestIncoming}
+                          style={{
+                            border: "1px solid rgba(96,165,250,.35)",
+                            background:
+                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                                ? "rgba(51,65,85,.35)"
+                                : "rgba(59,130,246,.14)",
+                            color:
+                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                                ? "#94a3b8"
+                                : "#bfdbfe",
+                            borderRadius: 10,
+                            padding: "7px 10px",
+                            cursor:
+                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                                ? "not-allowed"
+                                : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isUpgradeRequestPending
+                            ? "Đang chờ chấp nhận"
+                            : "Nâng cấp video"}
+                        </button>
+                      </>
                     )}
-                    {callKind === "voice" && (
-                      <button
-                        onClick={() => void upgradeVoiceToVideo()}
-                        style={{
-                          border: "1px solid rgba(96,165,250,.35)",
-                          background: "rgba(59,130,246,.14)",
-                          color: "#bfdbfe",
-                          borderRadius: 10,
-                          padding: "7px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Nâng cấp video
-                      </button>
-                    )}
+                    <button
+                      onClick={endCall}
+                      style={{
+                        border: "none",
+                        background: "#dc2626",
+                        color: "white",
+                        borderRadius: 10,
+                        padding: "7px 12px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Kết thúc
+                    </button>
                   </>
                 )}
-                <button
-                  onClick={endCall}
-                  style={{
-                    border: "none",
-                    background: "#dc2626",
-                    color: "white",
-                    borderRadius: 10,
-                    padding: "7px 12px",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  Kết thúc
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Context menu */}
