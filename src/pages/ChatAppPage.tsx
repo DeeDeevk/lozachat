@@ -7,6 +7,11 @@ import ConversationInfoPanel from "@/components/ConversationInfoPanel";
 import GroupConversationInfoPanel from "@/components/GroupConversationInfoPanel";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
+import {
+  CHAT_THEME_OPTIONS,
+  getChatThemeById,
+  useChatThemeStore,
+} from "@/stores/useChatThemeStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import toast from "react-hot-toast";
 import type {
@@ -16,7 +21,6 @@ import type {
   PollOption,
   PollVote,
 } from "@/types/chat";
-import { formatTime } from "@/utils/formatTime";
 import {
   decodeChatPayload,
   encodeChatPayload,
@@ -41,6 +45,7 @@ import {
   Trash2,
   User as UserIcon,
   UserPlus,
+  Palette,
   Video,
   X,
   Key,
@@ -78,9 +83,12 @@ interface ConversationListItem {
   lastMessage?: { content: string; createdAt: string };
   unread?: number;
   pinned?: boolean;
-  isStranger: string;
+  isStranger: boolean;
   strangerStatus: string;
 }
+
+type CallKind = "voice" | "video";
+type CallStatus = "idle" | "outgoing" | "incoming" | "connecting" | "in-call";
 
 const CHAT_STICKER_LIST = [
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414779/LINEStorePC/main.png;compress=true?__=20161019",
@@ -89,6 +97,11 @@ const CHAT_STICKER_LIST = [
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414808/LINEStorePC/main.png;compress=true?__=20161019",
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414804/LINEStorePC/main.png;compress=true?__=20161019",
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414799/IOS/main_animation.png?__=20161019",
+];
+
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
 ];
 
 // --- STYLES ---
@@ -221,6 +234,18 @@ function formatMessageDateTime(dateString: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatCallDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 // --- GROUP SEEN AVATARS ---
@@ -428,7 +453,6 @@ export default function ChatPage() {
     typingUsersByConv,
     updateStrangerStatus,
     forwardMessage,
-    updateMemberRole,
     editMessage,
   } = useChatStore();
 
@@ -478,6 +502,34 @@ export default function ChatPage() {
   const [editInput, setEditInput] = useState("");
   // Info panel
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [callStatus, setCallStatus] = useState<CallStatus>("idle");
+  const [callKind, setCallKind] = useState<CallKind | null>(null);
+  const [callConversationId, setCallConversationId] = useState<string | null>(
+    null,
+  );
+  const [incomingCallerName, setIncomingCallerName] = useState<string>("");
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+  const [callConnectedAt, setCallConnectedAt] = useState<number | null>(null);
+  const [callElapsedSeconds, setCallElapsedSeconds] = useState(0);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(
+    null,
+  );
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const selectedByConversation = useChatThemeStore(
+    (state) => state.selectedByConversation,
+  );
+  const setThemeForConversation = useChatThemeStore(
+    (state) => state.setThemeForConversation,
+  );
 
   // ─── Fetch conversations on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -491,11 +543,34 @@ export default function ChatPage() {
   }, [activeConversationId]);
 
   useEffect(() => {
+    if (!activeConversationId || !socket) return;
+
+    const joinRoom = () => {
+      socket.emit("join-conversation", { conversationId: activeConversationId });
+    };
+
+    if (socket.connected) {
+      joinRoom();
+      return;
+    }
+
+    socket.once("connect", joinRoom);
+
+    return () => {
+      socket.off("connect", joinRoom);
+    };
+  }, [activeConversationId, socket]);
+
+  useEffect(() => {
     setExpandedMessageKey(null);
   }, [activeConversationId]);
 
   useEffect(() => {
     setImagePreviewUrl(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    setShowThemePicker(false);
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -515,6 +590,9 @@ export default function ChatPage() {
       if (popupRef.current && !popupRef.current.contains(target)) {
         setActivePopup(null);
       }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(target)) {
+        setShowThemePicker(false);
+      }
       setVoteViewer(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -528,6 +606,23 @@ export default function ChatPage() {
       recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  useEffect(() => {
+    if (callStatus !== "in-call" || !callConnectedAt) {
+      setCallElapsedSeconds(0);
+      return;
+    }
+
+    const tick = () => {
+      setCallElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000)),
+      );
+    };
+
+    tick();
+    const timerId = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timerId);
+  }, [callConnectedAt, callStatus]);
 
   useEffect(() => {
     if (!activeConversationId || !socket) return;
@@ -553,6 +648,451 @@ export default function ChatPage() {
   );
 
   const otherAvatar = otherUser?.avatarUrl || "/miku.png";
+
+  const activeChatTheme = useMemo(
+    () =>
+      getChatThemeById(
+        activeConversationId
+          ? selectedByConversation[activeConversationId]
+          : undefined,
+      ),
+    [activeConversationId, selectedByConversation],
+  );
+
+  const chatAreaStyle = useMemo<React.CSSProperties>(() => {
+    const base: React.CSSProperties = {
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      color: "white",
+    };
+
+    if (activeChatTheme.mode === "image" && activeChatTheme.appBackgroundImage) {
+      base.background = `linear-gradient(180deg, rgba(2,6,23,.62) 0%, rgba(2,6,23,.82) 100%), url(${activeChatTheme.appBackgroundImage}) center/cover no-repeat`;
+      return base;
+    }
+
+    base.background = activeChatTheme.appBackground;
+    return base;
+  }, [activeChatTheme]);
+
+  const messagesAreaStyle = useMemo<React.CSSProperties>(
+    () => ({
+      flex: 1,
+      padding: 16,
+      overflowY: "auto",
+      background: activeChatTheme.messageAreaOverlay || "transparent",
+    }),
+    [activeChatTheme.messageAreaOverlay],
+  );
+
+  const cleanupCall = useCallback(() => {
+    if (peerRef.current) {
+      peerRef.current.onicecandidate = null;
+      peerRef.current.ontrack = null;
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+
+    pendingOfferRef.current = null;
+    setRemoteStream(null);
+    setLocalStreamState(null);
+    setCallStatus("idle");
+    setCallKind(null);
+    setCallConversationId(null);
+    setIncomingCallerName("");
+    setIsMicMuted(false);
+    setIsCameraOff(false);
+    setCallConnectedAt(null);
+    setCallElapsedSeconds(0);
+  }, []);
+
+  const ensureLocalStream = useCallback(async (kind: CallKind) => {
+    const existing = localStreamRef.current;
+    if (existing) {
+      if (kind === "video" && existing.getVideoTracks().length === 0) {
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          videoStream.getVideoTracks().forEach((track) => existing.addTrack(track));
+          setLocalStreamState(existing);
+        } catch (error) {
+          console.warn("Unable to add video track to existing stream", error);
+        }
+      }
+      return existing;
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: kind === "video",
+      });
+    } catch (error) {
+      if (kind !== "video") throw error;
+      console.warn("Falling back to audio-only call because video device is unavailable", error);
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      setCallKind("voice");
+      toast.error("Không thể mở camera, đã chuyển sang gọi thoại");
+    }
+    localStreamRef.current = stream;
+    setLocalStreamState(stream);
+    return stream;
+  }, []);
+
+  const createPeer = useCallback(
+    (conversationId: string) => {
+      if (peerRef.current) {
+        peerRef.current.close();
+        peerRef.current = null;
+      }
+
+      const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+      peer.onicecandidate = (event) => {
+        if (!event.candidate || !socket) return;
+        socket.emit("call:ice-candidate", {
+          conversationId,
+          candidate: event.candidate,
+        });
+      };
+
+      peer.ontrack = (event) => {
+        if (event.streams?.[0]) {
+          setRemoteStream(event.streams[0]);
+        }
+      };
+
+      peerRef.current = peer;
+      return peer;
+    },
+    [socket],
+  );
+
+  const startCall = useCallback(
+    async (kind: CallKind) => {
+      if (!activeConversation || activeConversation.group) {
+        toast.error("Hiện chỉ hỗ trợ gọi 1-1");
+        return;
+      }
+      if (!activeConversationId || !socket) {
+        toast.error("Không thể bắt đầu cuộc gọi lúc này");
+        return;
+      }
+
+      try {
+        cleanupCall();
+        setCallConversationId(activeConversationId);
+        setCallKind(kind);
+        setCallStatus("outgoing");
+
+        const stream = await ensureLocalStream(kind);
+        const peer = createPeer(activeConversationId);
+
+        stream.getTracks().forEach((track) => {
+          peer.addTrack(track, stream);
+        });
+
+        const offer = await peer.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: kind === "video",
+        });
+        await peer.setLocalDescription(offer);
+
+        socket.emit("call:initiate", {
+          conversationId: activeConversationId,
+          kind,
+          offer,
+        });
+      } catch (error) {
+        console.error("startCall error", error);
+        toast.error("Không thể bắt đầu cuộc gọi");
+        cleanupCall();
+      }
+    },
+    [
+      activeConversation,
+      activeConversationId,
+      cleanupCall,
+      createPeer,
+      ensureLocalStream,
+      socket,
+    ],
+  );
+
+  const acceptIncomingCall = useCallback(async () => {
+    if (!callConversationId || !callKind || !pendingOfferRef.current || !socket)
+      return;
+    try {
+      setCallStatus("connecting");
+      const stream = await ensureLocalStream(callKind);
+      const peer = createPeer(callConversationId);
+
+      stream.getTracks().forEach((track) => {
+        peer.addTrack(track, stream);
+      });
+
+      await peer.setRemoteDescription(pendingOfferRef.current);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+
+      socket.emit("call:accept", { conversationId: callConversationId });
+      socket.emit("call:answer", {
+        conversationId: callConversationId,
+        answer,
+      });
+      setCallConnectedAt(Date.now());
+      setCallStatus("in-call");
+    } catch (error) {
+      console.error("acceptIncomingCall error", error);
+      toast.error("Không thể nhận cuộc gọi");
+      cleanupCall();
+    }
+  }, [
+    callConversationId,
+    callKind,
+    cleanupCall,
+    createPeer,
+    ensureLocalStream,
+    socket,
+  ]);
+
+  const rejectIncomingCall = useCallback(() => {
+    if (callConversationId && socket) {
+      socket.emit("call:reject", { conversationId: callConversationId });
+    }
+    cleanupCall();
+  }, [callConversationId, cleanupCall, socket]);
+
+  const endCall = useCallback(() => {
+    if (callConversationId && socket) {
+      socket.emit("call:end", { conversationId: callConversationId });
+    }
+    cleanupCall();
+  }, [callConversationId, cleanupCall, socket]);
+
+  const toggleMic = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const nextMuted = !isMicMuted;
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = !nextMuted;
+    });
+    setIsMicMuted(nextMuted);
+  }, [isMicMuted]);
+
+  const toggleCamera = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const nextOff = !isCameraOff;
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = !nextOff;
+    });
+    setIsCameraOff(nextOff);
+  }, [isCameraOff]);
+
+  const upgradeVoiceToVideo = useCallback(async () => {
+    if (callStatus !== "in-call" || callKind !== "voice" || !callConversationId || !socket) {
+      return;
+    }
+
+    try {
+      const stream = await ensureLocalStream("video");
+      const peer = peerRef.current;
+      if (!peer) return;
+
+      setCallKind("video");
+      setIsCameraOff(false);
+
+      const existingVideoTracks = stream.getVideoTracks();
+      existingVideoTracks.forEach((track) => {
+        const alreadySent = peer.getSenders().some((sender) => sender.track?.id === track.id);
+        if (!alreadySent) {
+          peer.addTrack(track, stream);
+        }
+      });
+
+      const offer = await peer.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await peer.setLocalDescription(offer);
+      socket.emit("call:upgrade-offer", {
+        conversationId: callConversationId,
+        kind: "video",
+        offer,
+      });
+    } catch (error) {
+      console.error("upgradeVoiceToVideo error", error);
+      toast.error("Không thể nâng cấp lên video");
+    }
+  }, [callConversationId, callKind, callStatus, ensureLocalStream, socket]);
+
+  useEffect(() => {
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamState;
+      void localVideoRef.current.play().catch(() => undefined);
+    }
+  }, [localStreamState]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      void remoteVideoRef.current.play().catch(() => undefined);
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      void remoteAudioRef.current.play().catch(() => undefined);
+    }
+  }, [remoteStream]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const onIncoming = (payload: {
+      conversationId: string;
+      kind: CallKind;
+      offer: RTCSessionDescriptionInit;
+      fromDisplayName?: string;
+    }) => {
+      if (callStatus !== "idle") {
+        socket.emit("call:reject", { conversationId: payload.conversationId });
+        return;
+      }
+      pendingOfferRef.current = payload.offer;
+      setCallConversationId(payload.conversationId);
+      setCallKind(payload.kind);
+      setIncomingCallerName(payload.fromDisplayName || "Người dùng");
+      setCallStatus("incoming");
+    };
+
+    const onAccepted = () => {
+      setCallStatus((prev) => (prev === "outgoing" ? "connecting" : prev));
+    };
+
+    const onRejected = () => {
+      toast.error("Cuộc gọi đã bị từ chối");
+      cleanupCall();
+    };
+
+    const onAnswer = async (payload: {
+      answer: RTCSessionDescriptionInit;
+    }) => {
+      try {
+        if (!peerRef.current) return;
+        await peerRef.current.setRemoteDescription(payload.answer);
+        setCallConnectedAt((prev) => prev || Date.now());
+        setCallStatus("in-call");
+      } catch (error) {
+        console.error("onAnswer error", error);
+        cleanupCall();
+      }
+    };
+
+    const onUpgradeOffer = async (payload: {
+      conversationId: string;
+      kind: CallKind;
+      offer: RTCSessionDescriptionInit;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      try {
+        if (!peerRef.current) return;
+        setCallStatus("connecting");
+        setCallKind(payload.kind);
+        const stream = await ensureLocalStream(payload.kind);
+        if (payload.kind === "video") {
+          const peer = peerRef.current;
+          stream.getVideoTracks().forEach((track) => {
+            const alreadyAdded = peer.getSenders().some(
+              (sender) => sender.track?.id === track.id,
+            );
+            if (!alreadyAdded) {
+              peer.addTrack(track, stream);
+            }
+          });
+        }
+        await peerRef.current.setRemoteDescription(payload.offer);
+        const answer = await peerRef.current.createAnswer();
+        await peerRef.current.setLocalDescription(answer);
+        socket.emit("call:upgrade-answer", {
+          conversationId: payload.conversationId,
+          answer,
+        });
+        setCallStatus("in-call");
+      } catch (error) {
+        console.error("onUpgradeOffer error", error);
+        toast.error("Không thể nâng cấp lên video");
+      }
+    };
+
+    const onUpgradeAnswer = async (payload: {
+      conversationId: string;
+      answer: RTCSessionDescriptionInit;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      try {
+        if (!peerRef.current) return;
+        await peerRef.current.setRemoteDescription(payload.answer);
+        setCallKind("video");
+        setCallStatus("in-call");
+      } catch (error) {
+        console.error("onUpgradeAnswer error", error);
+      }
+    };
+
+    const onIceCandidate = async (payload: {
+      candidate: RTCIceCandidateInit;
+    }) => {
+      try {
+        if (!peerRef.current) return;
+        await peerRef.current.addIceCandidate(payload.candidate);
+      } catch (error) {
+        console.error("addIceCandidate error", error);
+      }
+    };
+
+    const onEnded = () => {
+      toast("Cuộc gọi đã kết thúc");
+      cleanupCall();
+    };
+
+    socket.on("call:incoming", onIncoming);
+    socket.on("call:accepted", onAccepted);
+    socket.on("call:rejected", onRejected);
+    socket.on("call:answer", onAnswer);
+    socket.on("call:upgrade-offer", onUpgradeOffer);
+    socket.on("call:upgrade-answer", onUpgradeAnswer);
+    socket.on("call:ice-candidate", onIceCandidate);
+    socket.on("call:ended", onEnded);
+
+    return () => {
+      socket.off("call:incoming", onIncoming);
+      socket.off("call:accepted", onAccepted);
+      socket.off("call:rejected", onRejected);
+      socket.off("call:answer", onAnswer);
+      socket.off("call:upgrade-offer", onUpgradeOffer);
+      socket.off("call:upgrade-answer", onUpgradeAnswer);
+      socket.off("call:ice-candidate", onIceCandidate);
+      socket.off("call:ended", onEnded);
+    };
+  }, [callStatus, cleanupCall, socket]);
+
+  useEffect(() => {
+    return () => {
+      cleanupCall();
+    };
+  }, [cleanupCall]);
 
   const currentMessages = useMemo(() => {
     if (!activeConversationId) return [];
@@ -627,7 +1167,7 @@ export default function ChatPage() {
           question: "Bình chọn",
           options: [],
           createdBy: payload.pollVote.userId,
-          votes: [],
+          votes: [] as Array<PollVote & { createdAt: string }>,
           latestActivityAt: message.createdAt,
         };
         const voteIndex = aggregate.votes.findIndex(
@@ -687,20 +1227,10 @@ export default function ChatPage() {
       .map((item) => item.message);
   }, [currentMessages, pollAggregates]);
 
-  const lastDisplayMessageKey = useMemo(() => {
-    const lastIndex = displayMessages.length - 1;
-    if (lastIndex < 0) return null;
-    const lastMessage = displayMessages[lastIndex];
-    return (
-      lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`
-    );
-  }, [displayMessages]);
-
   // For group seen: build a map of messageId -> list of participants who have read up to that message
   const groupSeenMap = useMemo(() => {
-    if (!activeConversation?.group)
-      return new Map<string, typeof activeConversation.participants>();
-    const map = new Map<string, typeof activeConversation.participants>();
+    if (!activeConversation?.group) return new Map<string, Conversation["participants"]>();
+    const map = new Map<string, Conversation["participants"]>();
     // For each participant (not me), find their lastReadMessageId and mark that message
     activeConversation.participants.forEach((p) => {
       if (p._id === user?.userId) return;
@@ -1280,6 +1810,66 @@ export default function ChatPage() {
         );
       }
 
+      if (payload.kind === "call" && payload.call) {
+        const callLabel =
+          payload.call.callType === "video"
+            ? "Cuộc gọi video"
+            : "Cuộc gọi thoại";
+        const finishedAt = payload.call.endedAt
+          ? formatMessageDateTime(payload.call.endedAt)
+          : "Đang diễn ra";
+
+        return (
+          <div
+            style={{
+              minWidth: 250,
+              padding: "12px 14px",
+              borderRadius: 14,
+              border: "1px solid rgba(96,165,250,.2)",
+              background:
+                "linear-gradient(145deg, rgba(15,23,42,.96) 0%, rgba(30,41,59,.96) 100%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  payload.call.callType === "video"
+                    ? "rgba(59,130,246,.15)"
+                    : "rgba(16,185,129,.15)",
+              }}
+            >
+              {payload.call.callType === "video" ? (
+                <Video size={18} color="#60a5fa" />
+              ) : (
+                <Phone size={18} color="#34d399" />
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ color: "#f8fafc", fontWeight: 700, fontSize: 14 }}>
+                {callLabel}
+              </div>
+              <div style={{ color: "#cbd5e1", fontSize: 12 }}>
+                {formatCallDuration(payload.call.durationSeconds || 0)} • {finishedAt}
+              </div>
+              {payload.call.upgradedFrom === "voice" && payload.call.upgradedTo === "video" && (
+                <div style={{ color: "#93c5fd", fontSize: 11 }}>
+                  Đã nâng cấp từ gọi thoại sang video
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
       if (payload.kind === "poll" && payload.poll) {
         const aggregate = pollAggregates.get(payload.poll.id);
         const votedOption = aggregate?.votes.find(
@@ -1558,6 +2148,7 @@ export default function ChatPage() {
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
         .menu-item:hover { background: rgba(148,163,184,0.12) !important; }
+        .theme-option:hover { border-color: rgba(96,165,250,.55) !important; transform: translateY(-1px); }
         @media (max-width: 1400px) { .info-panel-responsive { display: none !important; } }
         @media (max-width: 768px) { .conversation-list-responsive { display: none !important; } }
       `}</style>
@@ -1580,16 +2171,7 @@ export default function ChatPage() {
       {/* Main Chat Area + Info Panel Container */}
       <div style={{ display: "flex", flex: 1, position: "relative" }}>
         {/* Chat Area */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            color: "white",
-            background:
-              "radial-gradient(circle at 15% 20%, rgba(56,189,248,.18), transparent 40%), radial-gradient(circle at 95% 20%, rgba(59,130,246,.18), transparent 35%), #050d1f",
-          }}
-        >
+        <div style={chatAreaStyle}>
           {activeConversation ? (
             <>
               {/* Header */}
@@ -1782,6 +2364,95 @@ export default function ChatPage() {
 
                 {/* Right: Action buttons */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div ref={themeMenuRef} style={{ position: "relative" }}>
+                    <button
+                      title="Đổi giao diện chat"
+                      onClick={() => setShowThemePicker((prev) => !prev)}
+                      style={{
+                        ...actionIconStyle,
+                        width: 36,
+                        height: 36,
+                        color: showThemePicker ? "#60a5fa" : "#94a3b8",
+                      }}
+                      className="action-btn"
+                    >
+                      <Palette size={18} />
+                    </button>
+
+                    {showThemePicker && activeConversationId && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 44,
+                          right: 0,
+                          width: 240,
+                          borderRadius: 14,
+                          border: "1px solid rgba(148,163,184,.3)",
+                          background:
+                            "linear-gradient(160deg, rgba(7,16,36,.95) 0%, rgba(15,23,42,.95) 100%)",
+                          boxShadow: "0 16px 36px rgba(0,0,0,.45)",
+                          padding: 10,
+                          display: "grid",
+                          gap: 8,
+                          zIndex: 50,
+                        }}
+                      >
+                        {CHAT_THEME_OPTIONS.map((theme) => {
+                          const isActive = theme.id === activeChatTheme.id;
+                          const swatch =
+                            theme.mode === "image" && theme.appBackgroundImage
+                              ? `linear-gradient(180deg, rgba(15,23,42,.25) 0%, rgba(15,23,42,.55) 100%), url(${theme.appBackgroundImage}) center/cover no-repeat`
+                              : theme.appBackground;
+
+                          return (
+                            <button
+                              key={theme.id}
+                              className="theme-option"
+                              onClick={() => {
+                                setThemeForConversation(activeConversationId, theme.id);
+                                setShowThemePicker(false);
+                              }}
+                              style={{
+                                border: isActive
+                                  ? "1px solid rgba(96,165,250,.85)"
+                                  : "1px solid rgba(148,163,184,.25)",
+                                background: "rgba(15,23,42,.35)",
+                                borderRadius: 11,
+                                padding: "8px 10px",
+                                color: "#e2e8f0",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                transition: "all .16s",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: 8,
+                                  background: swatch,
+                                  border: "1px solid rgba(255,255,255,.2)",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: isActive ? 700 : 600,
+                                  textAlign: "left",
+                                }}
+                              >
+                                {theme.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   {activeConversation.group && (
                     <button
                       title="Thêm thành viên"
@@ -1793,6 +2464,7 @@ export default function ChatPage() {
                   )}
                   <button
                     title="Gọi"
+                    onClick={() => startCall("voice")}
                     style={{ ...actionIconStyle, width: 36, height: 36 }}
                     className="action-btn"
                   >
@@ -1800,6 +2472,7 @@ export default function ChatPage() {
                   </button>
                   <button
                     title="Gọi video"
+                    onClick={() => startCall("video")}
                     style={{ ...actionIconStyle, width: 36, height: 36 }}
                     className="action-btn"
                   >
@@ -1835,7 +2508,7 @@ export default function ChatPage() {
               {/* Messages */}
               <div
                 ref={messagesContainerRef}
-                style={{ flex: 1, padding: 16, overflowY: "auto" }}
+                style={messagesAreaStyle}
               >
                 {displayMessages.map((message, index) => {
                   const isMine = message.senderId === user?.userId;
@@ -1843,8 +2516,6 @@ export default function ChatPage() {
                   const payload = decodeChatPayload(message.content);
                   const messageKey =
                     message._id?.toString() || `${message.createdAt}-${index}`;
-                  const isLastMessage = messageKey === lastDisplayMessageKey;
-
                   // Sender participant (for group avatar)
                   const senderParticipant = !isMine
                     ? isGroup
@@ -1977,7 +2648,7 @@ export default function ChatPage() {
                                 : message.isRecalled
                                   ? "rgba(15,23,42,.4)"
                                   : isMine
-                                    ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                                    ? activeChatTheme.mineBubble
                                     : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
                             border:
                               payload?.kind === "image" ||
@@ -2872,6 +3543,189 @@ export default function ChatPage() {
             />
           ))}
       </div>
+
+      {callStatus !== "idle" && (
+        <div
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: 18,
+            width: 340,
+            borderRadius: 16,
+            border: "1px solid rgba(148,163,184,.32)",
+            background: "linear-gradient(165deg, #0b1220 0%, #16243f 100%)",
+            boxShadow: "0 20px 48px rgba(0,0,0,.55)",
+            padding: 14,
+            zIndex: 60,
+            color: "#e2e8f0",
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>
+            {callStatus === "incoming"
+              ? `${incomingCallerName || "Người dùng"} đang gọi`
+              : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
+          </div>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
+            {callKind === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại"} •{" "}
+            {callStatus === "outgoing"
+              ? "Đang đổ chuông"
+              : callStatus === "connecting"
+                ? "Đang kết nối"
+                : callStatus === "in-call"
+                  ? "Đang trong cuộc gọi"
+                  : "Đang chờ phản hồi"}
+          </div>
+          {callStatus === "in-call" && (
+            <div style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}>
+              Thời lượng: {formatCallDuration(callElapsedSeconds)}
+            </div>
+          )}
+
+          {callKind === "video" && (
+            <div
+              style={{
+                position: "relative",
+                height: 180,
+                borderRadius: 12,
+                overflow: "hidden",
+                border: "1px solid rgba(148,163,184,.25)",
+                background: "#020617",
+                marginBottom: 10,
+              }}
+            >
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  position: "absolute",
+                  width: 110,
+                  height: 74,
+                  right: 10,
+                  bottom: 10,
+                  borderRadius: 10,
+                  objectFit: "cover",
+                  border: "1px solid rgba(148,163,184,.35)",
+                  background: "#0f172a",
+                }}
+              />
+            </div>
+          )}
+
+          {callKind === "voice" && (
+            <audio ref={remoteAudioRef} autoPlay />
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            {callStatus === "incoming" ? (
+              <>
+                <button
+                  onClick={rejectIncomingCall}
+                  style={{
+                    border: "1px solid rgba(248,113,113,.35)",
+                    background: "rgba(248,113,113,.12)",
+                    color: "#fca5a5",
+                    borderRadius: 10,
+                    padding: "7px 12px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Từ chối
+                </button>
+                <button
+                  onClick={() => void acceptIncomingCall()}
+                  style={{
+                    border: "none",
+                    background: "#2563eb",
+                    color: "white",
+                    borderRadius: 10,
+                    padding: "7px 12px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Nhận
+                </button>
+              </>
+            ) : (
+              <>
+                {callStatus === "in-call" && (
+                  <>
+                    <button
+                      onClick={toggleMic}
+                      style={{
+                        border: "1px solid rgba(148,163,184,.3)",
+                        background: "rgba(148,163,184,.12)",
+                        color: "#e2e8f0",
+                        borderRadius: 10,
+                        padding: "7px 10px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {isMicMuted ? "Bật mic" : "Tắt mic"}
+                    </button>
+                    {callKind === "video" && (
+                      <button
+                        onClick={toggleCamera}
+                        style={{
+                          border: "1px solid rgba(148,163,184,.3)",
+                          background: "rgba(148,163,184,.12)",
+                          color: "#e2e8f0",
+                          borderRadius: 10,
+                          padding: "7px 10px",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {isCameraOff ? "Bật cam" : "Tắt cam"}
+                      </button>
+                    )}
+                    {callKind === "voice" && (
+                      <button
+                        onClick={() => void upgradeVoiceToVideo()}
+                        style={{
+                          border: "1px solid rgba(96,165,250,.35)",
+                          background: "rgba(59,130,246,.14)",
+                          color: "#bfdbfe",
+                          borderRadius: 10,
+                          padding: "7px 10px",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Nâng cấp video
+                      </button>
+                    )}
+                  </>
+                )}
+                <button
+                  onClick={endCall}
+                  style={{
+                    border: "none",
+                    background: "#dc2626",
+                    color: "white",
+                    borderRadius: 10,
+                    padding: "7px 12px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Kết thúc
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
