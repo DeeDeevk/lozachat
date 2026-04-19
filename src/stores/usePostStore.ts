@@ -1,32 +1,37 @@
 import { create } from "zustand";
-import type { Post, Visibility } from "../types/post";
-import type { ReactionType } from "../types/post";
-import type { Comment } from "../types/post";
+import type { Post, PostImage, Visibility, ReactionType, Comment } from "../types/post";
 import { postService } from "../services/postService";
 import toast from "react-hot-toast";
 
 interface PostStore {
+  // ─── Posts ───────────────────────────────────────────────────
   posts: Post[];
   loading: boolean;
   hasMore: boolean;
   page: number;
   fetchPosts: (reset?: boolean) => Promise<void>;
-  loadMore: () => void;
+  loadMore: () => Promise<void>;
   createPost: (content: string, images?: File[], visibility?: Visibility) => Promise<void>;
   updatePost: (id: string, content: string, newImages?: File[], removeImages?: string[]) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
-  
-  //comment
+
+  // ─── Images ──────────────────────────────────────────────────
+  getPostImages: (postId: string) => Promise<PostImage[]>;
+  reactToImage: (postId: string, imageId: string, type: ReactionType) => Promise<PostImage>;
+
+  // ─── Comments ────────────────────────────────────────────────
+  getCommentsForPost: (postId: string, imageId?: string) => Promise<Comment[]>;
   addComment: (
     postId: string,
     content: string,
     parentId?: string | null,
-    files?: File[]
-  ) => Promise<void>;
-  deleteComment: (postId: string, commentId: string) => Promise<void>;
-  getCommentsForPost: (postId: string) => Promise<Comment[]>;
-  
+    files?: File[],
+    imageId?: string | null,
+    audioFile?: File | null,
+  ) => Promise<Comment>;
+  deleteComment: (postId: string, commentId: string, isReply?: boolean) => Promise<void>;
+  reactToComment: (postId: string, commentId: string, type: ReactionType) => Promise<Comment>;
 }
 
 export const usePostStore = create<PostStore>((set, get) => ({
@@ -36,22 +41,17 @@ export const usePostStore = create<PostStore>((set, get) => ({
   page: 1,
 
   fetchPosts: async (reset = false) => {
-    const currentPage = reset ? 1 : get().page;
+    const { loading, page } = get();
+    if (loading) return;
+    const currentPage = reset ? 1 : page;
     set({ loading: true });
     try {
       const res = await postService.getPosts(currentPage);
-      
       let newPosts = res.posts;
-
-      // Logic xoay vòng bài viết khi reload (reset)
-      if (reset && newPosts.length > 0) {
-        // Lấy một điểm cắt ngẫu nhiên hoặc cố định (ví dụ: lấy 5 bài đầu chuyển xuống cuối)
+      if (reset && newPosts.length > 1) {
         const pivot = Math.floor(Math.random() * newPosts.length);
-        const head = newPosts.slice(0, pivot);
-        const tail = newPosts.slice(pivot);
-        newPosts = [...tail, ...head];
+        newPosts = [...newPosts.slice(pivot), ...newPosts.slice(0, pivot)];
       }
-
       set((state) => ({
         posts: reset ? newPosts : [...state.posts, ...newPosts],
         hasMore: res.pagination.hasMore,
@@ -62,25 +62,23 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.error("Không thể tải bài viết");
       set({ loading: false });
     }
-},
-
-  loadMore: () => {
-    const { loading, hasMore, page } = get();
-    if (!loading && hasMore) {
-      set({ page: page + 1 });
-      get().fetchPosts();
-    }
   },
 
+  loadMore: async () => {
+    const { loading, hasMore, page } = get();
+    if (loading || !hasMore) return;
+    set({ page: page + 1 });
+    await get().fetchPosts();
+  },
 
-  // Trong implementation của createPost
   createPost: async (content, images = [], visibility = "public") => {
     try {
-      const post = await postService.createPost(content, images, visibility); // Đã có tham số này trong service của bạn
+      const post = await postService.createPost(content, images, visibility);
       set((state) => ({ posts: [post, ...state.posts] }));
       toast.success("Đã đăng bài viết!");
     } catch {
       toast.error("Đăng bài thất bại!");
+      throw new Error("Create post failed");
     }
   },
 
@@ -104,6 +102,7 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.success("Đã xoá bài viết");
     } catch {
       toast.error("Xoá thất bại!");
+      throw new Error("Delete post failed");
     }
   },
 
@@ -117,17 +116,46 @@ export const usePostStore = create<PostStore>((set, get) => ({
       toast.error("Không thể thả reaction");
     }
   },
-  addComment: async (postId, content, parentId = null, files = []) => {
-    try {
-      const newComment = await postService.addComment(postId, content, parentId, files);
 
-      // Chỉ tăng commentsCount của Post khi là comment gốc (không phải reply)
-      if (!parentId) {
+  getPostImages: async (postId) => postService.getPostImages(postId),
+
+  reactToImage: async (postId, imageId, type) =>
+    postService.reactToImage(postId, imageId, type),
+
+  getCommentsForPost: async (postId, imageId) => {
+    try {
+      const res = await postService.getComments(postId, imageId);
+      return res.comments;
+    } catch {
+      return [];
+    }
+  },
+
+  addComment: async (
+    postId,
+    content,
+    parentId = null,
+    files = [],
+    imageId = null,
+    audioFile = null,
+  ) => {
+    try {
+      const newComment = await postService.addComment(
+        postId,
+        content,
+        parentId,
+        files,
+        imageId,
+        audioFile,
+      );
+
+      // Chỉ tăng commentsCount khi là comment gốc của bài (không reply, không comment ảnh)
+      if (!parentId && !imageId) {
         set((state) => ({
           posts: state.posts.map((p) =>
             p._id === postId
               ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
-              : p
+              : p,
           ),
         }));
       }
@@ -140,28 +168,31 @@ export const usePostStore = create<PostStore>((set, get) => ({
     }
   },
 
-  deleteComment: async (postId, commentId) => {
+  deleteComment: async (postId, commentId, isReply = false) => {
     try {
       await postService.deleteComment(postId, commentId);
-      set((state) => ({
-        posts: state.posts.map((p) =>
-          p._id === postId
-            ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 0) - 1) }
-            : p
-        ),
-      }));
+      if (!isReply) {
+        set((state) => ({
+          posts: state.posts.map((p) =>
+            p._id === postId
+              ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 0) - 1) }
+              : p,
+          ),
+        }));
+      }
       toast.success("Đã xóa bình luận");
     } catch {
       toast.error("Không thể xóa bình luận");
+      throw new Error("Delete comment failed");
     }
   },
 
-  getCommentsForPost: async (postId) => {
+  reactToComment: async (postId, commentId, type) => {
     try {
-      const res = await postService.getComments(postId);
-      return res.comments;
+      return await postService.reactToComment(postId, commentId, type);
     } catch {
-      return [];
+      toast.error("Không thể thả reaction");
+      throw new Error("React to comment failed");
     }
   },
 }));

@@ -1,4 +1,4 @@
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 import SideNav from "@/components/SideNav";
@@ -8,6 +8,7 @@ import GroupConversationInfoPanel from "@/components/GroupConversationInfoPanel"
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import toast from "react-hot-toast";
 import type {
   ChatStructuredPayload,
   Conversation,
@@ -27,9 +28,13 @@ import {
   FileUp,
   ImagePlus,
   Mic,
+  Pencil,
   Phone,
+  PanelRight,
+  PanelRightClose,
   Reply,
   RotateCcw,
+  Search,
   Send,
   Smile,
   Sticker,
@@ -38,10 +43,7 @@ import {
   UserPlus,
   Video,
   X,
-  Info,
-  Search,
-  PanelRight,
-  PanelRightClose,
+  Key,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 
@@ -221,6 +223,190 @@ function formatMessageDateTime(dateString: string) {
   });
 }
 
+// --- GROUP SEEN AVATARS ---
+interface GroupSeenAvatarsProps {
+  seenParticipants: Array<{
+    _id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  }>;
+}
+
+function GroupSeenAvatars({ seenParticipants }: GroupSeenAvatarsProps) {
+  if (seenParticipants.length === 0) return null;
+  const MAX_SHOW = 4;
+  const shown = seenParticipants.slice(0, MAX_SHOW);
+  const overflow = seenParticipants.length - MAX_SHOW;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        paddingRight: 4,
+        marginTop: 2,
+        gap: 0,
+      }}
+    >
+      {shown.map((p, i) => (
+        <div
+          key={p._id}
+          title={p.displayName}
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            border: "1.5px solid #0f172a",
+            marginLeft: i === 0 ? 0 : -5,
+            overflow: "hidden",
+            background: "#334155",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {p.avatarUrl ? (
+            <img
+              src={p.avatarUrl}
+              alt={p.displayName}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span style={{ fontSize: 8, color: "#cbd5e1", fontWeight: 700 }}>
+              {p.displayName?.[0]?.toUpperCase()}
+            </span>
+          )}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div
+          style={{
+            marginLeft: -5,
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            border: "1.5px solid #0f172a",
+            background: "#475569",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 7, color: "#f1f5f9", fontWeight: 700 }}>
+            {overflow}+
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- SENDER AVATAR (for group chat) ---
+interface SenderAvatarProps {
+  participant:
+    | { _id: string; displayName: string; avatarUrl?: string | null;  role?: "owner" | "admin" | "member"; }
+    | undefined;
+}
+
+function SenderAvatar({ participant }: SenderAvatarProps) {
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
+  let hash = 0;
+  const name = participant?.displayName || "?";
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const color = colors[Math.abs(hash) % colors.length];
+
+  return (
+    <div
+      title={name}
+      style={{
+        position: "relative",
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        flexShrink: 0,
+        overflow: "visible",
+        background: participant?.avatarUrl ? undefined : color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+        fontSize: 11,
+        fontWeight: 700,
+        alignSelf: "flex-end",
+        marginBottom: 2,
+      }}
+    >
+      {participant?.avatarUrl ? (
+        <img
+          src={participant.avatarUrl}
+          alt={name}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
+        />
+      ) : (
+        name.slice(0, 2).toUpperCase()
+      )}
+      {participant?.role === "owner" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: -4,
+            right: -4,
+            backgroundColor: "#0f172a",
+            borderRadius: "50%",
+            width: 10,
+            height: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 0 0.5px #0f172a",
+            zIndex: 2,
+          }}
+        >
+          <Key size={12} color="#eab308" strokeWidth={3} />
+        </div>
+      )}
+
+      {participant?.role === "admin" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: -4,
+            right: -4,
+            backgroundColor: "#0f172a",
+            borderRadius: "50%",
+            width: 18,
+            height: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 0 2.5px #0f172a",
+            zIndex: 2,
+          }}
+        >
+          <Key size={13} color="#f1f5f9" strokeWidth={3} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const {
     conversations,
@@ -238,6 +424,7 @@ export default function ChatPage() {
     updateStrangerStatus,
     forwardMessage,
     updateMemberRole,
+    editMessage,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -245,7 +432,6 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { user, userProfile } = useAuthStore();
   const { socket } = useSocketStore();
@@ -282,6 +468,10 @@ export default function ChatPage() {
   );
   const [forwardSearch, setForwardSearch] = useState("");
   const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
+  // Edit message
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [editInput, setEditInput] = useState("");
+  // Info panel
   const [showInfoPanel, setShowInfoPanel] = useState(true);
 
   // ─── Fetch conversations on mount ───────────────────────────────────────────
@@ -289,7 +479,6 @@ export default function ChatPage() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // ─── Fetch messages when active conversation changes ─────────────────────────
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
@@ -304,7 +493,6 @@ export default function ChatPage() {
     setImagePreviewUrl(null);
   }, [activeConversationId]);
 
-  // ─── Scroll to bottom on new messages ────────────────────────────────────────
   useEffect(() => {
     socketStore.connectSocket();
   }, []);
@@ -313,7 +501,6 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
 
-  // ─── Click outside to close menus ────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -329,7 +516,6 @@ export default function ChatPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ─── Cleanup recording on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current)
@@ -338,7 +524,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  // ─── Mark last message as read via socket ────────────────────────────────────
   useEffect(() => {
     if (!activeConversationId || !socket) return;
     const items = messages[activeConversationId]?.items ?? [];
@@ -371,7 +556,6 @@ export default function ChatPage() {
     return Array.isArray(data) ? data : (data.items ?? []);
   }, [messages, activeConversationId]);
 
-  // lastReadMessageId của người kia (để hiện avatar seen dưới tin của mình)
   const otherLastReadMessageId = useMemo(
     () =>
       activeConversation?.participants.find((p) => p._id !== user?.userId)
@@ -468,7 +652,6 @@ export default function ChatPage() {
 
   const displayMessages = useMemo(() => {
     const pollActivityOrder = new Map<string, number>();
-
     pollAggregates.forEach((aggregate, pollId) => {
       pollActivityOrder.set(
         pollId,
@@ -484,24 +667,16 @@ export default function ChatPage() {
       .map((message, index) => {
         const payload = decodeChatPayload(message.content);
         let displayTime = new Date(message.createdAt).getTime();
-
         if (payload?.kind === "poll" && payload.poll) {
           const latestPollActivity = pollActivityOrder.get(payload.poll.id);
-          if (latestPollActivity) {
+          if (latestPollActivity)
             displayTime = Math.max(displayTime, latestPollActivity);
-          }
         }
-
-        return {
-          message,
-          index,
-          displayTime,
-        };
+        return { message, index, displayTime };
       })
       .sort((a, b) => {
-        if (a.displayTime !== b.displayTime) {
+        if (a.displayTime !== b.displayTime)
           return a.displayTime - b.displayTime;
-        }
         return a.index - b.index;
       })
       .map((item) => item.message);
@@ -515,6 +690,21 @@ export default function ChatPage() {
       lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`
     );
   }, [displayMessages]);
+
+  // For group seen: build a map of messageId -> list of participants who have read up to that message
+  const groupSeenMap = useMemo(() => {
+    if (!activeConversation?.group)
+      return new Map<string, typeof activeConversation.participants>();
+    const map = new Map<string, typeof activeConversation.participants>();
+    // For each participant (not me), find their lastReadMessageId and mark that message
+    activeConversation.participants.forEach((p) => {
+      if (p._id === user?.userId) return;
+      if (!p.lastReadMessageId) return;
+      const existing = map.get(p.lastReadMessageId) || [];
+      map.set(p.lastReadMessageId, [...existing, p]);
+    });
+    return map;
+  }, [activeConversation, user?.userId]);
 
   // ─── Callbacks ───────────────────────────────────────────────────────────────
   const canRecall = useCallback(
@@ -575,7 +765,6 @@ export default function ChatPage() {
       await sendStructuredMessage(payload);
       setInput("");
       setReplyingTo(null);
-      // Stop typing indicator
       if (socket?.connected) {
         socket.emit("stop-typing", { conversationId: activeConversationId });
       }
@@ -624,7 +813,51 @@ export default function ChatPage() {
     },
     [sendStructuredMessage, uploadAttachment],
   );
+  const MAX_FILES = 10;
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
+  const handleSelectImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+
+    if (!files.length) return;
+    if (files.length > MAX_FILES) {
+      alert("Tối đa 10 ảnh");
+      return;
+    }
+    const invalid = files.find((f) => f.size > MAX_SIZE);
+    if (invalid) {
+      toast.error(`File ${invalid.name} vượt quá 10MB`);
+      return;
+    }
+
+    try {
+      setSending(true);
+
+      const uploadedList = await Promise.all(
+        files.map((file) => uploadAttachment(file)),
+      );
+      const attachments = uploadedList.map((u) => ({
+        name: u.fileName,
+        url: u.url,
+        mimeType: u.mimeType,
+        size: u.size,
+      }));
+
+      // 👉 gửi 1 message duy nhất
+      await sendStructuredMessage({
+        version: 1,
+        kind: "image",
+        attachments,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Upload nhiều ảnh thất bại");
+    } finally {
+      setSending(false);
+      setActivePopup(null);
+      e.target.value = "";
+    }
+  };
   const stopRecording = useCallback(() => {
     const recorder = recordingRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
@@ -799,6 +1032,26 @@ export default function ChatPage() {
     }
   }, [activeConversationId, contextMenu, deleteMessageForMe]);
 
+  const handleEdit = useCallback(async () => {
+    if (!editingMessage || !activeConversationId || !editInput.trim()) return;
+    if (editInput.trim() === editingMessage.content) {
+      setEditingMessage(null);
+      return;
+    }
+    try {
+      await editMessage(
+        editingMessage._id,
+        activeConversationId,
+        editInput.trim(),
+      );
+    } catch {
+      alert("Không thể sửa tin nhắn");
+    } finally {
+      setEditingMessage(null);
+      setEditInput("");
+    }
+  }, [editingMessage, activeConversationId, editInput, editMessage]);
+
   const renderLinks = useCallback((text: string) => {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
@@ -819,6 +1072,50 @@ export default function ChatPage() {
       );
     });
   }, []);
+  const handleSelectFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = Array.from(e.target.files || []);
+
+  if (!files.length) return;
+
+  if (files.length > 10) {
+    alert("Tối đa 10 file");
+    return;
+  }
+
+  const invalid = files.find((f) => f.size > 10 * 1024 * 1024);
+  if (invalid) {
+    alert(`File ${invalid.name} vượt quá 10MB`);
+    return;
+  }
+
+  try {
+    setSending(true);
+
+    const uploadedList = await Promise.all(
+      files.map((file) => uploadAttachment(file))
+    );
+
+    const attachments = uploadedList.map((u) => ({
+      name: u.fileName,
+      url: u.url,
+      mimeType: u.mimeType,
+      size: u.size,
+    }));
+
+    await sendStructuredMessage({
+      version: 1,
+      kind: "file",
+      attachments, // 👈 nhiều file
+    });
+
+  } catch (err) {
+    console.error(err);
+    alert("Upload file thất bại");
+  } finally {
+    setSending(false);
+    e.target.value = "";
+  }
+};
 
   const renderStructuredMessage = useCallback(
     (message: Message) => {
@@ -830,7 +1127,9 @@ export default function ChatPage() {
         );
       }
       const payload = decodeChatPayload(message.content);
-      if (!payload) return <span>{renderLinks(message.content || "")}</span>;
+      if (!payload) {
+        return <div>{renderLinks(message.content || "")}</div>;
+      }
 
       if (payload.kind === "reply") {
         return (
@@ -878,37 +1177,61 @@ export default function ChatPage() {
             }}
             onClick={(event) => {
               event.stopPropagation();
-              if (payload.attachment?.url) {
+              if (payload.attachment?.url)
                 setImagePreviewUrl(payload.attachment.url);
-              }
             }}
           />
         );
       }
 
-      if (payload.kind === "file" && payload.attachment) {
+      if (payload.kind === "file" && payload.attachments?.length) {
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      {(payload.attachments ?? []).map((file, index) => (
+        <a
+          key={file.url || index}
+          href={file.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            color: "#e2e8f0",
+            textDecoration: "underline",
+          }}
+        >
+          {file.name}
+        </a>
+      ))}
+    </div>
+  );
+}
+      if (payload.kind === "image" && payload.attachments?.length) {
         return (
           <div
             style={{
               display: "grid",
-              gap: 6,
-              background: "rgba(148,163,184,0.1)",
-              border: "1px solid rgba(148,163,184,0.3)",
-              borderRadius: 10,
-              padding: "8px 10px",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 4,
+              maxWidth: 280,
             }}
           >
-            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
-              Tệp đính kèm
-            </div>
-            <a
-              href={payload.attachment.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "#e2e8f0", textDecoration: "underline" }}
-            >
-              {payload.attachment.name}
-            </a>
+            {(payload.attachments ?? []).map((img, index) => (
+              <img
+                key={img.url || index}
+                src={img.url}
+                alt={img.name || "image"}
+                style={{
+                  width: "100%",
+                  height: 120,
+                  objectFit: "cover",
+                  borderRadius: 10,
+                  cursor: "zoom-in",
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (img.url) setImagePreviewUrl(img.url);
+                }}
+              />
+            ))}
           </div>
         );
       }
@@ -1208,9 +1531,11 @@ export default function ChatPage() {
       }
 
       return (
-        <span>
-          {renderLinks(payload.text || payload.emoji || message.content || "")}
-        </span>
+        <div>
+          {renderLinks(
+            payload?.text || payload?.emoji || message.content || "",
+          )}
+        </div>
       );
     },
     [
@@ -1229,16 +1554,8 @@ export default function ChatPage() {
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
         .menu-item:hover { background: rgba(148,163,184,0.12) !important; }
-        @media (max-width: 1400px) {
-          .info-panel-responsive {
-            display: none !important;
-          }
-        }
-        @media (max-width: 768px) {
-          .conversation-list-responsive {
-            display: none !important;
-          }
-        }
+        @media (max-width: 1400px) { .info-panel-responsive { display: none !important; } }
+        @media (max-width: 768px) { .conversation-list-responsive { display: none !important; } }
       `}</style>
 
       <SideNav onNewMessage={() => undefined} />
@@ -1281,16 +1598,12 @@ export default function ChatPage() {
                   justifyContent: "space-between",
                 }}
               >
-                {/* Cột trái: Avatar + Name + Status */}
+                {/* Left: Avatar + Name + Status */}
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   {/* Avatar */}
                   {activeConversation.group ? (
                     <div
-                      style={{
-                        position: "relative",
-                        width: 40,
-                        height: 40,
-                      }}
+                      style={{ position: "relative", width: 40, height: 40 }}
                     >
                       {activeConversation.participants
                         .slice(0, 3)
@@ -1322,7 +1635,6 @@ export default function ChatPage() {
                               ((hash << 5) - hash);
                           const avatarColor =
                             colors[Math.abs(hash) % colors.length];
-
                           return (
                             <div
                               key={p._id}
@@ -1395,7 +1707,6 @@ export default function ChatPage() {
                         otherUser?.displayName ||
                         "Đoạn chat"}
                     </strong>
-
                     <div
                       style={{
                         display: "flex",
@@ -1465,22 +1776,12 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {/* Cột phải: Action buttons */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
+                {/* Right: Action buttons */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {activeConversation.group && (
                     <button
                       title="Thêm thành viên"
-                      style={{
-                        ...actionIconStyle,
-                        width: 36,
-                        height: 36,
-                      }}
+                      style={{ ...actionIconStyle, width: 36, height: 36 }}
                       className="action-btn"
                     >
                       <UserPlus size={18} />
@@ -1488,33 +1789,21 @@ export default function ChatPage() {
                   )}
                   <button
                     title="Gọi"
-                    style={{
-                      ...actionIconStyle,
-                      width: 36,
-                      height: 36,
-                    }}
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
                     className="action-btn"
                   >
                     <Phone size={18} />
                   </button>
                   <button
                     title="Gọi video"
-                    style={{
-                      ...actionIconStyle,
-                      width: 36,
-                      height: 36,
-                    }}
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
                     className="action-btn"
                   >
                     <Video size={18} />
                   </button>
                   <button
                     title="Tìm kiếm"
-                    style={{
-                      ...actionIconStyle,
-                      width: 36,
-                      height: 36,
-                    }}
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
                     className="action-btn"
                   >
                     <Search size={18} />
@@ -1540,27 +1829,39 @@ export default function ChatPage() {
               </div>
 
               {/* Messages */}
-              <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
+              <div
+                ref={messagesContainerRef}
+                style={{ flex: 1, padding: 16, overflowY: "auto" }}
+              >
                 {displayMessages.map((message, index) => {
                   const isMine = message.senderId === user?.userId;
+                  const isGroup = !!activeConversation.group;
                   const payload = decodeChatPayload(message.content);
-                  const isAttachmentCard =
-                    payload?.kind === "file" || payload?.kind === "audio";
-                  const useNeutralBubble =
-                    message.isRecalled || isAttachmentCard;
-                  const isLastRead =
-                    otherLastReadMessageId &&
-                    message._id?.toString() ===
-                      otherLastReadMessageId.toString();
                   const messageKey =
                     message._id?.toString() || `${message.createdAt}-${index}`;
                   const isLastMessage = messageKey === lastDisplayMessageKey;
-                  const isTimeVisible =
-                    isLastMessage || expandedMessageKey === messageKey;
-                  const timeLabel =
-                    expandedMessageKey === messageKey
-                      ? formatMessageDateTime(message.createdAt)
-                      : formatTime(message.createdAt);
+
+                  // Sender participant (for group avatar)
+                  const senderParticipant = !isMine
+                    ? isGroup
+                      ? activeConversation.participants.find(
+                          (p) => p._id === message.senderId,
+                        )
+                      : otherUser
+                    : undefined;
+
+                  // Direct chat: single seen avatar
+                  const isLastRead =
+                    !isGroup &&
+                    otherLastReadMessageId &&
+                    message._id?.toString() ===
+                      otherLastReadMessageId.toString();
+
+                  // Group chat: who has read up to this message
+                  const groupSeenParticipants = isGroup
+                    ? groupSeenMap.get(message._id?.toString()) || []
+                    : [];
+
                   if (
                     message.type === "system" ||
                     message.content?.startsWith("{{system}}")
@@ -1593,24 +1894,50 @@ export default function ChatPage() {
                       </div>
                     );
                   }
+
                   return (
                     <div
-                      key={message._id || `${message.createdAt}-${index}`}
+                      key={messageKey}
                       style={{
                         display: "flex",
                         flexDirection: "column",
                         marginBottom: 10,
                       }}
                     >
+                      {/* Sender name for group (not mine) */}
+                      {isGroup && !isMine && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#94a3b8",
+                            marginBottom: 2,
+                            marginLeft: 36,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          {senderParticipant?.displayName || "Người dùng"}
+                        </div>
+                      )}
+
                       {/* Bubble row */}
                       <div
                         style={{
                           display: "flex",
                           justifyContent: isMine ? "flex-end" : "flex-start",
-                          gap: 8,
-                          alignItems: "center",
+                          gap: 6,
+                          alignItems: "flex-end",
                         }}
                       >
+                        {/* Group: sender avatar on the left (only for others) */}
+                        {!isMine && senderParticipant && (
+                          <SenderAvatar participant={senderParticipant} />
+                        )}
+
+                        {/* Spacer to align my messages in group (no avatar on right) */}
+                        {isGroup && isMine && <div style={{ width: 0 }} />}
+
                         {isMine && !message.isRecalled && (
                           <button
                             onClick={(e) => handleOpenContextMenu(e, message)}
@@ -1632,7 +1959,6 @@ export default function ChatPage() {
                             maxWidth: "72%",
                             borderRadius: 14,
                             cursor: "pointer",
-
                             padding:
                               payload?.kind === "image" ||
                               payload?.kind === "file" ||
@@ -1649,8 +1975,6 @@ export default function ChatPage() {
                                   : isMine
                                     ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
                                     : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-
-                            // ✅ 3. Xóa viền nếu là Ảnh, File, hoặc Poll
                             border:
                               payload?.kind === "image" ||
                               payload?.kind === "file" ||
@@ -1659,15 +1983,12 @@ export default function ChatPage() {
                                 : isMine
                                   ? "none"
                                   : "1px solid rgba(148,163,184,.18)",
-
-                            // ✅ 4. Xóa bóng đổ nếu là Ảnh, File, hoặc Poll
                             boxShadow:
                               payload?.kind === "image" ||
                               payload?.kind === "file" ||
                               payload?.kind === "poll"
                                 ? "none"
                                 : "0 8px 20px rgba(0,0,0,.25)",
-
                             overflow: "hidden",
                           }}
                         >
@@ -1685,7 +2006,8 @@ export default function ChatPage() {
                           </button>
                         )}
                       </div>
-                      {/* Chỉ hiện thời gian KHI VÀ CHỈ KHI tin nhắn được nhấn vào (expanded) */}
+
+                      {/* Edited + timestamp */}
                       {expandedMessageKey === messageKey && (
                         <div
                           style={{
@@ -1693,8 +2015,21 @@ export default function ChatPage() {
                             justifyContent: isMine ? "flex-end" : "flex-start",
                             marginTop: 4,
                             padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                            gap: 6,
+                            alignItems: "center",
                           }}
                         >
+                          {message.isEdited && !message.isRecalled && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#94a3b8",
+                                fontStyle: "italic",
+                              }}
+                            >
+                              (đã chỉnh sửa)
+                            </span>
+                          )}
                           <span
                             style={{
                               fontSize: 11,
@@ -1702,43 +2037,57 @@ export default function ChatPage() {
                               lineHeight: 1.3,
                             }}
                           >
-                            {/* Hiện đầy đủ ngày giờ khi nhấn vào */}
                             {formatMessageDateTime(message.createdAt)}
                           </span>
                         </div>
                       )}
 
-                      {/* Avatar seen — tin của mình, người kia đã đọc */}
-                      {isMine && !message.isRecalled && isLastRead && (
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "flex-end",
-                            paddingRight: 4,
-                            marginTop: 2,
-                          }}
-                        >
-                          <img
-                            src={otherAvatar}
-                            alt="seen"
+                      {/* Direct chat: avatar seen */}
+                      {isMine &&
+                        !message.isRecalled &&
+                        isLastRead &&
+                        !isGroup && (
+                          <div
                             style={{
-                              width: 16,
-                              height: 16,
-                              borderRadius: "50%",
-                              border: "1.5px solid #60a5fa",
+                              display: "flex",
+                              justifyContent: "flex-end",
+                              paddingRight: 4,
+                              marginTop: 2,
                             }}
-                            title={`${otherUser?.displayName} đã xem`}
+                          >
+                            <img
+                              src={otherAvatar}
+                              alt="seen"
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: "50%",
+                                border: "1.5px solid #60a5fa",
+                              }}
+                              title={`${otherUser?.displayName} đã xem`}
+                            />
+                          </div>
+                        )}
+
+                      {/* Group chat: seen avatars stack */}
+                      {isMine &&
+                        !message.isRecalled &&
+                        isGroup &&
+                        groupSeenParticipants.length > 0 && (
+                          <GroupSeenAvatars
+                            seenParticipants={groupSeenParticipants}
                           />
-                        </div>
-                      )}
+                        )}
                     </div>
                   );
                 })}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Stranger pending banners */}
               {activeConversation.isStranger &&
                 activeConversation.strangerStatus === "pending" &&
-                activeConversation.initiatorId === user?.userId && ( // ✅ người gửi
+                activeConversation.initiatorId === user?.userId && (
                   <div
                     style={{
                       margin: "0 16px 8px",
@@ -1771,7 +2120,6 @@ export default function ChatPage() {
                       padding: "14px 16px",
                     }}
                   >
-                    {/* Avatar + tên người gửi */}
                     {(() => {
                       const sender = activeConversation.participants.find(
                         (p) => p._id !== user?.userId,
@@ -1830,7 +2178,6 @@ export default function ChatPage() {
                         </div>
                       );
                     })()}
-
                     <p
                       style={{
                         color: "#94a3b8",
@@ -1842,7 +2189,6 @@ export default function ChatPage() {
                       Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin
                       nhắn từ họ không?
                     </p>
-
                     <div style={{ display: "flex", gap: 8 }}>
                       <button
                         onClick={() =>
@@ -1889,25 +2235,6 @@ export default function ChatPage() {
                     </div>
                   </div>
                 )}
-
-              {/* Input area — disable nếu stranger pending
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-                // ✅ Mờ đi khi chưa accept
-                opacity:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? 0.4
-                    : 1,
-                pointerEvents:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? "none"
-                    : "auto",
-              }}
-            ></div> */}
 
               {/* Typing indicator */}
               <div
@@ -1995,6 +2322,93 @@ export default function ChatPage() {
                     >
                       <X size={16} />
                     </button>
+                  </div>
+                )}
+
+                {/* Edit banner */}
+                {editingMessage && (
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      background: "rgba(234,179,8,.1)",
+                      border: "1px solid rgba(234,179,8,.35)",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "#fde047",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✏️ Đang chỉnh sửa tin nhắn
+                      </span>
+                      <button
+                        onClick={() => {
+                          setEditingMessage(null);
+                          setEditInput("");
+                        }}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={editInput}
+                        onChange={(e) => setEditInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleEdit();
+                          }
+                        }}
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          border: "0.5px solid rgba(234,179,8,.4)",
+                          background: "rgba(234,179,8,.05)",
+                          color: "#f1f5f9",
+                          borderRadius: 10,
+                          padding: "7px 10px",
+                          outline: "none",
+                          fontSize: 14,
+                        }}
+                      />
+                      <button
+                        onClick={() => void handleEdit()}
+                        disabled={!editInput.trim()}
+                        style={{
+                          border: "none",
+                          borderRadius: 10,
+                          padding: "7px 14px",
+                          background: editInput.trim() ? "#ca8a04" : "#334155",
+                          color: "white",
+                          cursor: editInput.trim() ? "pointer" : "not-allowed",
+                          fontWeight: 600,
+                          fontSize: 13,
+                        }}
+                      >
+                        Lưu
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -2196,7 +2610,6 @@ export default function ChatPage() {
                         >
                           + Thêm
                         </button>
-
                         <button
                           onClick={() => void handleCreatePoll()}
                           style={miniButtonPrimaryStyle}
@@ -2212,22 +2625,16 @@ export default function ChatPage() {
                     ref={imageInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void sendAttachmentMessage(file, "image");
-                      e.currentTarget.value = "";
-                    }}
+                    onChange={handleSelectImages}
                   />
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void sendAttachmentMessage(file, "file");
-                      e.currentTarget.value = "";
-                    }}
+                    onChange={handleSelectFiles}
                   />
 
                   {/* Input bar */}
@@ -2303,7 +2710,6 @@ export default function ChatPage() {
                       value={input}
                       onChange={(event) => {
                         setInput(event.target.value);
-                        // Typing indicator
                         if (socket?.connected && activeConversationId) {
                           socket.emit("typing", {
                             conversationId: activeConversationId,
@@ -2427,9 +2833,6 @@ export default function ChatPage() {
               currentUserId={user?.userId}
               onDeleteConversation={() => {
                 setActiveConversation(null);
-                const updatedConvs = conversations.filter(
-                  (c) => c._id !== activeConversationId,
-                );
                 alert("Xóa lịch sử trò chuyện thành công");
               }}
               onManageGroup={() => {
@@ -2437,9 +2840,6 @@ export default function ChatPage() {
               }}
               onLeaveGroup={() => {
                 setActiveConversation(null);
-                const updatedConvs = conversations.filter(
-                  (c) => c._id !== activeConversationId,
-                );
                 alert("Bạn đã rời khỏi nhóm");
               }}
               onUpdateMemberRole={async (targetUserId, role) => {
@@ -2463,9 +2863,6 @@ export default function ChatPage() {
               currentUserId={user?.userId}
               onDeleteConversation={() => {
                 setActiveConversation(null);
-                const updatedConvs = conversations.filter(
-                  (c) => c._id !== activeConversationId,
-                );
                 alert("Xóa lịch sử trò chuyện thành công");
               }}
             />
@@ -2501,7 +2898,26 @@ export default function ChatPage() {
               <Reply size={15} /> Trả lời
             </button>
           )}
-
+          {contextMenu.message.senderId === user?.userId &&
+            !contextMenu.message.isRecalled &&
+            canRecall(contextMenu.message) && (
+              <button
+                onClick={() => {
+                  const payload = decodeChatPayload(
+                    contextMenu.message.content,
+                  );
+                  const currentText =
+                    payload?.text || contextMenu.message.content || "";
+                  setEditInput(currentText);
+                  setEditingMessage(contextMenu.message);
+                  setContextMenu(null);
+                }}
+                style={contextMenuItemStyle}
+                className="menu-item"
+              >
+                <Pencil size={15} /> Chỉnh sửa
+              </button>
+            )}
           {canRecall(contextMenu.message) && (
             <button
               onClick={() => void handleRecall()}
@@ -2511,17 +2927,6 @@ export default function ChatPage() {
               <RotateCcw size={15} /> Thu hồi
             </button>
           )}
-
-          {!contextMenu.message.isRecalled &&
-            canRecall(contextMenu.message) && (
-              <div
-                style={{
-                  height: "0.5px",
-                  background: "rgba(148,163,184,.1)",
-                  margin: "4px 0",
-                }}
-              ></div>
-            )}
           {!contextMenu.message.isRecalled &&
             canRecall(contextMenu.message) && (
               <div
@@ -2545,7 +2950,6 @@ export default function ChatPage() {
               <Send size={15} /> Chuyển tiếp
             </button>
           )}
-
           {!contextMenu.message.isRecalled && (
             <button
               onClick={() => void handleDeleteForMe()}
@@ -2602,7 +3006,6 @@ export default function ChatPage() {
               <X size={18} />
             </button>
           </div>
-
           <div style={{ display: "grid", gap: 8 }}>
             {voteViewer.users.map((person, i) => (
               <div
@@ -2645,6 +3048,8 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Image preview */}
       {imagePreviewUrl && (
         <div
           style={{
@@ -2653,16 +3058,15 @@ export default function ChatPage() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.9)", // Nền đen mờ cực sang
+            backgroundColor: "rgba(0,0,0,0.9)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 9999, // Phải cực cao để đè lên mọi thứ
+            zIndex: 9999,
             cursor: "zoom-out",
           }}
-          onClick={() => setImagePreviewUrl(null)} // Nhấn ra ngoài để đóng
+          onClick={() => setImagePreviewUrl(null)}
         >
-          {/* Nút đóng góc trên bên phải */}
           <button
             onClick={() => setImagePreviewUrl(null)}
             style={{
@@ -2683,8 +3087,6 @@ export default function ChatPage() {
           >
             <X size={24} />
           </button>
-
-          {/* Ảnh phóng to */}
           <img
             src={imagePreviewUrl}
             alt="Preview"
@@ -2695,11 +3097,12 @@ export default function ChatPage() {
               borderRadius: 8,
               boxShadow: "0 0 30px rgba(0,0,0,0.5)",
             }}
-            onClick={(e) => e.stopPropagation()} // Nhấn vào ảnh thì không đóng modal
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
-      {/* 1. Modal Chuyển tiếp tin nhắn */}
+
+      {/* Forward modal */}
       {isForwardModalOpen && forwardingMessage && (
         <div
           style={{
@@ -2751,7 +3154,6 @@ export default function ChatPage() {
                     conv.participants.find((p) => p._id !== user?.userId)
                       ?.displayName ||
                     "Đoạn chat";
-
                   return (
                     <label
                       key={conv._id}
@@ -2763,7 +3165,7 @@ export default function ChatPage() {
                         cursor: "pointer",
                         background: isSelected
                           ? "rgba(37,99,235,0.1)"
-                          : "transparent", // Highlight khi chọn
+                          : "transparent",
                         borderRadius: 8,
                       }}
                     >
