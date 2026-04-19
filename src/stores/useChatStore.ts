@@ -444,6 +444,20 @@ export const useChatStore = create<ChatState>()(
           set({ convoLoading: false });
         }
       },
+      updateMemberRole: (conversationId, targetUserId, role) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? {
+                  ...c,
+                  participants: c.participants.map((p) =>
+                    p._id === targetUserId ? { ...p, role } : p,
+                  ),
+                }
+              : c,
+          ),
+        }));
+      },
     }),
     {
       name: "chat-storage",

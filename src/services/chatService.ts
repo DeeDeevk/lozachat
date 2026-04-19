@@ -99,4 +99,18 @@ export const chatService = {
     const res = await api.post("/conversations", payload);
     return res.data.conversation;
   },
+  updateMemberRole: async (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => {
+    const response = await api.patch(
+      `/conversations/${conversationId}/members/role`,
+      {
+        targetUserId,
+        role,
+      },
+    );
+    return response.data;
+  },
 };
