@@ -307,7 +307,12 @@ function GroupSeenAvatars({ seenParticipants }: GroupSeenAvatarsProps) {
 // --- SENDER AVATAR (for group chat) ---
 interface SenderAvatarProps {
   participant:
-    | { _id: string; displayName: string; avatarUrl?: string | null;  role?: "owner" | "admin" | "member"; }
+    | {
+        _id: string;
+        displayName: string;
+        avatarUrl?: string | null;
+        role?: "owner" | "admin" | "member";
+      }
     | undefined;
 }
 
@@ -391,12 +396,12 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
             right: -4,
             backgroundColor: "#0f172a",
             borderRadius: "50%",
-            width: 18,
-            height: 18,
+            width: 10,
+            height: 10,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 0 0 2.5px #0f172a",
+            boxShadow: "0 0 0 0.5px #0f172a",
             zIndex: 2,
           }}
         >
@@ -1073,49 +1078,48 @@ export default function ChatPage() {
     });
   }, []);
   const handleSelectFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []);
 
-  if (!files.length) return;
+    if (!files.length) return;
 
-  if (files.length > 10) {
-    alert("Tối đa 10 file");
-    return;
-  }
+    if (files.length > 10) {
+      alert("Tối đa 10 file");
+      return;
+    }
 
-  const invalid = files.find((f) => f.size > 10 * 1024 * 1024);
-  if (invalid) {
-    alert(`File ${invalid.name} vượt quá 10MB`);
-    return;
-  }
+    const invalid = files.find((f) => f.size > 10 * 1024 * 1024);
+    if (invalid) {
+      alert(`File ${invalid.name} vượt quá 10MB`);
+      return;
+    }
 
-  try {
-    setSending(true);
+    try {
+      setSending(true);
 
-    const uploadedList = await Promise.all(
-      files.map((file) => uploadAttachment(file))
-    );
+      const uploadedList = await Promise.all(
+        files.map((file) => uploadAttachment(file)),
+      );
 
-    const attachments = uploadedList.map((u) => ({
-      name: u.fileName,
-      url: u.url,
-      mimeType: u.mimeType,
-      size: u.size,
-    }));
+      const attachments = uploadedList.map((u) => ({
+        name: u.fileName,
+        url: u.url,
+        mimeType: u.mimeType,
+        size: u.size,
+      }));
 
-    await sendStructuredMessage({
-      version: 1,
-      kind: "file",
-      attachments, // 👈 nhiều file
-    });
-
-  } catch (err) {
-    console.error(err);
-    alert("Upload file thất bại");
-  } finally {
-    setSending(false);
-    e.target.value = "";
-  }
-};
+      await sendStructuredMessage({
+        version: 1,
+        kind: "file",
+        attachments, // 👈 nhiều file
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Upload file thất bại");
+    } finally {
+      setSending(false);
+      e.target.value = "";
+    }
+  };
 
   const renderStructuredMessage = useCallback(
     (message: Message) => {
@@ -1185,25 +1189,25 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "file" && payload.attachments?.length) {
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      {(payload.attachments ?? []).map((file, index) => (
-        <a
-          key={file.url || index}
-          href={file.url}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            color: "#e2e8f0",
-            textDecoration: "underline",
-          }}
-        >
-          {file.name}
-        </a>
-      ))}
-    </div>
-  );
-}
+        return (
+          <div style={{ display: "grid", gap: 6 }}>
+            {(payload.attachments ?? []).map((file, index) => (
+              <a
+                key={file.url || index}
+                href={file.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: "#e2e8f0",
+                  textDecoration: "underline",
+                }}
+              >
+                {file.name}
+              </a>
+            ))}
+          </div>
+        );
+      }
       if (payload.kind === "image" && payload.attachments?.length) {
         return (
           <div
