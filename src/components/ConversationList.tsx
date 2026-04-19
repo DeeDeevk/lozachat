@@ -450,10 +450,16 @@ export default function ConversationList({
                         flex: 1,
                       }}
                     >
-                      {getSafeMessagePreview(
-                        conv.lastMessage?.content,
-                        "Chưa có tin nhắn",
-                      )}
+                      {(() => {
+                        const content = conv.lastMessage?.content;
+                        if (content && content.startsWith("{{system}}")) {
+                          return content.replace("{{system}}", "");
+                        }
+                        return getSafeMessagePreview(
+                          content,
+                          "Chưa có tin nhắn",
+                        );
+                      })()}
                     </span>
                     {unread > 0 && (
                       <div className="cl-badge">
