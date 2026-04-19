@@ -18,6 +18,7 @@ import type {
   ChatStructuredPayload,
   Conversation,
   Message,
+  MessageReaction,
   PollOption,
   PollVote,
 } from "@/types/chat";
@@ -32,6 +33,8 @@ import {
   FileUp,
   ImagePlus,
   Mic,
+  Pin,
+  PinOff,
   Pencil,
   Phone,
   PanelRight,
@@ -40,6 +43,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  SmilePlus,
   Smile,
   Sticker,
   Trash2,
@@ -103,6 +107,8 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
 ];
+
+const REACTION_OPTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
 
 // --- STYLES ---
 const popupBoxStyle: React.CSSProperties = {
@@ -454,6 +460,10 @@ export default function ChatPage() {
     updateStrangerStatus,
     forwardMessage,
     editMessage,
+    reactMessage,
+    togglePinMessage,
+    fetchPinnedMessages,
+    updateConversationTheme,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -478,13 +488,28 @@ export default function ChatPage() {
   } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [reactionMenu, setReactionMenu] = useState<{
+    x: number;
+    y: number;
+    message: Message;
+    currentEmoji?: string;
+  } | null>(null);
+  const [reactionViewer, setReactionViewer] = useState<{
+    x: number;
+    y: number;
+    message: Message;
+  } | null>(null);
+  const [isPinnedModalOpen, setIsPinnedModalOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const reactionMenuRef = useRef<HTMLDivElement>(null);
+  const pinnedModalRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<BlobPart[]>([]);
+  const recordingShouldSendRef = useRef(true);
   const recordingTimerRef = useRef<number | null>(null);
   const [expandedMessageKey, setExpandedMessageKey] = useState<string | null>(
     null,
@@ -571,6 +596,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     setImagePreviewUrl(null);
+    setReactionMenu(null);
+    setReactionViewer(null);
+    setIsPinnedModalOpen(false);
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -578,12 +606,13 @@ export default function ChatPage() {
   }, [activeConversationId]);
 
   useEffect(() => {
-    socketStore.connectSocket();
-  }, []);
+    if (!activeConversationId) return;
+    void fetchPinnedMessages(activeConversationId).catch(() => undefined);
+  }, [activeConversationId, fetchPinnedMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeConversationId]);
+    socketStore.connectSocket();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -596,6 +625,12 @@ export default function ChatPage() {
       }
       if (themeMenuRef.current && !themeMenuRef.current.contains(target)) {
         setShowThemePicker(false);
+      }
+      if (reactionMenuRef.current && !reactionMenuRef.current.contains(target)) {
+        setReactionMenu(null);
+      }
+      if (pinnedModalRef.current && !pinnedModalRef.current.contains(target)) {
+        setIsPinnedModalOpen(false);
       }
       setVoteViewer(null);
     };
@@ -644,6 +679,39 @@ export default function ChatPage() {
   const activeConversation = useMemo(
     () => conversations.find((c) => c._id === activeConversationId),
     [conversations, activeConversationId],
+  );
+
+  useEffect(() => {
+    if (!activeConversationId || !activeConversation?.chatThemeId) return;
+    setThemeForConversation(activeConversationId, activeConversation.chatThemeId);
+  }, [
+    activeConversation?.chatThemeId,
+    activeConversationId,
+    setThemeForConversation,
+  ]);
+
+  const pinnedMessages = useMemo(
+    () =>
+      [...(activeConversation?.pinnedMessages || [])]
+        .sort(
+          (a, b) =>
+            new Date(b.pinnedAt).getTime() - new Date(a.pinnedAt).getTime(),
+        )
+        .slice(0, 5),
+    [activeConversation?.pinnedMessages],
+  );
+
+  const getUserDisplayNameById = useCallback(
+    (targetUserId?: string) => {
+      if (!targetUserId) return "Người dùng";
+      if (targetUserId === user?.userId)
+        return userProfile?.displayName || user?.username || "Bạn";
+      const participant = activeConversation?.participants.find(
+        (p) => p._id === targetUserId,
+      );
+      return participant?.displayName || "Người dùng";
+    },
+    [activeConversation?.participants, user?.userId, user?.username, userProfile?.displayName],
   );
 
   const otherUser = useMemo(
@@ -790,10 +858,6 @@ export default function ChatPage() {
 
   const startCall = useCallback(
     async (kind: CallKind) => {
-      if (!activeConversation || activeConversation.group) {
-        toast.error("Hiện chỉ hỗ trợ gọi 1-1");
-        return;
-      }
       if (!activeConversationId || !socket) {
         toast.error("Không thể bắt đầu cuộc gọi lúc này");
         return;
@@ -1257,6 +1321,10 @@ export default function ChatPage() {
     return Array.isArray(data) ? data : (data.items ?? []);
   }, [messages, activeConversationId]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeConversationId, currentMessages.length]);
+
   const otherLastReadMessageId = useMemo(
     () =>
       activeConversation?.participants.find((p) => p._id !== user?.userId)
@@ -1554,6 +1622,11 @@ export default function ChatPage() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }, []);
 
+  const cancelRecording = useCallback(() => {
+    recordingShouldSendRef.current = false;
+    stopRecording();
+  }, [stopRecording]);
+
   const startRecording = useCallback(async () => {
     if (isRecording) return;
     try {
@@ -1569,6 +1642,7 @@ export default function ChatPage() {
         "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType });
       recordingChunksRef.current = [];
+      recordingShouldSendRef.current = true;
       recordingStreamRef.current = stream;
       recordingRecorderRef.current = recorder;
 
@@ -1577,6 +1651,7 @@ export default function ChatPage() {
       };
       recorder.onstop = async () => {
         try {
+          if (!recordingShouldSendRef.current) return;
           const blob = new Blob(recordingChunksRef.current, {
             type: recorder.mimeType || "audio/webm",
           });
@@ -1587,6 +1662,7 @@ export default function ChatPage() {
           });
           await sendAttachmentMessage(file, "audio");
         } finally {
+          recordingShouldSendRef.current = true;
           recordingChunksRef.current = [];
           recordingRecorderRef.current = null;
           recordingStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -1699,6 +1775,58 @@ export default function ChatPage() {
     [user?.userId],
   );
 
+  const handleOpenReactionMenu = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>, message: Message) => {
+      event.stopPropagation();
+      event.preventDefault();
+      const rect = event.currentTarget.getBoundingClientRect();
+      const mine = (message.reactions || []).find(
+        (r) => r.userId === user?.userId,
+      );
+
+      setReactionMenu({
+        x: Math.max(8, Math.min(window.innerWidth - 320, rect.left - 110)),
+        y: Math.max(8, rect.top - 56),
+        message,
+        currentEmoji: mine?.emoji,
+      });
+    },
+    [user?.userId],
+  );
+
+  const handlePickReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!activeConversationId) return;
+      try {
+        await reactMessage(messageId, activeConversationId, emoji);
+      } catch {
+        toast.error("Không thể thả cảm xúc");
+      } finally {
+        setReactionMenu(null);
+      }
+    },
+    [activeConversationId, reactMessage],
+  );
+
+  const isPinnedMessage = useCallback(
+    (messageId: string) =>
+      !!(activeConversation?.pinnedMessages || []).find(
+        (item) => item.messageId === messageId,
+      ),
+    [activeConversation?.pinnedMessages],
+  );
+
+  const handleTogglePin = useCallback(async () => {
+    if (!contextMenu || !activeConversationId) return;
+    try {
+      await togglePinMessage(contextMenu.message._id, activeConversationId);
+    } catch {
+      toast.error("Không thể cập nhật ghim");
+    } finally {
+      setContextMenu(null);
+    }
+  }, [activeConversationId, contextMenu, togglePinMessage]);
+
   const handleRecall = useCallback(async () => {
     if (!contextMenu || !activeConversationId) return;
     try {
@@ -1781,28 +1909,45 @@ export default function ChatPage() {
 
     try {
       setSending(true);
+      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+      const otherFiles = files.filter((f) => !f.type.startsWith("image/"));
 
-      const uploadedList = await Promise.all(
-        files.map((file) => uploadAttachment(file)),
-      );
+      if (imageFiles.length > 0) {
+        const uploadedImages = await Promise.all(
+          imageFiles.map((file) => uploadAttachment(file)),
+        );
 
-      const attachments = uploadedList.map((u) => ({
-        name: u.fileName,
-        url: u.url,
-        mimeType: u.mimeType,
-        size: u.size,
-      }));
+        await sendStructuredMessage({
+          version: 1,
+          kind: "image",
+          attachments: uploadedImages.map((u) => ({
+            name: u.fileName,
+            url: u.url,
+            mimeType: u.mimeType,
+            size: u.size,
+          })),
+        });
+      }
 
-      await sendStructuredMessage({
-        version: 1,
-        kind: "file",
-        attachments, // 👈 nhiều file
-      });
+      for (const file of otherFiles) {
+        const uploaded = await uploadAttachment(file);
+        await sendStructuredMessage({
+          version: 1,
+          kind: "file",
+          attachment: {
+            name: uploaded.fileName,
+            url: uploaded.url,
+            mimeType: uploaded.mimeType,
+            size: uploaded.size,
+          },
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Upload file thất bại");
     } finally {
       setSending(false);
+      setActivePopup(null);
       e.target.value = "";
     }
   };
@@ -1871,6 +2016,29 @@ export default function ChatPage() {
                 setImagePreviewUrl(payload.attachment.url);
             }}
           />
+        );
+      }
+
+      if (payload.kind === "file" && payload.attachment?.url) {
+        return (
+          <a
+            href={payload.attachment.url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              color: "#e2e8f0",
+              textDecoration: "underline",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "10px 12px",
+              background: "rgba(148,163,184,0.12)",
+              border: "1px solid rgba(148,163,184,0.2)",
+              borderRadius: 10,
+            }}
+          >
+            <FileUp size={15} /> {payload.attachment.name}
+          </a>
         );
       }
 
@@ -2578,6 +2746,12 @@ export default function ChatPage() {
                               className="theme-option"
                               onClick={() => {
                                 setThemeForConversation(activeConversationId, theme.id);
+                                void updateConversationTheme(
+                                  activeConversationId,
+                                  theme.id,
+                                ).catch(() => {
+                                  toast.error("Không thể đồng bộ giao diện chat");
+                                });
                                 setShowThemePicker(false);
                               }}
                               style={{
@@ -2617,6 +2791,35 @@ export default function ChatPage() {
                             </button>
                           );
                         })}
+                        <button
+                          onClick={() => {
+                            const defaultThemeId = "aurora";
+                            setThemeForConversation(
+                              activeConversationId,
+                              defaultThemeId,
+                            );
+                            void updateConversationTheme(
+                              activeConversationId,
+                              defaultThemeId,
+                            ).catch(() => {
+                              toast.error("Không thể đưa về mặc định");
+                            });
+                            setShowThemePicker(false);
+                          }}
+                          style={{
+                            ...miniButtonStyle,
+                            marginTop: 6,
+                            width: "100%",
+                            color: "#bfdbfe",
+                            border: "1px solid rgba(96,165,250,.45)",
+                            display: "inline-flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <RotateCcw size={14} /> Đặt mặc định
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2672,6 +2875,54 @@ export default function ChatPage() {
                   </button>
                 </div>
               </div>
+
+              {pinnedMessages.length > 0 && (
+                <div
+                  style={{
+                    margin: "0 14px 10px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(96,165,250,.35)",
+                    background: "rgba(37,99,235,.12)",
+                    padding: "8px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Pin size={14} color="#93c5fd" />
+                    <span
+                      style={{
+                        color: "#dbeafe",
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {getSafeMessagePreview(pinnedMessages[0].content || "Tin nhắn")}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsPinnedModalOpen(true)}
+                    style={{
+                      ...miniButtonStyle,
+                      color: "#bfdbfe",
+                      border: "1px solid rgba(96,165,250,.45)",
+                    }}
+                  >
+                    Xem ghim ({pinnedMessages.length})
+                  </button>
+                </div>
+              )}
 
               {/* Messages */}
               <div
@@ -2741,6 +2992,7 @@ export default function ChatPage() {
                   return (
                     <div
                       key={messageKey}
+                      id={`msg-${message._id}`}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -2782,14 +3034,24 @@ export default function ChatPage() {
                         {isGroup && isMine && <div style={{ width: 0 }} />}
 
                         {isMine && !message.isRecalled && (
-                          <button
-                            onClick={(e) => handleOpenContextMenu(e, message)}
-                            style={actionDotsStyle}
-                            className="action-btn"
-                            title="Tùy chọn tin nhắn"
-                          >
-                            <Ellipsis size={16} />
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => handleOpenReactionMenu(e, message)}
+                              style={actionDotsStyle}
+                              className="action-btn"
+                              title="Thả cảm xúc"
+                            >
+                              <SmilePlus size={15} />
+                            </button>
+                            <button
+                              onClick={(e) => handleOpenContextMenu(e, message)}
+                              style={actionDotsStyle}
+                              className="action-btn"
+                              title="Tùy chọn tin nhắn"
+                            >
+                              <Ellipsis size={16} />
+                            </button>
+                          </>
                         )}
 
                         <div
@@ -2839,16 +3101,80 @@ export default function ChatPage() {
                         </div>
 
                         {!isMine && !message.isRecalled && (
-                          <button
-                            onClick={(e) => handleOpenContextMenu(e, message)}
-                            style={actionDotsStyle}
-                            className="action-btn"
-                            title="Tùy chọn tin nhắn"
-                          >
-                            <Ellipsis size={16} />
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => handleOpenReactionMenu(e, message)}
+                              style={actionDotsStyle}
+                              className="action-btn"
+                              title="Thả cảm xúc"
+                            >
+                              <SmilePlus size={15} />
+                            </button>
+                            <button
+                              onClick={(e) => handleOpenContextMenu(e, message)}
+                              style={actionDotsStyle}
+                              className="action-btn"
+                              title="Tùy chọn tin nhắn"
+                            >
+                              <Ellipsis size={16} />
+                            </button>
+                          </>
                         )}
                       </div>
+
+                      {!!message.reactions?.length && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: isMine ? "flex-end" : "flex-start",
+                            marginTop: 4,
+                            padding: isMine ? "0 4px 0 0" : "0 0 0 36px",
+                            gap: 6,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {(Object.entries(
+                            (message.reactions || []).reduce(
+                              (
+                                acc: Record<string, number>,
+                                reaction: MessageReaction,
+                              ) => {
+                                acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1;
+                                return acc;
+                              },
+                              {} as Record<string, number>,
+                            ),
+                          ) as Array<[string, number]>).map(([emoji, count]) => (
+                            <button
+                              key={`${message._id}-${emoji}`}
+                              onClick={(event) => {
+                                const rect = (
+                                  event.currentTarget as HTMLButtonElement
+                                ).getBoundingClientRect();
+                                setReactionViewer({
+                                  x: Math.max(
+                                    8,
+                                    Math.min(window.innerWidth - 320, rect.left - 120),
+                                  ),
+                                  y: rect.bottom + 6,
+                                  message,
+                                });
+                              }}
+                              style={{
+                                border: "1px solid rgba(148,163,184,.3)",
+                                background: "rgba(15,23,42,.75)",
+                                color: "#e2e8f0",
+                                borderRadius: 999,
+                                padding: "2px 7px",
+                                fontSize: 12,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {emoji} {count}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Edited + timestamp */}
                       {expandedMessageKey === messageKey && (
@@ -3332,16 +3658,28 @@ export default function ChatPage() {
                             <Mic size={16} /> Bắt đầu ghi âm
                           </button>
                         ) : (
-                          <button
-                            style={{
-                              ...popupActionStyle,
-                              borderColor: "rgba(248,113,113,.45)",
-                              background: "rgba(248,113,113,.15)",
-                            }}
-                            onClick={() => stopRecording()}
-                          >
-                            <Mic size={16} /> Dừng và gửi
-                          </button>
+                          <>
+                            <button
+                              style={{
+                                ...popupActionStyle,
+                                borderColor: "rgba(248,113,113,.45)",
+                                background: "rgba(248,113,113,.15)",
+                              }}
+                              onClick={() => stopRecording()}
+                            >
+                              <Mic size={16} /> Dừng và gửi
+                            </button>
+                            <button
+                              style={{
+                                ...popupActionStyle,
+                                borderColor: "rgba(148,163,184,.35)",
+                                background: "rgba(15,23,42,.45)",
+                              }}
+                              onClick={() => cancelRecording()}
+                            >
+                              <X size={16} /> Hủy ghi âm
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -4145,6 +4483,23 @@ export default function ChatPage() {
               <Reply size={15} /> Trả lời
             </button>
           )}
+          {!contextMenu.message.isRecalled && (
+            <button
+              onClick={() => void handleTogglePin()}
+              style={contextMenuItemStyle}
+              className="menu-item"
+            >
+              {isPinnedMessage(contextMenu.message._id) ? (
+                <>
+                  <PinOff size={15} /> Bỏ ghim
+                </>
+              ) : (
+                <>
+                  <Pin size={15} /> Ghim tin nhắn
+                </>
+              )}
+            </button>
+          )}
           {contextMenu.message.senderId === user?.userId &&
             !contextMenu.message.isRecalled &&
             canRecall(contextMenu.message) && (
@@ -4206,6 +4561,223 @@ export default function ChatPage() {
               <Trash2 size={15} /> Xóa phía tôi
             </button>
           )}
+        </div>
+      )}
+
+      {reactionMenu && (
+        <div
+          ref={reactionMenuRef}
+          style={{
+            position: "fixed",
+            top: reactionMenu.y,
+            left: reactionMenu.x,
+            zIndex: 46,
+            borderRadius: 999,
+            border: "1px solid rgba(148,163,184,.3)",
+            background: "rgba(15,23,42,.96)",
+            boxShadow: "0 16px 30px rgba(0,0,0,.5)",
+            padding: "8px 10px",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {REACTION_OPTIONS.map((emoji) => {
+            const active = reactionMenu.currentEmoji === emoji;
+            return (
+              <button
+                key={`${reactionMenu.message._id}-${emoji}`}
+                onClick={() => void handlePickReaction(reactionMenu.message._id, emoji)}
+                style={{
+                  border: active
+                    ? "1px solid rgba(96,165,250,.85)"
+                    : "1px solid transparent",
+                  background: active ? "rgba(37,99,235,.18)" : "transparent",
+                  color: "#fff",
+                  borderRadius: 999,
+                  width: 34,
+                  height: 34,
+                  fontSize: 18,
+                  cursor: "pointer",
+                }}
+              >
+                {emoji}
+              </button>
+            );
+          })}
+          {reactionMenu.currentEmoji && (
+            <button
+              onClick={() =>
+                void handlePickReaction(
+                  reactionMenu.message._id,
+                  reactionMenu.currentEmoji || "",
+                )
+              }
+              style={{
+                ...miniButtonStyle,
+                border: "1px solid rgba(248,113,113,.45)",
+                color: "#fca5a5",
+                padding: "6px 10px",
+              }}
+              title="Hủy reaction của bạn"
+            >
+              Hủy
+            </button>
+          )}
+        </div>
+      )}
+
+      {reactionViewer && (
+        <div
+          style={{
+            position: "fixed",
+            top: reactionViewer.y,
+            left: reactionViewer.x,
+            zIndex: 47,
+            width: 300,
+            borderRadius: 14,
+            border: "1px solid rgba(148,163,184,.3)",
+            background: "rgba(15,23,42,.96)",
+            boxShadow: "0 20px 42px rgba(0,0,0,.6)",
+            padding: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 13 }}>
+              Cảm xúc tin nhắn
+            </div>
+            <button
+              onClick={() => setReactionViewer(null)}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+            {(reactionViewer.message.reactions || []).length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>Không có cảm xúc</div>
+            ) : (
+              (reactionViewer.message.reactions || []).map((reaction, index) => (
+                <div
+                  key={`${reaction.userId}-${reaction.emoji}-${index}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    background: "rgba(30,41,59,.55)",
+                    border: "1px solid rgba(148,163,184,.2)",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                  }}
+                >
+                  <span style={{ color: "#e2e8f0", fontSize: 13 }}>
+                    {getUserDisplayNameById(reaction.userId)}
+                  </span>
+                  <span style={{ fontSize: 18 }}>{reaction.emoji}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {isPinnedModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 60,
+            background: "rgba(2,6,23,.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            ref={pinnedModalRef}
+            style={{
+              width: "min(520px, 100%)",
+              maxHeight: "70vh",
+              overflowY: "auto",
+              borderRadius: 16,
+              border: "1px solid rgba(96,165,250,.35)",
+              background: "linear-gradient(165deg, #0f172a 0%, #1e293b 100%)",
+              padding: 14,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <div style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 700 }}>
+                Tin nhắn đã ghim
+              </div>
+              <button
+                onClick={() => setIsPinnedModalOpen(false)}
+                style={{
+                  ...miniButtonStyle,
+                  color: "#cbd5e1",
+                  border: "1px solid rgba(148,163,184,.35)",
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {pinnedMessages.length === 0 ? (
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>Chưa có tin ghim</div>
+              ) : (
+                pinnedMessages.map((item) => (
+                  <button
+                    key={item.messageId}
+                    onClick={() => {
+                      setIsPinnedModalOpen(false);
+                      const target = document.getElementById(`msg-${item.messageId}`);
+                      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
+                    style={{
+                      border: "1px solid rgba(148,163,184,.25)",
+                      background: "rgba(30,41,59,.5)",
+                      color: "#e2e8f0",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                      {getSafeMessagePreview(item.content || "Tin nhắn")}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                      Ghim lúc {formatMessageDateTime(item.pinnedAt)}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
