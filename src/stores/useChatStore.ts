@@ -436,10 +436,50 @@ export const useChatStore = create<ChatState>()(
           set({ convoLoading: false });
         }
       },
-    }),
-    {
-      name: "chat-storage",
-      partialize: (state) => ({ conversations: state.conversations }),
-    },
+      pinnedMessages: {},
+      fetchPinnedMessages: async (conversationId) => {
+        try {
+          const messages = await chatService.fetchPinnedMessages(conversationId);
+          set((state) => ({
+            pinnedMessages: {
+              ...state.pinnedMessages,
+              [conversationId]: messages,
+            },
+          }));
+        } catch (error) {
+          console.error("Lỗi fetch pinned messages:", error);
+        }
+      },
+      pinMessage: async (conversationId, messageId) => {
+        try {
+          const messages = await chatService.pinMessage(conversationId, messageId);
+          set((state) => ({
+            pinnedMessages: {
+              ...state.pinnedMessages,
+              [conversationId]: messages,
+            },
+          }));
+        } catch (error) {
+          console.error("Lỗi pin message:", error);
+          throw error;
+        }
+      },
+      unpinMessage: async (conversationId, messageId) => {
+        try {
+          await chatService.unpinMessage(conversationId, messageId);
+          set((state) => ({
+            pinnedMessages: {
+              ...state.pinnedMessages,
+              [conversationId]: (state.pinnedMessages[conversationId] ?? []).filter(
+                (m) => m._id !== messageId
+              ),
+            },
+          }));
+        } catch (error) {
+          console.error("Lỗi unpin message:", error);
+          throw error;
+        }
+      },
+    })
   ),
 );

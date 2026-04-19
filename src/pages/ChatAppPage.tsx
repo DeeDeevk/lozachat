@@ -29,6 +29,7 @@ import {
   Mic,
   Phone,
   Reply,
+  Pin,
   RotateCcw,
   Send,
   Smile,
@@ -249,6 +250,15 @@ export default function ChatPage() {
   const { socket } = useSocketStore();
   const [sending, setSending] = useState(false);
   const [activePopup, setActivePopup] = useState<PopupType>(null);
+    const {
+    // ...các field cũ...
+    pinnedMessages,
+    fetchPinnedMessages,
+    pinMessage,
+    unpinMessage,
+  } = useChatStore();
+  const [showPinnedPopup, setShowPinnedPopup] = useState(false);
+  const [pinnedMenuOpenId, setPinnedMenuOpenId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
@@ -686,6 +696,42 @@ export default function ChatPage() {
       alert("Không thể truy cập micro để ghi âm");
     }
   }, [isRecording, sendAttachmentMessage]);
+
+  const handlePinMessage = useCallback(async () => {
+    if (!contextMenu || !activeConversationId) return;
+    const msg = contextMenu.message;
+    const isPinned = (pinnedMessages[activeConversationId] ?? []).some(
+      (m) => m._id === msg._id
+    );
+    try {
+      if (isPinned) {
+        await unpinMessage(activeConversationId, msg._id);
+      } else {
+        await pinMessage(activeConversationId, msg._id);
+      }
+    } catch {
+      alert("Không thể ghim tin nhắn");
+    }
+    setContextMenu(null);
+  }, [contextMenu, activeConversationId, pinnedMessages, pinMessage, unpinMessage]);
+
+useEffect(() => {
+  if (activeConversationId) {
+    fetchPinnedMessages(activeConversationId);
+  }
+}, [activeConversationId]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Highlight nhấp nháy
+      el.style.transition = "background .2s";
+      el.style.background = "rgba(37,99,235,0.25)";
+      setTimeout(() => { el.style.background = ""; }, 1500);
+    }
+    setShowPinnedPopup(false);
+  }, []);
 
   const handleCreatePoll = useCallback(async () => {
     const q = pollQuestion.trim();
@@ -1537,6 +1583,245 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              {/*Banner ghim tin nhắn*/}
+              {activeConversationId &&
+                (pinnedMessages[activeConversationId] ?? []).length > 0 && (() => {
+                  const pins = pinnedMessages[activeConversationId];
+                  const top = pins[0];
+                  const topPayload = decodeChatPayload(top.content);
+                  const topPreview =
+                    topPayload?.text
+                    || topPayload?.reply?.preview
+                    || (topPayload?.kind === "image" ? "Ảnh" : null)
+                    || (topPayload?.kind === "audio" ? "Ghi âm" : null)
+                    || (topPayload?.kind === "file" ? topPayload.attachment?.name : null)
+                    || (topPayload?.kind === "sticker" ? "Sticker" : null)
+                    || (topPayload?.kind === "poll" ? topPayload.poll?.question : null)
+                    || top.content;
+
+                  const topSender = getSenderName(top, user?.userId, activeConversation?.participants);
+
+                  return (
+                    <div style={{
+                      background: "#1a2744",
+                      borderBottom: "1px solid rgba(148,163,184,0.12)",
+                    }}>
+                      {/* Row collapsed — luôn hiện */}
+                      {!showPinnedPopup && (
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "8px 16px",
+                        }}>
+                          {/* Icon */}
+                          <div style={{
+                            width: 32, height: 32, borderRadius: "50%",
+                            background: "rgba(37,99,235,0.15)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}>
+                            <Pin size={15} style={{ color: "#60a5fa" }} />
+                          </div>
+
+                          {/* Nội dung tin đầu */}
+                          <div 
+                              onClick={() => scrollToMessage(top._id)}
+                              style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                          >
+                            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 1 }}>Tin nhắn</div>
+                            <div style={{
+                              fontSize: 13, color: "#cbd5e1",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              display: "flex", alignItems: "center", gap: 4,
+                            }}>
+                              <span style={{ color: "#e2e8f0", fontWeight: 500, flexShrink: 0 }}>
+                                {topSender}:
+                              </span>
+                              {topPayload?.kind === "image" && topPayload.attachment?.url ? (
+                                <>
+                                  <img
+                                    src={topPayload.attachment.url}
+                                    style={{ width: 16, height: 16, objectFit: "cover", borderRadius: 3, flexShrink: 0 }}
+                                    alt=""
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                  <span>Ảnh</span>
+                                </>
+                              ) : (
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {topPreview}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Badge +N ghim (chỉ hiện khi có > 1 tin) */}
+                          {pins.length > 1 && (
+                            <button
+                              onClick={() => setShowPinnedPopup((v) => !v)}
+                              style={{
+                                border: "1px solid rgba(96,165,250,0.35)",
+                                background: showPinnedPopup ? "rgba(37,99,235,0.25)" : "rgba(37,99,235,0.12)",
+                                color: "#60a5fa",
+                                borderRadius: 20,
+                                padding: "3px 10px",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: 4,
+                                flexShrink: 0,
+                                transition: "background .15s",
+                              }}
+                            >
+                              +{pins.length - 1} ghim
+                              <span style={{ fontSize: 10 }}>{showPinnedPopup ? "▲" : "▼"}</span>
+                            </button>
+                          )}
+
+                          {/* Nút ··· cho tin đầu */}
+                          <div style={{ position: "relative", flexShrink: 0 }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPinnedMenuOpenId((prev) => (prev === top._id ? null : top._id));
+                              }}
+                              style={{
+                                border: "none", background: "transparent",
+                                color: "#64748b", cursor: "pointer",
+                                fontSize: 18, letterSpacing: 1, padding: "0 4px",
+                              }}
+                            >
+                              ···
+                            </button>
+                            {pinnedMenuOpenId === top._id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  position: "absolute", right: 0, top: "100%", zIndex: 50,
+                                  background: "#1e293b",
+                                  border: "1px solid rgba(148,163,184,0.15)",
+                                  borderRadius: 10,
+                                  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                                  minWidth: 140, overflow: "hidden",
+                                }}
+                              >
+                                <button
+                                  onClick={() => {
+                                    const payload = decodeChatPayload(top.content);
+                                    const text = payload?.text || payload?.reply?.preview || top.content || "";
+                                    navigator.clipboard.writeText(text).catch(() => {});
+                                    setPinnedMenuOpenId(null);
+                                  }}
+                                  style={{ width: "100%", border: "none", background: "transparent", color: "#e2e8f0", padding: "10px 14px", textAlign: "left", cursor: "pointer", fontSize: 13 }}
+                                  className="menu-item"
+                                >
+                                  Copy
+                                </button>
+                                <div style={{ height: 1, background: "rgba(148,163,184,0.1)", margin: "0 10px" }} />
+                                <button
+                                  onClick={() => unpinMessage(activeConversationId, top._id)}
+                                  style={{ width: "100%", border: "none", background: "transparent", color: "#f87171", padding: "10px 14px", textAlign: "left", cursor: "pointer", fontSize: 13 }}
+                                  className="menu-item"
+                                >
+                                  Bỏ ghim
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Danh sách mở rộng — hiện khi click +N ghim */}
+                      {showPinnedPopup && pins.length > 1 && (
+                        <div style={{
+                          borderTop: "1px solid rgba(148,163,184,0.1)",
+                          paddingBottom: 6,
+                        }}>
+                          {/* Header */}
+                          <div style={{
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            padding: "8px 16px 4px",
+                          }}>
+                            <span style={{ color: "#f1f5f9", fontWeight: 600, fontSize: 13 }}>
+                              Danh sách ghim ({pins.length})
+                            </span>
+                            <span
+                              onClick={() => setShowPinnedPopup(false)}
+                              style={{ color: "#60a5fa", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                            >
+                              Thu gọn ▲
+                            </span>
+                          </div>
+
+                          {/* Các tin còn lại (bỏ qua tin đầu đã hiện ở trên) */}
+                          {pins.map((msg) => {
+                            const payload = decodeChatPayload(msg.content);
+                            const preview =
+                              payload?.text
+                              || payload?.reply?.preview
+                              || (payload?.kind === "image" ? "Ảnh" : null)
+                              || (payload?.kind === "audio" ? "Ghi âm" : null)
+                              || (payload?.kind === "file" ? payload.attachment?.name : null)
+                              || (payload?.kind === "sticker" ? "Sticker" : null)
+                              || (payload?.kind === "poll" ? payload.poll?.question : null)
+                              || msg.content;
+                            const senderName = getSenderName(msg, user?.userId, activeConversation?.participants);
+
+                            return (
+                              <div key={msg._id} 
+                                onClick={() => scrollToMessage(msg._id)}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 10,
+                                  padding: "7px 16px",
+                                }} className="menu-item">
+                                <div style={{
+                                  width: 32, height: 32, borderRadius: "50%",
+                                  background: "rgba(37,99,235,0.15)",
+                                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                                }}>
+                                  <Pin size={15} style={{ color: "#60a5fa" }} />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 1 }}>Tin nhắn</div>
+                                  <div style={{
+                                    fontSize: 13, color: "#cbd5e1",
+                                    display: "flex", alignItems: "center", gap: 4,
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                  }}>
+                                    <span style={{ color: "#e2e8f0", fontWeight: 500, flexShrink: 0 }}>{senderName}:</span>
+                                    {payload?.kind === "image" && payload.attachment?.url ? (
+                                      <>
+                                        <img src={payload.attachment.url} style={{ width: 16, height: 16, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                        <span>Ảnh</span>
+                                      </>
+                                    ) : (
+                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Nút ··· */}
+                                <div style={{ position: "relative", flexShrink: 0 }}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setPinnedMenuOpenId((prev) => (prev === msg._id ? null : msg._id)); }}
+                                    style={{ border: "none", background: "transparent", color: "#64748b", cursor: "pointer", fontSize: 18, letterSpacing: 1, padding: "0 4px" }}
+                                  >···</button>
+                                  {pinnedMenuOpenId === msg._id && (
+                                    <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", right: 0, top: "100%", zIndex: 50, background: "#1e293b", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 140, overflow: "hidden" }}>
+                                      <button onClick={() => { const p = decodeChatPayload(msg.content); navigator.clipboard.writeText(p?.text || p?.reply?.preview || msg.content || "").catch(() => {}); setPinnedMenuOpenId(null); }} style={{ width: "100%", border: "none", background: "transparent", color: "#e2e8f0", padding: "10px 14px", textAlign: "left", cursor: "pointer", fontSize: 13 }} className="menu-item">Copy</button>
+                                      <div style={{ height: 1, background: "rgba(148,163,184,0.1)", margin: "0 10px" }} />
+                                      <button onClick={() => unpinMessage(activeConversationId, msg._id)} style={{ width: "100%", border: "none", background: "transparent", color: "#f87171", padding: "10px 14px", textAlign: "left", cursor: "pointer", fontSize: 13 }} className="menu-item">Bỏ ghim</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              }
+
               {/* Messages */}
               <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
                 {displayMessages.map((message, index) => {
@@ -1563,6 +1848,7 @@ export default function ChatPage() {
                   return (
                     <div
                       key={message._id || `${message.createdAt}-${index}`}
+                      id={`msg-${message._id}`}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -2443,6 +2729,20 @@ export default function ChatPage() {
             padding: 7,
           }}
         >
+          {!contextMenu.message.isRecalled && (
+            <button
+              onClick={handlePinMessage}
+              style={contextMenuItemStyle}
+              className="menu-item"
+            >
+              <Pin size={15} />
+              {(pinnedMessages[activeConversationId ?? ""] ?? []).some(
+                (m) => m._id === contextMenu.message._id
+              )
+                ? "Bỏ ghim"
+                : "Ghim tin nhắn"}
+            </button>
+          )}
           {!contextMenu.message.isRecalled && (
             <button
               onClick={() => {

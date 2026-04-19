@@ -99,4 +99,18 @@ export const chatService = {
     const res = await api.post("/conversations", payload);
     return res.data.conversation;
   },
+
+  async pinMessage(conversationId: string, messageId: string): Promise<Message[]> {
+    const res = await api.post(`/conversations/${conversationId}/pin/${messageId}`);
+    return res.data.pinnedMessages;
+  },
+
+  async unpinMessage(conversationId: string, messageId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/pin/${messageId}`);
+  },
+
+  async fetchPinnedMessages(conversationId: string): Promise<Message[]> {
+    const res = await api.get(`/conversations/${conversationId}/pins`);
+    return res.data.pinnedMessages;
+  },
 };
