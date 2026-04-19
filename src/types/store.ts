@@ -72,6 +72,11 @@ export interface ChatState {
     name?: string;
     memberIds: string[];
   }) => Promise<void>;
+  updateMemberRole: (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => void;
 }
 
 export interface FriendUpdateEvent {

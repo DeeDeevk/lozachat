@@ -103,4 +103,18 @@ export const chatService = {
   const res = await api.patch(`/messages/${messageId}/edit`, { content });
   return res.data.message;
 },
+  updateMemberRole: async (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => {
+    const response = await api.patch(
+      `/conversations/${conversationId}/members/role`,
+      {
+        targetUserId,
+        role,
+      },
+    );
+    return response.data;
+  },
 };

@@ -1,8 +1,10 @@
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 import SideNav from "@/components/SideNav";
 import ConversationList from "@/components/ConversationList";
+import ConversationInfoPanel from "@/components/ConversationInfoPanel";
+import GroupConversationInfoPanel from "@/components/GroupConversationInfoPanel";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -25,16 +27,23 @@ import {
   FileUp,
   ImagePlus,
   Mic,
+  Pencil,
+  Phone,
+  PanelRight,
+  PanelRightClose,
   Reply,
   RotateCcw,
+  Search,
   Send,
   Smile,
   Sticker,
   Trash2,
   User as UserIcon,
+  UserPlus,
+  Video,
   X,
-  Pencil,
 } from "lucide-react";
+import { chatService } from "@/services/chatService";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -212,6 +221,143 @@ function formatMessageDateTime(dateString: string) {
   });
 }
 
+// --- GROUP SEEN AVATARS ---
+interface GroupSeenAvatarsProps {
+  seenParticipants: Array<{
+    _id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  }>;
+}
+
+function GroupSeenAvatars({ seenParticipants }: GroupSeenAvatarsProps) {
+  if (seenParticipants.length === 0) return null;
+  const MAX_SHOW = 4;
+  const shown = seenParticipants.slice(0, MAX_SHOW);
+  const overflow = seenParticipants.length - MAX_SHOW;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        paddingRight: 4,
+        marginTop: 2,
+        gap: 0,
+      }}
+    >
+      {shown.map((p, i) => (
+        <div
+          key={p._id}
+          title={p.displayName}
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            border: "1.5px solid #0f172a",
+            marginLeft: i === 0 ? 0 : -5,
+            overflow: "hidden",
+            background: "#334155",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {p.avatarUrl ? (
+            <img
+              src={p.avatarUrl}
+              alt={p.displayName}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span style={{ fontSize: 8, color: "#cbd5e1", fontWeight: 700 }}>
+              {p.displayName?.[0]?.toUpperCase()}
+            </span>
+          )}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div
+          style={{
+            marginLeft: -5,
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            border: "1.5px solid #0f172a",
+            background: "#475569",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: 7, color: "#f1f5f9", fontWeight: 700 }}>
+            {overflow}+
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- SENDER AVATAR (for group chat) ---
+interface SenderAvatarProps {
+  participant:
+    | { _id: string; displayName: string; avatarUrl?: string | null }
+    | undefined;
+}
+
+function SenderAvatar({ participant }: SenderAvatarProps) {
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+  ];
+  let hash = 0;
+  const name = participant?.displayName || "?";
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const color = colors[Math.abs(hash) % colors.length];
+
+  return (
+    <div
+      title={name}
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        flexShrink: 0,
+        overflow: "hidden",
+        background: participant?.avatarUrl ? undefined : color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "white",
+        fontSize: 11,
+        fontWeight: 700,
+        alignSelf: "flex-end",
+        marginBottom: 2,
+      }}
+    >
+      {participant?.avatarUrl ? (
+        <img
+          src={participant.avatarUrl}
+          alt={name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        name.slice(0, 2).toUpperCase()
+      )}
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const {
     conversations,
@@ -228,6 +374,8 @@ export default function ChatPage() {
     typingUsersByConv,
     updateStrangerStatus,
     forwardMessage,
+    updateMemberRole,
+    editMessage,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -235,7 +383,6 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { user, userProfile } = useAuthStore();
   const { socket } = useSocketStore();
@@ -272,17 +419,17 @@ export default function ChatPage() {
   );
   const [forwardSearch, setForwardSearch] = useState("");
   const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
-  //edit
+  // Edit message
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editInput, setEditInput] = useState("");
-  const { editMessage } = useChatStore();
+  // Info panel
+  const [showInfoPanel, setShowInfoPanel] = useState(true);
 
   // ─── Fetch conversations on mount ───────────────────────────────────────────
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // ─── Fetch messages when active conversation changes ─────────────────────────
   useEffect(() => {
     if (activeConversationId) {
       fetchMessages(activeConversationId);
@@ -297,7 +444,6 @@ export default function ChatPage() {
     setImagePreviewUrl(null);
   }, [activeConversationId]);
 
-  // ─── Scroll to bottom on new messages ────────────────────────────────────────
   useEffect(() => {
     socketStore.connectSocket();
   }, []);
@@ -306,7 +452,6 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeConversationId]);
 
-  // ─── Click outside to close menus ────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -322,7 +467,6 @@ export default function ChatPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ─── Cleanup recording on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current)
@@ -331,7 +475,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  // ─── Mark last message as read via socket ────────────────────────────────────
   useEffect(() => {
     if (!activeConversationId || !socket) return;
     const items = messages[activeConversationId]?.items ?? [];
@@ -364,7 +507,6 @@ export default function ChatPage() {
     return Array.isArray(data) ? data : (data.items ?? []);
   }, [messages, activeConversationId]);
 
-  // lastReadMessageId của người kia (để hiện avatar seen dưới tin của mình)
   const otherLastReadMessageId = useMemo(
     () =>
       activeConversation?.participants.find((p) => p._id !== user?.userId)
@@ -461,7 +603,6 @@ export default function ChatPage() {
 
   const displayMessages = useMemo(() => {
     const pollActivityOrder = new Map<string, number>();
-
     pollAggregates.forEach((aggregate, pollId) => {
       pollActivityOrder.set(
         pollId,
@@ -477,24 +618,16 @@ export default function ChatPage() {
       .map((message, index) => {
         const payload = decodeChatPayload(message.content);
         let displayTime = new Date(message.createdAt).getTime();
-
         if (payload?.kind === "poll" && payload.poll) {
           const latestPollActivity = pollActivityOrder.get(payload.poll.id);
-          if (latestPollActivity) {
+          if (latestPollActivity)
             displayTime = Math.max(displayTime, latestPollActivity);
-          }
         }
-
-        return {
-          message,
-          index,
-          displayTime,
-        };
+        return { message, index, displayTime };
       })
       .sort((a, b) => {
-        if (a.displayTime !== b.displayTime) {
+        if (a.displayTime !== b.displayTime)
           return a.displayTime - b.displayTime;
-        }
         return a.index - b.index;
       })
       .map((item) => item.message);
@@ -508,6 +641,21 @@ export default function ChatPage() {
       lastMessage._id?.toString() || `${lastMessage.createdAt}-${lastIndex}`
     );
   }, [displayMessages]);
+
+  // For group seen: build a map of messageId -> list of participants who have read up to that message
+  const groupSeenMap = useMemo(() => {
+    if (!activeConversation?.group)
+      return new Map<string, typeof activeConversation.participants>();
+    const map = new Map<string, typeof activeConversation.participants>();
+    // For each participant (not me), find their lastReadMessageId and mark that message
+    activeConversation.participants.forEach((p) => {
+      if (p._id === user?.userId) return;
+      if (!p.lastReadMessageId) return;
+      const existing = map.get(p.lastReadMessageId) || [];
+      map.set(p.lastReadMessageId, [...existing, p]);
+    });
+    return map;
+  }, [activeConversation, user?.userId]);
 
   // ─── Callbacks ───────────────────────────────────────────────────────────────
   const canRecall = useCallback(
@@ -568,7 +716,6 @@ export default function ChatPage() {
       await sendStructuredMessage(payload);
       setInput("");
       setReplyingTo(null);
-      // Stop typing indicator
       if (socket?.connected) {
         socket.emit("stop-typing", { conversationId: activeConversationId });
       }
@@ -893,9 +1040,8 @@ export default function ChatPage() {
             }}
             onClick={(event) => {
               event.stopPropagation();
-              if (payload.attachment?.url) {
+              if (payload.attachment?.url)
                 setImagePreviewUrl(payload.attachment.url);
-              }
             }}
           />
         );
@@ -1246,6 +1392,8 @@ export default function ChatPage() {
         .sticker-btn:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
         .action-btn:hover { background: rgba(148,163,184,0.15) !important; color: #f8fafc !important; }
         .menu-item:hover { background: rgba(148,163,184,0.12) !important; }
+        @media (max-width: 1400px) { .info-panel-responsive { display: none !important; } }
+        @media (max-width: 768px) { .conversation-list-responsive { display: none !important; } }
       `}</style>
 
       <SideNav onNewMessage={() => undefined} />
@@ -1263,1040 +1411,1303 @@ export default function ChatPage() {
         onClose={() => undefined}
       />
 
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          color: "white",
-          background:
-            "radial-gradient(circle at 15% 20%, rgba(56,189,248,.18), transparent 40%), radial-gradient(circle at 95% 20%, rgba(59,130,246,.18), transparent 35%), #050d1f",
-        }}
-      >
-        {activeConversation ? (
-          <>
-            {/* Header */}
-            <div
-              style={{
-                padding: "12px 16px",
-                borderBottom: "1px solid rgba(255,255,255,.08)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              {/* Cột trái: tên + badge người lạ */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <strong style={{ color: "#f1f5f9", fontSize: 15 }}>
-                  {activeConversation.group?.name ||
-                    otherUser?.displayName ||
-                    "Đoạn chat"}
-                </strong>
-
-                {activeConversation.strangerStatus === "accepted" &&
-                  activeConversation.isStranger === true && (
-                    <span
+      {/* Main Chat Area + Info Panel Container */}
+      <div style={{ display: "flex", flex: 1, position: "relative" }}>
+        {/* Chat Area */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            color: "white",
+            background:
+              "radial-gradient(circle at 15% 20%, rgba(56,189,248,.18), transparent 40%), radial-gradient(circle at 95% 20%, rgba(59,130,246,.18), transparent 35%), #050d1f",
+          }}
+        >
+          {activeConversation ? (
+            <>
+              {/* Header */}
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderBottom: "1px solid rgba(255,255,255,.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                {/* Left: Avatar + Name + Status */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {/* Avatar */}
+                  {activeConversation.group ? (
+                    <div
+                      style={{ position: "relative", width: 40, height: 40 }}
+                    >
+                      {activeConversation.participants
+                        .slice(0, 3)
+                        .map((p, idx) => {
+                          const positions = [
+                            { top: 0, left: 0, zIndex: 3 },
+                            { top: 0, right: 0, zIndex: 2 },
+                            {
+                              bottom: 0,
+                              left: "50%",
+                              transform: "translateX(-50%)",
+                              zIndex: 1,
+                            },
+                          ];
+                          const pos = positions[idx];
+                          const colors = [
+                            "#3b82f6",
+                            "#10b981",
+                            "#8b5cf6",
+                            "#f59e0b",
+                            "#ef4444",
+                            "#06b6d4",
+                            "#ec4899",
+                          ];
+                          let hash = 0;
+                          for (let i = 0; i < p.displayName.length; i++)
+                            hash =
+                              p.displayName.charCodeAt(i) +
+                              ((hash << 5) - hash);
+                          const avatarColor =
+                            colors[Math.abs(hash) % colors.length];
+                          return (
+                            <div
+                              key={p._id}
+                              style={{
+                                position: "absolute",
+                                width: idx === 0 ? 28 : 22,
+                                height: idx === 0 ? 28 : 22,
+                                borderRadius: "50%",
+                                border: "2px solid #0f172a",
+                                overflow: "hidden",
+                                background: p.avatarUrl
+                                  ? undefined
+                                  : avatarColor,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "white",
+                                fontWeight: 700,
+                                fontSize: idx === 0 ? 10 : 8,
+                                ...pos,
+                              }}
+                            >
+                              {p.avatarUrl ? (
+                                <img
+                                  src={p.avatarUrl}
+                                  alt={p.displayName}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                              ) : (
+                                p.displayName?.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <div
                       style={{
-                        display: "inline-flex",
+                        width: 40,
+                        height: 40,
+                        borderRadius: "50%",
+                        background: otherUser?.avatarUrl
+                          ? `url(${otherUser.avatarUrl}) center/cover`
+                          : "#2563eb",
+                        border: "2px solid rgba(37,99,235,0.3)",
+                        display: "flex",
                         alignItems: "center",
-                        gap: 4,
-                        width: "fit-content",
-                        background: "rgba(148,163,184,0.1)",
-                        border: "1px solid rgba(148,163,184,0.2)",
-                        borderRadius: 20,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        color: "#94a3b8",
+                        justifyContent: "center",
+                        color: "white",
+                        fontSize: 16,
+                        fontWeight: 700,
+                        flexShrink: 0,
                       }}
                     >
-                      <UserIcon size={15} /> Người lạ
-                    </span>
+                      {!otherUser?.avatarUrl &&
+                        otherUser?.displayName?.[0]?.toUpperCase()}
+                    </div>
                   )}
-              </div>
 
-              {/* Cột phải: số tin nhắn */}
-              <span style={{ color: "#94a3b8", fontSize: 13 }}>
-                {displayMessages.length} tin nhắn
-              </span>
-            </div>
-
-            {/* Messages */}
-            <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
-              {displayMessages.map((message, index) => {
-                const isMine = message.senderId === user?.userId;
-                const payload = decodeChatPayload(message.content);
-                const isAttachmentCard =
-                  payload?.kind === "file" || payload?.kind === "audio";
-                const useNeutralBubble = message.isRecalled || isAttachmentCard;
-                const isLastRead =
-                  otherLastReadMessageId &&
-                  message._id?.toString() === otherLastReadMessageId.toString();
-                const messageKey =
-                  message._id?.toString() || `${message.createdAt}-${index}`;
-                const isLastMessage = messageKey === lastDisplayMessageKey;
-                const isTimeVisible =
-                  isLastMessage || expandedMessageKey === messageKey;
-                const timeLabel =
-                  expandedMessageKey === messageKey
-                    ? formatMessageDateTime(message.createdAt)
-                    : formatTime(message.createdAt);
-                const editedLabel =
-                  message.isEdited && !message.isRecalled ? (
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#94a3b8",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      (đã chỉnh sửa)
-                    </span>
-                  ) : null;
-
-                return (
+                  {/* Name + Status */}
                   <div
-                    key={message._id || `${message.createdAt}-${index}`}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      marginBottom: 10,
-                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: 2 }}
                   >
-                    {/* Bubble row */}
-
+                    <strong style={{ color: "#f1f5f9", fontSize: 16 }}>
+                      {activeConversation.group?.name ||
+                        otherUser?.displayName ||
+                        "Đoạn chat"}
+                    </strong>
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: isMine ? "flex-end" : "flex-start",
-                        padding: "2px 2px",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 11,
+                        color: activeConversation.group
+                          ? "#94a3b8"
+                          : socketStore.onlineUsers.some(
+                                (id) => String(id) === String(otherUser?._id),
+                              )
+                            ? "#10b981"
+                            : "#64748b",
                       }}
                     >
-                      <div
+                      {activeConversation.group ? (
+                        <span>
+                          {activeConversation.participants.length} thành viên
+                        </span>
+                      ) : activeConversation.isStranger ? (
+                        <span style={{ color: "#94a3b8" }}></span>
+                      ) : (
+                        <>
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: socketStore.onlineUsers.some(
+                                (id) => String(id) === String(otherUser?._id),
+                              )
+                                ? "#10b981"
+                                : "#64748b",
+                              display: "inline-block",
+                            }}
+                          />
+                          {socketStore.onlineUsers.some(
+                            (id) => String(id) === String(otherUser?._id),
+                          )
+                            ? "Đang hoạt động"
+                            : "Ngoại tuyến"}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stranger badge */}
+                  {!activeConversation.group &&
+                    activeConversation.strangerStatus === "accepted" &&
+                    activeConversation.isStranger === true && (
+                      <span
                         style={{
-                          display: "flex",
-                          justifyContent: isMine ? "flex-end" : "flex-start",
-                          
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          background: "rgba(148,163,184,0.1)",
+                          border: "1px solid rgba(148,163,184,0.2)",
+                          borderRadius: 20,
+                          padding: "2px 8px",
+                          fontSize: 10,
+                          color: "#94a3b8",
+                          marginLeft: 8,
                         }}
                       >
-                        <div
+                        <UserIcon size={13} /> Người lạ
+                      </span>
+                    )}
+                </div>
+
+                {/* Right: Action buttons */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {activeConversation.group && (
+                    <button
+                      title="Thêm thành viên"
+                      style={{ ...actionIconStyle, width: 36, height: 36 }}
+                      className="action-btn"
+                    >
+                      <UserPlus size={18} />
+                    </button>
+                  )}
+                  <button
+                    title="Gọi"
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
+                    className="action-btn"
+                  >
+                    <Phone size={18} />
+                  </button>
+                  <button
+                    title="Gọi video"
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
+                    className="action-btn"
+                  >
+                    <Video size={18} />
+                  </button>
+                  <button
+                    title="Tìm kiếm"
+                    style={{ ...actionIconStyle, width: 36, height: 36 }}
+                    className="action-btn"
+                  >
+                    <Search size={18} />
+                  </button>
+                  <button
+                    onClick={() => setShowInfoPanel(!showInfoPanel)}
+                    title={showInfoPanel ? "Ẩn thông tin" : "Hiện thông tin"}
+                    style={{
+                      ...actionIconStyle,
+                      width: 36,
+                      height: 36,
+                      color: showInfoPanel ? "#2563eb" : "#94a3b8",
+                    }}
+                    className="action-btn"
+                  >
+                    {showInfoPanel ? (
+                      <PanelRightClose size={18} />
+                    ) : (
+                      <PanelRight size={18} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div
+                ref={messagesContainerRef}
+                style={{ flex: 1, padding: 16, overflowY: "auto" }}
+              >
+                {displayMessages.map((message, index) => {
+                  const isMine = message.senderId === user?.userId;
+                  const isGroup = !!activeConversation.group;
+                  const payload = decodeChatPayload(message.content);
+                  const messageKey =
+                    message._id?.toString() || `${message.createdAt}-${index}`;
+                  const isLastMessage = messageKey === lastDisplayMessageKey;
+
+                  // Sender participant (for group avatar)
+                  const senderParticipant = !isMine
+                    ? isGroup
+                      ? activeConversation.participants.find(
+                          (p) => p._id === message.senderId,
+                        )
+                      : otherUser
+                    : undefined;
+
+                  // Direct chat: single seen avatar
+                  const isLastRead =
+                    !isGroup &&
+                    otherLastReadMessageId &&
+                    message._id?.toString() ===
+                      otherLastReadMessageId.toString();
+
+                  // Group chat: who has read up to this message
+                  const groupSeenParticipants = isGroup
+                    ? groupSeenMap.get(message._id?.toString()) || []
+                    : [];
+
+                  if (
+                    message.type === "system" ||
+                    message.content?.startsWith("{{system}}")
+                  ) {
+                    const text = message.content.replace("{{system}}", "");
+                    return (
+                      <div
+                        key={messageKey}
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <span
                           style={{
+                            fontSize: 12,
+                            color: "#94a3b8",
+                            background: "rgba(148,163,184,0.1)",
+                            border: "1px solid rgba(148,163,184,0.15)",
+                            borderRadius: 20,
+                            padding: "4px 14px",
                             display: "flex",
                             alignItems: "center",
                             gap: 6,
                           }}
                         >
-                          {isMine &&
-                            message.isEdited &&
-                            !message.isRecalled && (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  color: "#94a3b8",
-                                  fontStyle: "italic",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                (đã chỉnh sửa)
-                              </span>
-                            )}
-                          {isMine && !message.isRecalled && (
-                            <button
-                              onClick={(e) => handleOpenContextMenu(e, message)}
-                              style={{
-                                ...actionDotsStyle,
-                                opacity: 0.7,
-                              }}
-                              className="action-btn"
-                            >
-                              <Ellipsis size={16} />
-                            </button>
-                          )}
-
-                          {/* 👉 BUBBLE (dùng chung, giữ nguyên style cũ) */}
-                          <div
-                            onClick={() =>
-                              setExpandedMessageKey((prev) =>
-                                prev === messageKey ? null : messageKey,
-                              )
-                            }
-                            style={{
-                              maxWidth: "90%",
-                              borderRadius: 14,
-                              cursor: "pointer",
-
-                              padding:
-                                payload?.kind === "image" ||
-                                payload?.kind === "file" ||
-                                payload?.kind === "poll"
-                                  ? 0
-                                  : "10px 12px",
-
-                              background:
-                                payload?.kind === "image" ||
-                                payload?.kind === "file" ||
-                                payload?.kind === "poll"
-                                  ? "transparent"
-                                  : message.isRecalled
-                                    ? "rgba(15,23,42,.4)"
-                                    : isMine
-                                      ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
-                                      : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
-
-                              border:
-                                payload?.kind === "image" ||
-                                payload?.kind === "file" ||
-                                payload?.kind === "poll"
-                                  ? "none"
-                                  : isMine
-                                    ? "none"
-                                    : "1px solid rgba(148,163,184,.18)",
-
-                              boxShadow:
-                                payload?.kind === "image" ||
-                                payload?.kind === "file" ||
-                                payload?.kind === "poll"
-                                  ? "none"
-                                  : "0 8px 20px rgba(0,0,0,.25)",
-
-                              overflow: "hidden",
-                            }}
-                          >
-                            {renderStructuredMessage(message)}
-                          </div>
-
-                          {/* 👉 BÊN NGƯỜI KHÁC: button */}
-                          {!isMine && !message.isRecalled && (
-                            <button
-                              onClick={(e) => handleOpenContextMenu(e, message)}
-                              style={{
-                                ...actionDotsStyle,
-                                opacity: 0.7,
-                              }}
-                              className="action-btn"
-                            >
-                              <Ellipsis size={16} />
-                            </button>
-                          )}
-
-                          {/* 👉 BÊN NGƯỜI KHÁC: edited */}
-                          {!isMine &&
-                            message.isEdited &&
-                            !message.isRecalled && (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  color: "#94a3b8",
-                                  fontStyle: "italic",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                (đã chỉnh sửa)
-                              </span>
-                            )}
-                        </div>
+                          {text}
+                        </span>
                       </div>
-                    </div>
-                    {/* Chỉ hiện thời gian KHI VÀ CHỈ KHI tin nhắn được nhấn vào (expanded) */}
-                    {expandedMessageKey === messageKey && (
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={messageKey}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        marginBottom: 10,
+                      }}
+                    >
+                      {/* Sender name for group (not mine) */}
+                      {isGroup && !isMine && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#94a3b8",
+                            marginBottom: 2,
+                            marginLeft: 36,
+                          }}
+                        >
+                          {senderParticipant?.displayName || "Người dùng"}
+                        </div>
+                      )}
+
+                      {/* Bubble row */}
                       <div
                         style={{
                           display: "flex",
                           justifyContent: isMine ? "flex-end" : "flex-start",
-                          marginTop: 4,
-                          padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                          gap: 6,
+                          alignItems: "flex-end",
                         }}
                       >
-                        <span
+                        {/* Group: sender avatar on the left (only for others) */}
+                        {!isMine && senderParticipant && (
+  <SenderAvatar participant={senderParticipant} />
+)}
+
+                        {/* Spacer to align my messages in group (no avatar on right) */}
+                        {isGroup && isMine && <div style={{ width: 0 }} />}
+
+                        {isMine && !message.isRecalled && (
+                          <button
+                            onClick={(e) => handleOpenContextMenu(e, message)}
+                            style={actionDotsStyle}
+                            className="action-btn"
+                            title="Tùy chọn tin nhắn"
+                          >
+                            <Ellipsis size={16} />
+                          </button>
+                        )}
+
+                        <div
+                          onClick={() =>
+                            setExpandedMessageKey((prev) =>
+                              prev === messageKey ? null : messageKey,
+                            )
+                          }
                           style={{
-                            fontSize: 11,
-                            color: "#94a3b8",
-                            lineHeight: 1.3,
+                            maxWidth: "72%",
+                            borderRadius: 14,
+                            cursor: "pointer",
+                            padding:
+                              payload?.kind === "image" ||
+                              payload?.kind === "file" ||
+                              payload?.kind === "poll"
+                                ? 0
+                                : "10px 12px",
+                            background:
+                              payload?.kind === "image" ||
+                              payload?.kind === "file" ||
+                              payload?.kind === "poll"
+                                ? "transparent"
+                                : message.isRecalled
+                                  ? "rgba(15,23,42,.4)"
+                                  : isMine
+                                    ? "linear-gradient(145deg, #1d4ed8 0%, #2563eb 100%)"
+                                    : "linear-gradient(145deg, #0f172a 0%, #1f2937 100%)",
+                            border:
+                              payload?.kind === "image" ||
+                              payload?.kind === "file" ||
+                              payload?.kind === "poll"
+                                ? "none"
+                                : isMine
+                                  ? "none"
+                                  : "1px solid rgba(148,163,184,.18)",
+                            boxShadow:
+                              payload?.kind === "image" ||
+                              payload?.kind === "file" ||
+                              payload?.kind === "poll"
+                                ? "none"
+                                : "0 8px 20px rgba(0,0,0,.25)",
+                            overflow: "hidden",
                           }}
                         >
-                          {/* Hiện đầy đủ ngày giờ khi nhấn vào */}
-                          {formatMessageDateTime(message.createdAt)}
-                        </span>
-                      </div>
-                    )}
+                          {renderStructuredMessage(message)}
+                        </div>
 
-                    {/* Avatar seen — tin của mình, người kia đã đọc */}
-                    {isMine && !message.isRecalled && isLastRead && (
-                      <div
+                        {!isMine && !message.isRecalled && (
+                          <button
+                            onClick={(e) => handleOpenContextMenu(e, message)}
+                            style={actionDotsStyle}
+                            className="action-btn"
+                            title="Tùy chọn tin nhắn"
+                          >
+                            <Ellipsis size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Edited + timestamp */}
+                      {expandedMessageKey === messageKey && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: isMine ? "flex-end" : "flex-start",
+                            marginTop: 4,
+                            padding: isMine ? "0 4px 0 0" : "0 0 0 4px",
+                            gap: 6,
+                            alignItems: "center",
+                          }}
+                        >
+                          {message.isEdited && !message.isRecalled && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#94a3b8",
+                                fontStyle: "italic",
+                              }}
+                            >
+                              (đã chỉnh sửa)
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#94a3b8",
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {formatMessageDateTime(message.createdAt)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Direct chat: avatar seen */}
+                      {isMine &&
+                        !message.isRecalled &&
+                        isLastRead &&
+                        !isGroup && (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "flex-end",
+                              paddingRight: 4,
+                              marginTop: 2,
+                            }}
+                          >
+                            <img
+                              src={otherAvatar}
+                              alt="seen"
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: "50%",
+                                border: "1.5px solid #60a5fa",
+                              }}
+                              title={`${otherUser?.displayName} đã xem`}
+                            />
+                          </div>
+                        )}
+
+                      {/* Group chat: seen avatars stack */}
+                      {isMine &&
+                        !message.isRecalled &&
+                        isGroup &&
+                        groupSeenParticipants.length > 0 && (
+                          <GroupSeenAvatars
+                            seenParticipants={groupSeenParticipants}
+                          />
+                        )}
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Stranger pending banners */}
+              {activeConversation.isStranger &&
+                activeConversation.strangerStatus === "pending" &&
+                activeConversation.initiatorId === user?.userId && (
+                  <div
+                    style={{
+                      margin: "0 16px 8px",
+                      padding: "10px 14px",
+                      background: "rgba(37,99,235,0.08)",
+                      border: "1px solid rgba(37,99,235,0.2)",
+                      borderRadius: 12,
+                      color: "#94a3b8",
+                      fontSize: 13,
+                      textAlign: "center",
+                    }}
+                  >
+                    ⏳ Đang chờ{" "}
+                    <strong style={{ color: "#f1f5f9" }}>
+                      {otherUser?.displayName}
+                    </strong>{" "}
+                    chấp nhận tin nhắn của bạn
+                  </div>
+                )}
+
+              {activeConversation.isStranger &&
+                activeConversation.strangerStatus === "pending" &&
+                activeConversation.initiatorId !== user?.userId && (
+                  <div
+                    style={{
+                      margin: "0 16px 8px",
+                      background: "rgba(30,41,59,0.9)",
+                      border: "1px solid rgba(148,163,184,0.2)",
+                      borderRadius: 14,
+                      padding: "14px 16px",
+                    }}
+                  >
+                    {(() => {
+                      const sender = activeConversation.participants.find(
+                        (p) => p._id !== user?.userId,
+                      );
+                      return (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            marginBottom: 10,
+                          }}
+                        >
+                          {sender?.avatarUrl ? (
+                            <img
+                              src={sender.avatarUrl}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                background: "#2563eb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontWeight: 700,
+                                fontSize: 14,
+                              }}
+                            >
+                              {sender?.displayName?.[0]?.toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div
+                              style={{
+                                color: "#f1f5f9",
+                                fontWeight: 600,
+                                fontSize: 14,
+                              }}
+                            >
+                              {sender?.displayName}
+                            </div>
+                            <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                              Muốn nhắn tin với bạn
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <p
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: 13,
+                        marginBottom: 12,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin
+                      nhắn từ họ không?
+                    </p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() =>
+                          updateStrangerStatus(
+                            activeConversation._id,
+                            "accepted",
+                          )
+                        }
                         style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          paddingRight: 4,
-                          marginTop: 2,
+                          flex: 1,
+                          padding: "8px 0",
+                          borderRadius: 10,
+                          border: "none",
+                          background: "#2563eb",
+                          color: "#fff",
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: "pointer",
                         }}
                       >
-                        <img
-                          src={otherAvatar}
-                          alt="seen"
-                          style={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: "50%",
-                            border: "1.5px solid #60a5fa",
-                          }}
-                          title={`${otherUser?.displayName} đã xem`}
-                        />
-                      </div>
-                    )}
+                        ✓ Chấp nhận
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateStrangerStatus(
+                            activeConversation._id,
+                            "declined",
+                          )
+                        }
+                        style={{
+                          flex: 1,
+                          padding: "8px 0",
+                          borderRadius: 10,
+                          border: "1px solid rgba(248,113,113,0.4)",
+                          background: "rgba(248,113,113,0.1)",
+                          color: "#fca5a5",
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✗ Từ chối
+                      </button>
+                    </div>
                   </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-            {activeConversation.isStranger &&
-              activeConversation.strangerStatus === "pending" &&
-              activeConversation.initiatorId === user?.userId && ( // ✅ người gửi
-                <div
-                  style={{
-                    margin: "0 16px 8px",
-                    padding: "10px 14px",
-                    background: "rgba(37,99,235,0.08)",
-                    border: "1px solid rgba(37,99,235,0.2)",
-                    borderRadius: 12,
-                    color: "#94a3b8",
-                    fontSize: 13,
-                    textAlign: "center",
-                  }}
-                >
-                  ⏳ Đang chờ{" "}
-                  <strong style={{ color: "#f1f5f9" }}>
-                    {otherUser?.displayName}
-                  </strong>{" "}
-                  chấp nhận tin nhắn của bạn
-                </div>
-              )}
+                )}
 
-            {activeConversation.isStranger &&
-              activeConversation.strangerStatus === "pending" &&
-              activeConversation.initiatorId !== user?.userId && (
-                <div
-                  style={{
-                    margin: "0 16px 8px",
-                    background: "rgba(30,41,59,0.9)",
-                    border: "1px solid rgba(148,163,184,0.2)",
-                    borderRadius: 14,
-                    padding: "14px 16px",
-                  }}
-                >
-                  {/* Avatar + tên người gửi */}
-                  {(() => {
-                    const sender = activeConversation.participants.find(
-                      (p) => p._id !== user?.userId,
-                    );
-                    return (
+              {/* Typing indicator */}
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#94a3b8",
+                  height: 18,
+                  marginBottom: 4,
+                  paddingLeft: 16,
+                }}
+              >
+                {typingUsers.length > 0 && (
+                  <span>
+                    {typingUsers
+                      .map(
+                        (id) =>
+                          activeConversation.participants.find(
+                            (p) => p._id === id,
+                          )?.displayName,
+                      )
+                      .filter(Boolean)
+                      .join(", ")}{" "}
+                    đang soạn...
+                  </span>
+                )}
+              </div>
+
+              {/* Input area */}
+              <div
+                style={{
+                  padding: "10px 14px 14px",
+                  borderTop: "1px solid rgba(255,255,255,.08)",
+                }}
+              >
+                {/* Reply banner */}
+                {replyingTo && (
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      background: "rgba(30,64,175,.22)",
+                      border: "1px solid rgba(96,165,250,.4)",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          color: "#bfdbfe",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Đang trả lời{" "}
+                        {getSenderName(
+                          replyingTo,
+                          user?.userId,
+                          activeConversation.participants,
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          color: "#cbd5e1",
+                          fontSize: 12,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {getSafeMessagePreview(replyingTo.content)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#e2e8f0",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Edit banner */}
+                {editingMessage && (
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      background: "rgba(234,179,8,.1)",
+                      border: "1px solid rgba(234,179,8,.35)",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "#fde047",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✏️ Đang chỉnh sửa tin nhắn
+                      </span>
+                      <button
+                        onClick={() => {
+                          setEditingMessage(null);
+                          setEditInput("");
+                        }}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={editInput}
+                        onChange={(e) => setEditInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleEdit();
+                          }
+                        }}
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          border: "0.5px solid rgba(234,179,8,.4)",
+                          background: "rgba(234,179,8,.05)",
+                          color: "#f1f5f9",
+                          borderRadius: 10,
+                          padding: "7px 10px",
+                          outline: "none",
+                          fontSize: 14,
+                        }}
+                      />
+                      <button
+                        onClick={() => void handleEdit()}
+                        disabled={!editInput.trim()}
+                        style={{
+                          border: "none",
+                          borderRadius: 10,
+                          padding: "7px 14px",
+                          background: editInput.trim() ? "#ca8a04" : "#334155",
+                          color: "white",
+                          cursor: editInput.trim() ? "pointer" : "not-allowed",
+                          fontWeight: 600,
+                          fontSize: 13,
+                        }}
+                      >
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ position: "relative" }} ref={popupRef}>
+                  {/* Media popup */}
+                  {activePopup === "media" && (
+                    <div style={popupBoxStyle}>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          marginBottom: 10,
+                          color: "#f1f5f9",
+                        }}
+                      >
+                        Gửi tệp hoặc hình ảnh
+                      </div>
+                      <div style={{ display: "grid", gap: 8 }}>
+                        <button
+                          style={popupActionStyle}
+                          className="menu-item"
+                          onClick={() => imageInputRef.current?.click()}
+                        >
+                          <ImagePlus size={16} /> Chọn ảnh
+                        </button>
+                        <button
+                          style={popupActionStyle}
+                          className="menu-item"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <FileUp size={16} /> Chọn tệp
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audio popup */}
+                  {activePopup === "audio" && (
+                    <div style={popupBoxStyle}>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 10,
-                          marginBottom: 10,
+                          justifyContent: "space-between",
+                          gap: 8,
+                          marginBottom: 12,
                         }}
                       >
-                        {sender?.avatarUrl ? (
-                          <img
-                            src={sender.avatarUrl}
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: "50%",
-                              background: "#2563eb",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#fff",
-                              fontWeight: 700,
-                              fontSize: 14,
-                            }}
-                          >
-                            {sender?.displayName?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div
-                            style={{
-                              color: "#f1f5f9",
-                              fontWeight: 600,
-                              fontSize: 14,
-                            }}
-                          >
-                            {sender?.displayName}
-                          </div>
-                          <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                            Muốn nhắn tin với bạn
-                          </div>
+                        <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
+                          Ghi âm
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: isRecording ? "#fca5a5" : "#64748b",
+                            background: isRecording
+                              ? "rgba(252,165,165,.1)"
+                              : "rgba(100,116,139,.1)",
+                            border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
+                            borderRadius: 20,
+                            padding: "4px 10px",
+                          }}
+                        >
+                          {isRecording
+                            ? `● ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")}`
+                            : "Sẵn sàng"}
                         </div>
                       </div>
-                    );
-                  })()}
-
-                  <p
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: 13,
-                      marginBottom: 12,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin nhắn
-                    từ họ không?
-                  </p>
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() =>
-                        updateStrangerStatus(activeConversation._id, "accepted")
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 10,
-                        border: "none",
-                        background: "#2563eb",
-                        color: "#fff",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✓ Chấp nhận
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateStrangerStatus(activeConversation._id, "declined")
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "8px 0",
-                        borderRadius: 10,
-                        border: "1px solid rgba(248,113,113,0.4)",
-                        background: "rgba(248,113,113,0.1)",
-                        color: "#fca5a5",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✗ Từ chối
-                    </button>
-                  </div>
-                </div>
-              )}
-
-            {/* Input area — disable nếu stranger pending
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-                // ✅ Mờ đi khi chưa accept
-                opacity:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? 0.4
-                    : 1,
-                pointerEvents:
-                  activeConversation.isStranger &&
-                  activeConversation.strangerStatus === "pending"
-                    ? "none"
-                    : "auto",
-              }}
-            ></div> */}
-
-            {/* Typing indicator */}
-            <div
-              style={{
-                fontSize: 12,
-                color: "#94a3b8",
-                height: 18,
-                marginBottom: 4,
-                paddingLeft: 16,
-              }}
-            >
-              {typingUsers.length > 0 && (
-                <span>
-                  {typingUsers
-                    .map(
-                      (id) =>
-                        activeConversation.participants.find(
-                          (p) => p._id === id,
-                        )?.displayName,
-                    )
-                    .filter(Boolean)
-                    .join(", ")}{" "}
-                  đang soạn...
-                </span>
-              )}
-            </div>
-
-            {/* Input area */}
-            <div
-              style={{
-                padding: "10px 14px 14px",
-                borderTop: "1px solid rgba(255,255,255,.08)",
-              }}
-            >
-              {/* Reply banner */}
-              {replyingTo && (
-                <div
-                  style={{
-                    marginBottom: 8,
-                    background: "rgba(30,64,175,.22)",
-                    border: "1px solid rgba(96,165,250,.4)",
-                    borderRadius: 12,
-                    padding: "8px 10px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        color: "#bfdbfe",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Đang trả lời{" "}
-                      {getSenderName(
-                        replyingTo,
-                        user?.userId,
-                        activeConversation.participants,
-                      )}
+                      <div style={{ display: "grid", gap: 8 }}>
+                        {!isRecording ? (
+                          <button
+                            style={{
+                              ...popupActionStyle,
+                              borderColor: "rgba(37,99,235,.45)",
+                              background: "rgba(37,99,235,.1)",
+                            }}
+                            onClick={() => void startRecording()}
+                          >
+                            <Mic size={16} /> Bắt đầu ghi âm
+                          </button>
+                        ) : (
+                          <button
+                            style={{
+                              ...popupActionStyle,
+                              borderColor: "rgba(248,113,113,.45)",
+                              background: "rgba(248,113,113,.15)",
+                            }}
+                            onClick={() => stopRecording()}
+                          >
+                            <Mic size={16} /> Dừng và gửi
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        color: "#cbd5e1",
-                        fontSize: 12,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {getSafeMessagePreview(replyingTo.content)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setReplyingTo(null)}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "#e2e8f0",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              )}
-              {editingMessage && (
-                <div
-                  style={{
-                    marginBottom: 8,
-                    background: "rgba(234,179,8,.1)",
-                    border: "1px solid rgba(234,179,8,.35)",
-                    borderRadius: 12,
-                    padding: "8px 10px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#fde047",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      ✏️ Đang chỉnh sửa tin nhắn
-                    </span>
-                    <button
-                      onClick={() => {
-                        setEditingMessage(null);
-                        setEditInput("");
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: "#94a3b8",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      value={editInput}
-                      onChange={(e) => setEditInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleEdit();
-                        }
-                      }}
-                      autoFocus
-                      style={{
-                        flex: 1,
-                        border: "0.5px solid rgba(234,179,8,.4)",
-                        background: "rgba(234,179,8,.05)",
-                        color: "#f1f5f9",
-                        borderRadius: 10,
-                        padding: "7px 10px",
-                        outline: "none",
-                        fontSize: 14,
-                      }}
-                    />
-                    <button
-                      onClick={() => void handleEdit()}
-                      disabled={!editInput.trim()}
-                      style={{
-                        border: "none",
-                        borderRadius: 10,
-                        padding: "7px 14px",
-                        background: editInput.trim() ? "#ca8a04" : "#334155",
-                        color: "white",
-                        cursor: editInput.trim() ? "pointer" : "not-allowed",
-                        fontWeight: 600,
-                        fontSize: 13,
-                      }}
-                    >
-                      Lưu
-                    </button>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              <div style={{ position: "relative" }} ref={popupRef}>
-                {/* Media popup */}
-                {activePopup === "media" && (
-                  <div style={popupBoxStyle}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        marginBottom: 10,
-                        color: "#f1f5f9",
-                      }}
-                    >
-                      Gửi tệp hoặc hình ảnh
-                    </div>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      <button
-                        style={popupActionStyle}
-                        className="menu-item"
-                        onClick={() => imageInputRef.current?.click()}
+                  {/* Sticker popup */}
+                  {activePopup === "sticker" && (
+                    <div style={{ ...popupBoxStyle, width: 340 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 12,
+                        }}
                       >
-                        <ImagePlus size={16} /> Chọn ảnh
-                      </button>
-                      <button
-                        style={popupActionStyle}
-                        className="menu-item"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <FileUp size={16} /> Chọn tệp
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Audio popup */}
-                {activePopup === "audio" && (
-                  <div style={popupBoxStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
-                        Ghi âm
+                        <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
+                        <a
+                          href="https://chatsticker.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "#3b82f6",
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Xem thêm
+                        </a>
                       </div>
                       <div
                         style={{
-                          fontSize: 12,
-                          color: isRecording ? "#fca5a5" : "#64748b",
-                          background: isRecording
-                            ? "rgba(252,165,165,.1)"
-                            : "rgba(100,116,139,.1)",
-                          border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
-                          borderRadius: 20,
-                          padding: "4px 10px",
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: 10,
                         }}
                       >
-                        {isRecording
-                          ? `● ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")}`
-                          : "Sẵn sàng"}
+                        {CHAT_STICKER_LIST.map((stickerUrl, index) => (
+                          <button
+                            key={`sticker-${index}`}
+                            className="sticker-btn"
+                            onClick={() => {
+                              void sendStructuredMessage({
+                                version: 1,
+                                kind: "sticker",
+                                stickerUrl,
+                              });
+                              setActivePopup(null);
+                            }}
+                            style={{
+                              border: "0.5px solid rgba(148,163,184,.15)",
+                              background: "rgba(255,255,255,.03)",
+                              borderRadius: 12,
+                              padding: 6,
+                              cursor: "pointer",
+                              transition: "all .2s ease",
+                            }}
+                          >
+                            <img
+                              src={stickerUrl}
+                              alt="sticker"
+                              style={{
+                                width: "100%",
+                                height: 80,
+                                objectFit: "contain",
+                              }}
+                            />
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {!isRecording ? (
-                        <button
-                          style={{
-                            ...popupActionStyle,
-                            borderColor: "rgba(37,99,235,.45)",
-                            background: "rgba(37,99,235,.1)",
-                          }}
-                          onClick={() => void startRecording()}
-                        >
-                          <Mic size={16} /> Bắt đầu ghi âm
-                        </button>
-                      ) : (
-                        <button
-                          style={{
-                            ...popupActionStyle,
-                            borderColor: "rgba(248,113,113,.45)",
-                            background: "rgba(248,113,113,.15)",
-                          }}
-                          onClick={() => stopRecording()}
-                        >
-                          <Mic size={16} /> Dừng và gửi
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Sticker popup */}
-                {activePopup === "sticker" && (
-                  <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 12,
-                      }}
-                    >
-                      <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
-                      <a
-                        href="https://chatsticker.com"
-                        target="_blank"
-                        rel="noreferrer"
+                  {/* Poll popup */}
+                  {activePopup === "poll" && (
+                    <div style={{ ...popupBoxStyle, width: 340 }}>
+                      <div
                         style={{
-                          color: "#3b82f6",
-                          fontSize: 12,
-                          fontWeight: 500,
+                          fontWeight: 600,
+                          marginBottom: 12,
+                          color: "#f1f5f9",
                         }}
                       >
-                        Xem thêm
-                      </a>
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: 10,
-                      }}
-                    >
-                      {CHAT_STICKER_LIST.map((stickerUrl, index) => (
-                        <button
-                          key={`sticker-${index}`}
-                          className="sticker-btn"
-                          onClick={() => {
-                            void sendStructuredMessage({
-                              version: 1,
-                              kind: "sticker",
-                              stickerUrl,
-                            });
-                            setActivePopup(null);
-                          }}
-                          style={{
-                            border: "0.5px solid rgba(148,163,184,.15)",
-                            background: "rgba(255,255,255,.03)",
-                            borderRadius: 12,
-                            padding: 6,
-                            cursor: "pointer",
-                            transition: "all .2s ease",
-                          }}
-                        >
-                          <img
-                            src={stickerUrl}
-                            alt="sticker"
-                            style={{
-                              width: "100%",
-                              height: 80,
-                              objectFit: "contain",
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Poll popup */}
-                {activePopup === "poll" && (
-                  <div style={{ ...popupBoxStyle, width: 340 }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        marginBottom: 12,
-                        color: "#f1f5f9",
-                      }}
-                    >
-                      Tạo cuộc thăm dò
-                    </div>
-                    <input
-                      value={pollQuestion}
-                      onChange={(e) => setPollQuestion(e.target.value)}
-                      placeholder="Câu hỏi bình chọn"
-                      style={pollInputStyle}
-                    />
-                    {pollOptions.map((option, index) => (
+                        Tạo cuộc thăm dò
+                      </div>
                       <input
-                        key={`poll-opt-${index}`}
-                        value={option}
-                        onChange={(e) => {
-                          const next = [...pollOptions];
-                          next[index] = e.target.value;
-                          setPollOptions(next);
-                        }}
-                        placeholder={`Lựa chọn ${index + 1}`}
+                        value={pollQuestion}
+                        onChange={(e) => setPollQuestion(e.target.value)}
+                        placeholder="Câu hỏi bình chọn"
                         style={pollInputStyle}
                       />
-                    ))}
-                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <button
-                        onClick={() => setPollOptions((p) => [...p, ""])}
-                        style={miniButtonStyle}
-                      >
-                        + Thêm
-                      </button>
-
-                      <button
-                        onClick={() => void handleCreatePoll()}
-                        style={miniButtonPrimaryStyle}
-                      >
-                        Tạo bình chọn
-                      </button>
+                      {pollOptions.map((option, index) => (
+                        <input
+                          key={`poll-opt-${index}`}
+                          value={option}
+                          onChange={(e) => {
+                            const next = [...pollOptions];
+                            next[index] = e.target.value;
+                            setPollOptions(next);
+                          }}
+                          placeholder={`Lựa chọn ${index + 1}`}
+                          style={pollInputStyle}
+                        />
+                      ))}
+                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                        <button
+                          onClick={() => setPollOptions((p) => [...p, ""])}
+                          style={miniButtonStyle}
+                        >
+                          + Thêm
+                        </button>
+                        <button
+                          onClick={() => void handleCreatePoll()}
+                          style={miniButtonPrimaryStyle}
+                        >
+                          Tạo bình chọn
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Hidden file inputs */}
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void sendAttachmentMessage(file, "image");
-                    e.currentTarget.value = "";
-                  }}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void sendAttachmentMessage(file, "file");
-                    e.currentTarget.value = "";
-                  }}
-                />
-
-                {/* Input bar */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    border: "1px solid rgba(148,163,184,.25)",
-                    background: "rgba(8,15,35,.85)",
-                    borderRadius: 16,
-                    padding: "6px 10px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                      paddingRight: 4,
-                      borderRight: "1px solid rgba(148,163,184,.12)",
-                    }}
-                  >
-                    <button
-                      title="Ảnh / Tệp"
-                      style={actionIconStyle}
-                      className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "media" ? null : "media"))
-                      }
-                    >
-                      <ImagePlus size={18} />
-                    </button>
-                    <button
-                      title="Nhãn dán"
-                      style={actionIconStyle}
-                      className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) =>
-                          p === "sticker" ? null : "sticker",
-                        )
-                      }
-                    >
-                      <Sticker size={18} />
-                    </button>
-                    <button
-                      title="Ghi âm"
-                      style={actionIconStyle}
-                      className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "audio" ? null : "audio"))
-                      }
-                    >
-                      <Mic size={18} />
-                    </button>
-                    <button
-                      title="Thăm dò"
-                      style={actionIconStyle}
-                      className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "poll" ? null : "poll"))
-                      }
-                    >
-                      <BarChart3 size={18} />
-                    </button>
-                  </div>
-
+                  {/* Hidden file inputs */}
                   <input
-                    value={input}
-                    onChange={(event) => {
-                      setInput(event.target.value);
-                      // Typing indicator
-                      if (socket?.connected && activeConversationId) {
-                        socket.emit("typing", {
-                          conversationId: activeConversationId,
-                        });
-                        if (typingTimeoutRef.current)
-                          clearTimeout(typingTimeoutRef.current);
-                        typingTimeoutRef.current = setTimeout(() => {
-                          socket.emit("stop-typing", {
-                            conversationId: activeConversationId,
-                          });
-                        }, 1200);
-                      }
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void sendAttachmentMessage(file, "image");
+                      e.currentTarget.value = "";
                     }}
-                    placeholder="Nhập tin nhắn..."
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void sendTextMessage();
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      color: "#f8fafc",
-                      padding: "0 8px",
-                      fontSize: 15,
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void sendAttachmentMessage(file, "file");
+                      e.currentTarget.value = "";
                     }}
                   />
 
-                  {/* Emoji picker */}
-                  <div style={{ position: "relative", display: "inline-flex" }}>
-                    {activePopup === "emoji" && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          right: 0,
-                          bottom: 46,
-                          zIndex: 40,
-                        }}
-                      >
-                        <Picker
-                          data={data}
-                          theme="dark"
-                          onEmojiSelect={(emoji: EmojiSelectEvent) => {
-                            if (!emoji.native) return;
-                            setInput((prev) => prev + emoji.native);
-                          }}
-                          previewPosition="none"
-                          skinTonePosition="none"
-                        />
-                      </div>
-                    )}
-                    <button
-                      title="Emoji"
-                      style={actionIconStyle}
-                      className="action-btn"
-                      onClick={() =>
-                        setActivePopup((p) => (p === "emoji" ? null : "emoji"))
-                      }
+                  {/* Input bar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      border: "1px solid rgba(148,163,184,.25)",
+                      background: "rgba(8,15,35,.85)",
+                      borderRadius: 16,
+                      padding: "6px 10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 2,
+                        paddingRight: 4,
+                        borderRight: "1px solid rgba(148,163,184,.12)",
+                      }}
                     >
-                      <Smile size={18} />
+                      <button
+                        title="Ảnh / Tệp"
+                        style={actionIconStyle}
+                        className="action-btn"
+                        onClick={() =>
+                          setActivePopup((p) =>
+                            p === "media" ? null : "media",
+                          )
+                        }
+                      >
+                        <ImagePlus size={18} />
+                      </button>
+                      <button
+                        title="Nhãn dán"
+                        style={actionIconStyle}
+                        className="action-btn"
+                        onClick={() =>
+                          setActivePopup((p) =>
+                            p === "sticker" ? null : "sticker",
+                          )
+                        }
+                      >
+                        <Sticker size={18} />
+                      </button>
+                      <button
+                        title="Ghi âm"
+                        style={actionIconStyle}
+                        className="action-btn"
+                        onClick={() =>
+                          setActivePopup((p) =>
+                            p === "audio" ? null : "audio",
+                          )
+                        }
+                      >
+                        <Mic size={18} />
+                      </button>
+                      <button
+                        title="Thăm dò"
+                        style={actionIconStyle}
+                        className="action-btn"
+                        onClick={() =>
+                          setActivePopup((p) => (p === "poll" ? null : "poll"))
+                        }
+                      >
+                        <BarChart3 size={18} />
+                      </button>
+                    </div>
+
+                    <input
+                      value={input}
+                      onChange={(event) => {
+                        setInput(event.target.value);
+                        if (socket?.connected && activeConversationId) {
+                          socket.emit("typing", {
+                            conversationId: activeConversationId,
+                          });
+                          if (typingTimeoutRef.current)
+                            clearTimeout(typingTimeoutRef.current);
+                          typingTimeoutRef.current = setTimeout(() => {
+                            socket.emit("stop-typing", {
+                              conversationId: activeConversationId,
+                            });
+                          }, 1200);
+                        }
+                      }}
+                      placeholder="Nhập tin nhắn..."
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void sendTextMessage();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        color: "#f8fafc",
+                        padding: "0 8px",
+                        fontSize: 15,
+                      }}
+                    />
+
+                    {/* Emoji picker */}
+                    <div
+                      style={{ position: "relative", display: "inline-flex" }}
+                    >
+                      {activePopup === "emoji" && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            right: 0,
+                            bottom: 46,
+                            zIndex: 40,
+                          }}
+                        >
+                          <Picker
+                            data={data}
+                            theme="dark"
+                            onEmojiSelect={(emoji: EmojiSelectEvent) => {
+                              if (!emoji.native) return;
+                              setInput((prev) => prev + emoji.native);
+                            }}
+                            previewPosition="none"
+                            skinTonePosition="none"
+                          />
+                        </div>
+                      )}
+                      <button
+                        title="Emoji"
+                        style={actionIconStyle}
+                        className="action-btn"
+                        onClick={() =>
+                          setActivePopup((p) =>
+                            p === "emoji" ? null : "emoji",
+                          )
+                        }
+                      >
+                        <Smile size={18} />
+                      </button>
+                    </div>
+
+                    {/* Send button */}
+                    <button
+                      onClick={() => void sendTextMessage()}
+                      disabled={sending || !input.trim()}
+                      style={{
+                        border: "none",
+                        borderRadius: 12,
+                        width: 38,
+                        height: 38,
+                        background:
+                          sending || !input.trim() ? "#334155" : "#2563eb",
+                        color: "white",
+                        cursor:
+                          sending || !input.trim() ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "transform .15s, background .15s",
+                      }}
+                      title="Gửi"
+                    >
+                      <Send size={18} />
                     </button>
                   </div>
-
-                  {/* Send button */}
-                  <button
-                    onClick={() => void sendTextMessage()}
-                    disabled={sending || !input.trim()}
-                    style={{
-                      border: "none",
-                      borderRadius: 12,
-                      width: 38,
-                      height: 38,
-                      background:
-                        sending || !input.trim() ? "#334155" : "#2563eb",
-                      color: "white",
-                      cursor:
-                        sending || !input.trim() ? "not-allowed" : "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition: "transform .15s, background .15s",
-                    }}
-                    title="Gửi"
-                  >
-                    <Send size={18} />
-                  </button>
                 </div>
               </div>
+            </>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                color: "#94a3b8",
+                fontWeight: 500,
+              }}
+            >
+              Chọn cuộc trò chuyện để bắt đầu
             </div>
-          </>
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              color: "#94a3b8",
-              fontWeight: 500,
-            }}
-          >
-            Chọn cuộc trò chuyện để bắt đầu
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Right Info Panel */}
+        {activeConversation &&
+          showInfoPanel &&
+          (activeConversation.group ? (
+            <GroupConversationInfoPanel
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              onDeleteConversation={() => {
+                setActiveConversation(null);
+                alert("Xóa lịch sử trò chuyện thành công");
+              }}
+              onManageGroup={() => {
+                alert("Tính năng quản lý nhóm sẽ được triển khai");
+              }}
+              onLeaveGroup={() => {
+                setActiveConversation(null);
+                alert("Bạn đã rời khỏi nhóm");
+              }}
+              onUpdateMemberRole={async (targetUserId, role) => {
+                if (!activeConversationId) return;
+                try {
+                  await chatService.updateMemberRole(
+                    activeConversationId,
+                    targetUserId,
+                    role,
+                  );
+                } catch (error) {
+                  console.error("Lỗi khi cập nhật role:", error);
+                  alert("Không thể cập nhật quyền thành viên");
+                }
+              }}
+            />
+          ) : (
+            <ConversationInfoPanel
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              onDeleteConversation={() => {
+                setActiveConversation(null);
+                alert("Xóa lịch sử trò chuyện thành công");
+              }}
+            />
+          ))}
       </div>
 
       {/* Context menu */}
@@ -2333,7 +2744,6 @@ export default function ChatPage() {
             canRecall(contextMenu.message) && (
               <button
                 onClick={() => {
-                  // Decode để lấy text gốc nếu là structured message
                   const payload = decodeChatPayload(
                     contextMenu.message.content,
                   );
@@ -2358,17 +2768,6 @@ export default function ChatPage() {
               <RotateCcw size={15} /> Thu hồi
             </button>
           )}
-
-          {!contextMenu.message.isRecalled &&
-            canRecall(contextMenu.message) && (
-              <div
-                style={{
-                  height: "0.5px",
-                  background: "rgba(148,163,184,.1)",
-                  margin: "4px 0",
-                }}
-              ></div>
-            )}
           {!contextMenu.message.isRecalled &&
             canRecall(contextMenu.message) && (
               <div
@@ -2392,7 +2791,6 @@ export default function ChatPage() {
               <Send size={15} /> Chuyển tiếp
             </button>
           )}
-
           {!contextMenu.message.isRecalled && (
             <button
               onClick={() => void handleDeleteForMe()}
@@ -2449,7 +2847,6 @@ export default function ChatPage() {
               <X size={18} />
             </button>
           </div>
-
           <div style={{ display: "grid", gap: 8 }}>
             {voteViewer.users.map((person, i) => (
               <div
@@ -2492,6 +2889,8 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Image preview */}
       {imagePreviewUrl && (
         <div
           style={{
@@ -2500,16 +2899,15 @@ export default function ChatPage() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.9)", // Nền đen mờ cực sang
+            backgroundColor: "rgba(0,0,0,0.9)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 9999, // Phải cực cao để đè lên mọi thứ
+            zIndex: 9999,
             cursor: "zoom-out",
           }}
-          onClick={() => setImagePreviewUrl(null)} // Nhấn ra ngoài để đóng
+          onClick={() => setImagePreviewUrl(null)}
         >
-          {/* Nút đóng góc trên bên phải */}
           <button
             onClick={() => setImagePreviewUrl(null)}
             style={{
@@ -2530,8 +2928,6 @@ export default function ChatPage() {
           >
             <X size={24} />
           </button>
-
-          {/* Ảnh phóng to */}
           <img
             src={imagePreviewUrl}
             alt="Preview"
@@ -2542,11 +2938,12 @@ export default function ChatPage() {
               borderRadius: 8,
               boxShadow: "0 0 30px rgba(0,0,0,0.5)",
             }}
-            onClick={(e) => e.stopPropagation()} // Nhấn vào ảnh thì không đóng modal
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
-      {/* 1. Modal Chuyển tiếp tin nhắn */}
+
+      {/* Forward modal */}
       {isForwardModalOpen && forwardingMessage && (
         <div
           style={{
@@ -2598,7 +2995,6 @@ export default function ChatPage() {
                     conv.participants.find((p) => p._id !== user?.userId)
                       ?.displayName ||
                     "Đoạn chat";
-
                   return (
                     <label
                       key={conv._id}
@@ -2610,7 +3006,7 @@ export default function ChatPage() {
                         cursor: "pointer",
                         background: isSelected
                           ? "rgba(37,99,235,0.1)"
-                          : "transparent", // Highlight khi chọn
+                          : "transparent",
                         borderRadius: 8,
                       }}
                     >
