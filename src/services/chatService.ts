@@ -99,6 +99,10 @@ export const chatService = {
     const res = await api.post("/conversations", payload);
     return res.data.conversation;
   },
+  async editMessage(messageId: string, content: string): Promise<Message> {
+  const res = await api.patch(`/messages/${messageId}/edit`, { content });
+  return res.data.message;
+},
   updateMemberRole: async (
     conversationId: string,
     targetUserId: string,

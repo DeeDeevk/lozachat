@@ -129,14 +129,25 @@ export default function ConversationList({
   };
 
   // ── Filter ───────────────────────────────────────────────────────────────
-  const filteredConvs = conversations.filter((c) => {
-    const matchesSearch = getName(c)
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    if (activeTab === "group") return matchesSearch && !!c.group;
-    if (activeTab === "direct") return matchesSearch && !c.group;
-    return matchesSearch;
-  });
+  const filteredConvs = conversations
+    .filter((c) => {
+      const matchesSearch = getName(c)
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      if (activeTab === "group") return matchesSearch && !!c.group;
+      if (activeTab === "direct") return matchesSearch && !c.group;
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      const timeA = a.lastMessage?.createdAt
+        ? new Date(a.lastMessage.createdAt).getTime()
+        : 0;
+      const timeB = b.lastMessage?.createdAt
+        ? new Date(b.lastMessage.createdAt).getTime()
+        : 0;
+
+      return timeB - timeA;
+    });
 
   return (
     <>
