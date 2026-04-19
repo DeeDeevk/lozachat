@@ -27,6 +27,7 @@ import {
   encodeChatPayload,
   getSafeMessagePreview,
 } from "@/utils/chatMessageCodec";
+import { lozaBotService } from "@/services/lozaBotService";
 import {
   BarChart3,
   Ellipsis,
@@ -109,6 +110,15 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const REACTION_OPTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
+const LOZA_BOT_NAME = "ZolaBot";
+const LOZA_BOT_COMMAND_REGEX = /^@(LozaBot|ZolaBot)\s+(.+)$/i;
+const LOZA_BOT_MENTION_REGEX = /^@(LozaBot|ZolaBot)\b/i;
+const BOT_MENTION_TRIGGER_REGEX = /(^|\s)@([^\s@]*)$/;
+const LOZA_BOT_SUGGESTIONS = [
+  "Tóm tắt cuộc trò chuyện từ tin nhắn cuối cùng của mình đến hiện tại",
+  "Liệt kê các việc cần làm tiếp theo theo mức ưu tiên",
+  "Soạn giúp mình một câu trả lời ngắn gọn và lịch sự",
+];
 
 // --- STYLES ---
 const popupBoxStyle: React.CSSProperties = {
@@ -1505,10 +1515,13 @@ export default function ChatPage() {
     if (!input.trim() || !activeConversationId || sending) return;
     try {
       setSending(true);
+      const trimmedInput = input.trim();
+      const botMatch = trimmedInput.match(LOZA_BOT_COMMAND_REGEX);
+      const isBotMention = LOZA_BOT_MENTION_REGEX.test(trimmedInput);
       const payload: ChatStructuredPayload = {
         version: 1,
         kind: replyingTo ? "reply" : "text",
-        text: input.trim(),
+        text: trimmedInput,
         reply: replyingTo
           ? {
               messageId: replyingTo._id,
@@ -1522,6 +1535,89 @@ export default function ChatPage() {
           : undefined,
       };
       await sendStructuredMessage(payload);
+
+      if (isBotMention && !botMatch?.[2]) {
+        toast("Thêm yêu cầu sau @ZolaBot, ví dụ: @ZolaBot tóm tắt đoạn chat");
+      }
+
+      if (isBotMention && botMatch?.[2]) {
+        const botRequest = botMatch[2].trim();
+        const lastOwnIndex = [...displayMessages]
+          .reverse()
+          .findIndex((m) => {
+            if (m.senderId !== user?.userId) return false;
+            const p = decodeChatPayload(m.content);
+            const text = p?.text || m.content || "";
+            return !LOZA_BOT_MENTION_REGEX.test(text.trim());
+          });
+
+        const startIndex =
+          lastOwnIndex < 0
+            ? 0
+            : Math.max(0, displayMessages.length - 1 - lastOwnIndex);
+        const contextWindow = displayMessages.slice(startIndex);
+
+        const contextMessages = contextWindow.map((m) => {
+          const preview = getSafeMessagePreview(m.content);
+          const senderName =
+            m.senderId === user?.userId
+              ? userProfile?.displayName || user?.username || "Bạn"
+              : getSenderName(
+                  m,
+                  user?.userId,
+                  activeConversation?.participants || [],
+                );
+
+          return {
+            sender: (m.senderId === user?.userId ? "me" : "other") as
+              | "me"
+              | "other",
+            senderName,
+            at: m.createdAt,
+            content: preview,
+          };
+        });
+
+        const safeContextMessages =
+          contextMessages.length > 0
+            ? contextMessages
+            : [
+                {
+                  sender: "me" as const,
+                  senderName:
+                    userProfile?.displayName || user?.username || "Bạn",
+                  at: new Date().toISOString(),
+                  content: botRequest,
+                },
+              ];
+
+        try {
+          const answer = await lozaBotService.ask({
+            conversationId: activeConversationId,
+            request: botRequest,
+            fromLastOwnMessage: true,
+            messages: safeContextMessages,
+          });
+
+          const botReply =
+            answer?.trim() || "Mình chưa có dữ liệu để tóm tắt lúc này.";
+          const systemContent = `{{system}}🤖 LozaBot: ${botReply}`;
+
+          if (activeConversation?.group) {
+            await sendGroupMessage(activeConversationId, {
+              content: systemContent,
+            });
+          } else if (otherUser?._id) {
+            await sendDirectMessage(otherUser._id, {
+              content: systemContent,
+            });
+          }
+        } catch (botError) {
+          console.error("LozaBot request error", botError);
+          toast.error("LozaBot đang bận, thử lại sau nhé");
+        }
+      }
+
       setInput("");
       setReplyingTo(null);
       if (socket?.connected) {
@@ -1536,13 +1632,45 @@ export default function ChatPage() {
   }, [
     activeConversation?.participants,
     activeConversationId,
+    displayMessages,
+    getSenderName,
     input,
+    otherUser?._id,
     replyingTo,
+    sendDirectMessage,
+    sendGroupMessage,
     sendStructuredMessage,
     sending,
     socket,
+    user?.username,
     user?.userId,
+    userProfile?.displayName,
   ]);
+
+  const showLozaBotSuggestions = useMemo(
+    () => LOZA_BOT_MENTION_REGEX.test(input.trim()),
+    [input],
+  );
+
+  const mentionDraft = useMemo(() => {
+    const match = input.match(BOT_MENTION_TRIGGER_REGEX);
+    if (!match) return null;
+    const keyword = match[2] || "";
+    if (!LOZA_BOT_NAME.toLowerCase().startsWith(keyword.toLowerCase())) {
+      return null;
+    }
+    if (keyword.toLowerCase() === LOZA_BOT_NAME.toLowerCase()) {
+      return null;
+    }
+    const start = input.length - keyword.length - 1;
+    return { start };
+  }, [input]);
+
+  const applyZolaBotMention = useCallback(() => {
+    if (!mentionDraft) return;
+    const before = input.slice(0, mentionDraft.start);
+    setInput(`${before}@${LOZA_BOT_NAME} `);
+  }, [input, mentionDraft]);
 
   const sendAttachmentMessage = useCallback(
     async (file: File, kind: "image" | "file" | "audio") => {
@@ -3904,7 +4032,7 @@ export default function ChatPage() {
                           }, 1200);
                         }
                       }}
-                      placeholder="Nhập tin nhắn..."
+                      placeholder="Nhập tin nhắn... hoặc @ZolaBot <vấn đề>"
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
@@ -3985,6 +4113,67 @@ export default function ChatPage() {
                       <Send size={18} />
                     </button>
                   </div>
+
+                  {showLozaBotSuggestions && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginTop: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {LOZA_BOT_SUGGESTIONS.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => setInput(`@${LOZA_BOT_NAME} ${suggestion}`)}
+                          style={{
+                            border: "1px solid rgba(96,165,250,.45)",
+                            background: "rgba(37,99,235,.12)",
+                            color: "#bfdbfe",
+                            borderRadius: 999,
+                            padding: "6px 10px",
+                            fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {mentionDraft && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        border: "1px solid rgba(148,163,184,.3)",
+                        background: "rgba(15,23,42,.92)",
+                        borderRadius: 10,
+                        padding: "6px 10px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={applyZolaBotMention}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "#e2e8f0",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          padding: 0,
+                        }}
+                      >
+                        @{LOZA_BOT_NAME}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
