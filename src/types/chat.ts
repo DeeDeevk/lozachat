@@ -106,6 +106,7 @@ export interface ChatStructuredPayload {
   text?: string;
   emoji?: string;
   attachment?: ChatAttachment;
+  attachments?: ChatAttachment[];
   stickerUrl?: string;
   reply?: ReplyMeta;
   poll?: {

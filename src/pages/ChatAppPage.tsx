@@ -8,6 +8,7 @@ import GroupConversationInfoPanel from "@/components/GroupConversationInfoPanel"
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import toast from "react-hot-toast";
 import type {
   ChatStructuredPayload,
   Conversation,
@@ -42,6 +43,7 @@ import {
   UserPlus,
   Video,
   X,
+  Key,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 
@@ -305,7 +307,7 @@ function GroupSeenAvatars({ seenParticipants }: GroupSeenAvatarsProps) {
 // --- SENDER AVATAR (for group chat) ---
 interface SenderAvatarProps {
   participant:
-    | { _id: string; displayName: string; avatarUrl?: string | null }
+    | { _id: string; displayName: string; avatarUrl?: string | null;  role?: "owner" | "admin" | "member"; }
     | undefined;
 }
 
@@ -329,11 +331,12 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
     <div
       title={name}
       style={{
+        position: "relative",
         width: 28,
         height: 28,
         borderRadius: "50%",
         flexShrink: 0,
-        overflow: "hidden",
+        overflow: "visible",
         background: participant?.avatarUrl ? undefined : color,
         display: "flex",
         alignItems: "center",
@@ -349,10 +352,56 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
         <img
           src={participant.avatarUrl}
           alt={name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
         />
       ) : (
         name.slice(0, 2).toUpperCase()
+      )}
+      {participant?.role === "owner" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: -4,
+            right: -4,
+            backgroundColor: "#0f172a",
+            borderRadius: "50%",
+            width: 10,
+            height: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 0 0.5px #0f172a",
+            zIndex: 2,
+          }}
+        >
+          <Key size={12} color="#eab308" strokeWidth={3} />
+        </div>
+      )}
+
+      {participant?.role === "admin" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: -4,
+            right: -4,
+            backgroundColor: "#0f172a",
+            borderRadius: "50%",
+            width: 18,
+            height: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 0 2.5px #0f172a",
+            zIndex: 2,
+          }}
+        >
+          <Key size={13} color="#f1f5f9" strokeWidth={3} />
+        </div>
       )}
     </div>
   );
@@ -764,7 +813,51 @@ export default function ChatPage() {
     },
     [sendStructuredMessage, uploadAttachment],
   );
+  const MAX_FILES = 10;
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
+  const handleSelectImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+
+    if (!files.length) return;
+    if (files.length > MAX_FILES) {
+      alert("Tối đa 10 ảnh");
+      return;
+    }
+    const invalid = files.find((f) => f.size > MAX_SIZE);
+    if (invalid) {
+      toast.error(`File ${invalid.name} vượt quá 10MB`);
+      return;
+    }
+
+    try {
+      setSending(true);
+
+      const uploadedList = await Promise.all(
+        files.map((file) => uploadAttachment(file)),
+      );
+      const attachments = uploadedList.map((u) => ({
+        name: u.fileName,
+        url: u.url,
+        mimeType: u.mimeType,
+        size: u.size,
+      }));
+
+      // 👉 gửi 1 message duy nhất
+      await sendStructuredMessage({
+        version: 1,
+        kind: "image",
+        attachments,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Upload nhiều ảnh thất bại");
+    } finally {
+      setSending(false);
+      setActivePopup(null);
+      e.target.value = "";
+    }
+  };
   const stopRecording = useCallback(() => {
     const recorder = recordingRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
@@ -979,6 +1072,50 @@ export default function ChatPage() {
       );
     });
   }, []);
+  const handleSelectFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = Array.from(e.target.files || []);
+
+  if (!files.length) return;
+
+  if (files.length > 10) {
+    alert("Tối đa 10 file");
+    return;
+  }
+
+  const invalid = files.find((f) => f.size > 10 * 1024 * 1024);
+  if (invalid) {
+    alert(`File ${invalid.name} vượt quá 10MB`);
+    return;
+  }
+
+  try {
+    setSending(true);
+
+    const uploadedList = await Promise.all(
+      files.map((file) => uploadAttachment(file))
+    );
+
+    const attachments = uploadedList.map((u) => ({
+      name: u.fileName,
+      url: u.url,
+      mimeType: u.mimeType,
+      size: u.size,
+    }));
+
+    await sendStructuredMessage({
+      version: 1,
+      kind: "file",
+      attachments, // 👈 nhiều file
+    });
+
+  } catch (err) {
+    console.error(err);
+    alert("Upload file thất bại");
+  } finally {
+    setSending(false);
+    e.target.value = "";
+  }
+};
 
   const renderStructuredMessage = useCallback(
     (message: Message) => {
@@ -1047,29 +1184,54 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "file" && payload.attachment) {
+      if (payload.kind === "file" && payload.attachments?.length) {
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      {(payload.attachments ?? []).map((file, index) => (
+        <a
+          key={file.url || index}
+          href={file.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            color: "#e2e8f0",
+            textDecoration: "underline",
+          }}
+        >
+          {file.name}
+        </a>
+      ))}
+    </div>
+  );
+}
+      if (payload.kind === "image" && payload.attachments?.length) {
         return (
           <div
             style={{
               display: "grid",
-              gap: 6,
-              background: "rgba(148,163,184,0.1)",
-              border: "1px solid rgba(148,163,184,0.3)",
-              borderRadius: 10,
-              padding: "8px 10px",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 4,
+              maxWidth: 280,
             }}
           >
-            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
-              Tệp đính kèm
-            </div>
-            <a
-              href={payload.attachment.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "#e2e8f0", textDecoration: "underline" }}
-            >
-              {payload.attachment.name}
-            </a>
+            {(payload.attachments ?? []).map((img, index) => (
+              <img
+                key={img.url || index}
+                src={img.url}
+                alt={img.name || "image"}
+                style={{
+                  width: "100%",
+                  height: 120,
+                  objectFit: "cover",
+                  borderRadius: 10,
+                  cursor: "zoom-in",
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (img.url) setImagePreviewUrl(img.url);
+                }}
+              />
+            ))}
           </div>
         );
       }
@@ -1750,6 +1912,9 @@ export default function ChatPage() {
                             color: "#94a3b8",
                             marginBottom: 2,
                             marginLeft: 36,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
                           }}
                         >
                           {senderParticipant?.displayName || "Người dùng"}
@@ -1767,8 +1932,8 @@ export default function ChatPage() {
                       >
                         {/* Group: sender avatar on the left (only for others) */}
                         {!isMine && senderParticipant && (
-  <SenderAvatar participant={senderParticipant} />
-)}
+                          <SenderAvatar participant={senderParticipant} />
+                        )}
 
                         {/* Spacer to align my messages in group (no avatar on right) */}
                         {isGroup && isMine && <div style={{ width: 0 }} />}
@@ -2460,22 +2625,16 @@ export default function ChatPage() {
                     ref={imageInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void sendAttachmentMessage(file, "image");
-                      e.currentTarget.value = "";
-                    }}
+                    onChange={handleSelectImages}
                   />
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     hidden
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void sendAttachmentMessage(file, "file");
-                      e.currentTarget.value = "";
-                    }}
+                    onChange={handleSelectFiles}
                   />
 
                   {/* Input bar */}
