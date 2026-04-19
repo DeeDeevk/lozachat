@@ -85,10 +85,18 @@ export const chatService = {
 
   async updateStrangerStatus(
     conversationId: string,
-    action: "accepted" | "decline",
+    action: "accepted" | "declined",
   ): Promise<void> {
     await api.patch(`/conversations/${conversationId}/stranger-status`, {
       action,
     });
+  },
+  async createConversation(payload: {
+    type: "group" | "direct";
+    name?: string;
+    memberIds: string[];
+  }) {
+    const res = await api.post("/conversations", payload);
+    return res.data.conversation;
   },
 };
