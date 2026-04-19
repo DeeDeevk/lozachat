@@ -1,18 +1,27 @@
 import { useState, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
-import type { Comment } from "../../types/post";
+import { useAuthStore } from "@/stores/useAuthStore";
+import type { Comment, ReactionType } from "../../types/post";
+import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
 import { usePostStore } from "../../stores/usePostStore";
+import { CommentInput } from "./Commentinput";
 import toast from "react-hot-toast";
 
 type CommentWithReplies = Comment & { replies?: CommentWithReplies[] };
+
+const REACTION_TYPES: ReactionType[] = ["like", "love", "haha", "wow", "sad", "angry"];
+
+// Detect sticker content
+const isStickerContent = (content: string) => content.startsWith("[sticker]:");
+const getStickerUrl = (content: string) => content.replace("[sticker]:", "");
 
 interface CommentItemProps {
   comment: CommentWithReplies;
   postId: string;
   currentUserId: string;
   level?: number;
-  onDelete: (commentId: string) => void;
+  onDelete: (commentId: string, isReply: boolean) => void;
   onReplySuccess: () => void;
 }
 
@@ -25,62 +34,81 @@ export const CommentItem = ({
   onReplySuccess,
 }: CommentItemProps) => {
   const [replying, setReplying] = useState(false);
-  const [replyContent, setReplyContent] = useState("");
-  const [loadingReply, setLoadingReply] = useState(false);
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const pickerHideTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  //image
-  const [replyPreviews, setReplyPreviews] = useState<string[]>([]);
-  const [replyFiles, setReplyFiles] = useState<File[]>([]);
-  const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const { userProfile } = useAuthStore();
+  const { addComment, reactToComment } = usePostStore();
 
-  const { addComment } = usePostStore();
-  const isOwner = comment.author._id === currentUserId;
+  const isOwner = comment.author?._id === currentUserId;
+  const isReply = !!comment.parentId;
   const indent = Math.min(level, 3) * 20;
   const avatarSize = level === 0 ? "w-9 h-9 text-sm" : "w-7 h-7 text-xs";
 
-  const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = Array.from(e.target.files || []).filter((f) =>
-      f.type.startsWith("image/"),
-    );
+  const myReaction = comment.reactions?.find((r) => r.userId === currentUserId);
+  const totalReactions = comment.reactions?.length ?? 0;
 
-    if (replyFiles.length + newFiles.length > 4) {
-      toast.error("Tối đa 4 ảnh mỗi bình luận");
-      return;
-    }
-
-    const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
-
-    setReplyFiles((prev) => [...prev, ...newFiles]);
-    setReplyPreviews((prev) => [...prev, ...newPreviews]);
-    e.target.value = "";
-  };
-
-  const removeReplyImage = (index: number) => {
-    URL.revokeObjectURL(replyPreviews[index]);
-    setReplyPreviews((prev) => prev.filter((_, i) => i !== index));
-    setReplyFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handlePostReply = async () => {
-    if (!replyContent.trim() && replyFiles.length === 0) return;
-
-    setLoadingReply(true);
+  // ─── React ────────────────────────────────────────────────────
+  const handleReact = async (type: ReactionType) => {
     try {
-      await addComment(postId, replyContent.trim(), comment._id, replyFiles);
+      await reactToComment(postId, comment._id, type);
+      onReplySuccess(); // reload để cập nhật reactions
+    } catch {
+      toast.error("Không thể thả reaction");
+    }
+  };
 
-      // cleanup
-      replyPreviews.forEach((url) => URL.revokeObjectURL(url));
-      setReplyContent("");
-      setReplyPreviews([]);
-      setReplyFiles([]);
+  // ─── Reply submit ─────────────────────────────────────────────
+  const handleReplySubmit = async (
+    content: string,
+    imageFiles: File[],
+    audioFile: File | null,
+  ) => {
+    setReplySubmitting(true);
+    try {
+      await addComment(
+        postId,
+        content,
+        comment._id,
+        imageFiles,
+        comment.imageId ?? null,
+        audioFile,
+      );
       setReplying(false);
       onReplySuccess();
     } catch {
       toast.error("Không thể gửi trả lời");
     } finally {
-      setLoadingReply(false);
+      setReplySubmitting(false);
     }
   };
+
+  // ─── Render deleted ───────────────────────────────────────────
+  if (comment.isDeleted) {
+    return (
+      <div style={{ marginLeft: `${indent}px` }}>
+        <div className="bg-[#111d30]/60 border border-white/[0.04] rounded-2xl px-4 py-3">
+          <p className="text-[#3a4a60] text-[13px] italic">Bình luận đã bị xóa.</p>
+        </div>
+        {comment.replies && comment.replies.length > 0 && (
+          <div className="mt-2 ml-5 pl-3 border-l-2 border-[#3b6ef5]/20 space-y-2">
+            {comment.replies.map((reply) => (
+              <CommentItem
+                key={reply._id}
+                comment={reply}
+                postId={postId}
+                currentUserId={currentUserId}
+                level={level + 1}
+                onDelete={onDelete}
+                onReplySuccess={onReplySuccess}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginLeft: `${indent}px` }}>
@@ -89,40 +117,54 @@ export const CommentItem = ({
         <div className="flex gap-3">
           {/* Avatar */}
           <div
-            className={`${avatarSize} rounded-full flex-shrink-0 bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5] flex items-center justify-center text-white font-semibold`}
+            className={`${avatarSize} rounded-full flex-shrink-0 bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5] flex items-center justify-center text-white font-semibold overflow-hidden`}
           >
-            {comment.author.displayName?.[0]?.toUpperCase() ?? "U"}
+            {comment.author?.avatarUrl ? (
+              <img src={comment.author.avatarUrl} alt={comment.author.displayName} className="w-full h-full object-cover" />
+            ) : (
+              comment.author?.displayName?.[0]?.toUpperCase() ?? "U"
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
             {/* Header */}
             <div className="flex justify-between items-center gap-2">
               <span className="text-[#e8eaf0] font-semibold text-sm truncate">
-                {comment.author.displayName}
+                {comment.author?.displayName ?? "Người dùng"}
               </span>
               <span className="text-[#4a5a70] text-[11px] flex-shrink-0">
-                {formatDistanceToNow(new Date(comment.createdAt), {
-                  addSuffix: true,
-                  locale: vi,
-                })}
+                {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: vi })}
               </span>
             </div>
 
             {/* Content */}
-            <p className="mt-1.5 text-[14px] leading-relaxed text-[#c8cdd8]">
-              {comment.content}
-            </p>
+            {comment.content && !isStickerContent(comment.content) && (
+              <p className="mt-1.5 text-[14px] leading-relaxed text-[#c8cdd8]">
+                {comment.content}
+              </p>
+            )}
 
-            {/* ─── Hiển thị ảnh của bình luận (nếu có) ───────────────── */}
+            {/* Sticker */}
+            {comment.content && isStickerContent(comment.content) && (
+              <div className="mt-2">
+                <img
+                  src={getStickerUrl(comment.content)}
+                  alt="sticker"
+                  className="w-28 h-28 object-contain"
+                />
+              </div>
+            )}
+
+            {/* Ảnh đính kèm */}
             {comment.images && comment.images.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {comment.images.map((imgUrl, idx) => (
+                {comment.images.map((url, idx) => (
                   <div
                     key={idx}
-                    className="relative w-36 h-36 md:w-70 md:h-70 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
+                    className="relative w-36 h-36 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
                   >
                     <img
-                      src={imgUrl}
+                      src={url}
                       alt={`comment-img-${idx}`}
                       className="w-full h-full object-cover cursor-pointer hover:brightness-110 transition-all"
                     />
@@ -131,155 +173,113 @@ export const CommentItem = ({
               </div>
             )}
 
-            {/* Actions */}
-            <div className="mt-2.5 flex items-center gap-1">
-              <button
-                onClick={() => setReplying(!replying)}
-                className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
-                  bg-white/5 backdrop-blur-sm
-                  text-[#3b8aff]
-                  border border-white/10
-                  hover:bg-white/10 hover:text-[#5b9fff]
-                  transition-all"
-              >
-                ↩ Trả lời
-              </button>
+            {/* Voice message */}
+            {comment.audioUrl && (
+              <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-white/[0.07] max-w-xs">
+                <audio controls src={comment.audioUrl} className="flex-1 h-8" style={{ minWidth: 0 }} />
+              </div>
+            )}
 
+            {/* ─── Actions ─────────────────────────────────────────── */}
+            <div className="mt-2.5 flex items-center gap-1 flex-wrap">
+              {/* React button */}
+              <div
+                className="relative"
+                onMouseEnter={() => {
+                  clearTimeout(pickerHideTimer.current);
+                  setShowReactionPicker(true);
+                }}
+                onMouseLeave={() => {
+                  pickerHideTimer.current = setTimeout(() => setShowReactionPicker(false), 200);
+                }}
+              >
+                <button
+                  onClick={() => handleReact(myReaction?.type ?? "like")}
+                  className={`px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all flex items-center gap-1.5
+                    ${myReaction
+                      ? "bg-[#3b6ef5]/15 border-[#3b6ef5]/40 text-[#7aa3ff]"
+                      : "bg-white/5 border-white/10 text-[#7a8aa8] hover:bg-white/10 hover:text-[#e8eaf0]"}`}
+                >
+                  <span>{myReaction ? REACTION_EMOJI[myReaction.type] : "👍"}</span>
+                  <span>{myReaction ? REACTION_LABEL[myReaction.type] : "Thích"}</span>
+                  {totalReactions > 0 && (
+                    <span className="text-[10px] opacity-70">{totalReactions}</span>
+                  )}
+                </button>
+
+                {showReactionPicker && (
+                  <div
+                    className="absolute bottom-full left-0 mb-1 z-50 flex gap-1 p-2 rounded-2xl"
+                    style={{
+                      background: "var(--loza-bg-elevated, #1a2a45)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                    }}
+                    onMouseEnter={() => clearTimeout(pickerHideTimer.current)}
+                    onMouseLeave={() => {
+                      pickerHideTimer.current = setTimeout(() => setShowReactionPicker(false), 200);
+                    }}
+                  >
+                    {REACTION_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        title={REACTION_LABEL[type]}
+                        onClick={() => { void handleReact(type); setShowReactionPicker(false); }}
+                        className="text-xl p-1.5 rounded-xl transition-all hover:scale-125 active:scale-110"
+                      >
+                        {REACTION_EMOJI[type]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Reply button (chỉ hiện đến level 1) */}
+              {level < 2 && (
+                <button
+                  onClick={() => setReplying((v) => !v)}
+                  className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
+                    bg-white/5 border border-white/10 text-[#3b8aff]
+                    hover:bg-white/10 hover:text-[#5b9fff] transition-all"
+                >
+                  ↩ Trả lời
+                  {comment.repliesCount > 0 && (
+                    <span className="ml-1 opacity-60">({comment.repliesCount})</span>
+                  )}
+                </button>
+              )}
+
+              {/* Delete */}
               {isOwner && (
                 <button
-                  onClick={() => {
-                    if (confirm("Xóa bình luận này?")) onDelete(comment._id);
-                  }}
+                  onClick={() => { if (confirm("Xóa bình luận này?")) onDelete(comment._id, isReply); }}
                   className="px-3 py-1.5 rounded-xl text-[12px] font-semibold
-                    bg-white/5 backdrop-blur-sm
-                    text-[#e05a5a]
-                    border border-white/10
-                    hover:bg-red-500/10 hover:text-[#ff6b6b]
-                    transition-all"
+                    bg-white/5 border border-white/10 text-[#e05a5a]
+                    hover:bg-red-500/10 hover:text-[#ff6b6b] transition-all"
                 >
                   Xóa
                 </button>
               )}
             </div>
 
-            {/* Reply input */}
+            {/* Reply input — dùng CommentInput compact */}
             {replying && (
-              <div className="mt-3 bg-white/5 backdrop-blur-md border border-[#3b6ef5]/20 rounded-xl p-3">
-                <div className="flex gap-2.5">
-                  <div
-                    className="w-7 h-7 rounded-full bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5]
-                    flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                  >
-                    U
-                  </div>
-
-                  <div className="flex-1">
-                    <textarea
-                      value={replyContent}
-                      onChange={(e) => setReplyContent(e.target.value)}
-                      autoFocus
-                      placeholder={`Trả lời ${comment.author.displayName}...`}
-                      className="w-full bg-transparent text-[#e8eaf0] placeholder:text-[#3a4a60]
-                        text-sm resize-none min-h-[36px] outline-none leading-relaxed"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handlePostReply();
-                        }
-                        if (e.key === "Escape") {
-                          setReplying(false);
-                          setReplyContent("");
-                        }
-                      }}
-                      rows={2}
-                    />
-
-                    {/* Reply attach + buttons */}
-                    <div className="mt-2 flex gap-2 items-center">
-                      <button
-                        type="button"
-                        onClick={() => replyFileInputRef.current?.click()}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold
-                          bg-white/5 border border-white/10 text-[#7a8aa8]
-                          hover:bg-white/10 hover:text-[#e8eaf0] transition-all"
-                      >
-                        📸
-                      </button>
-
-                      <button
-                        onClick={handlePostReply}
-                        disabled={(!replyContent.trim() && replyFiles.length === 0) || loadingReply}
-                        className="px-4 py-1.5 rounded-xl text-xs font-semibold
-                          bg-white/5 backdrop-blur-sm
-                          text-[#3b8aff]
-                          border border-white/10
-                          hover:bg-white/10 hover:text-[#5b9fff]
-                          disabled:opacity-40 disabled:cursor-not-allowed
-                          transition-all"
-                      >
-                        {loadingReply ? "Đang gửi..." : "Gửi"}
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setReplying(false);
-                          setReplyContent("");
-                          replyPreviews.forEach((url) => URL.revokeObjectURL(url));
-                          setReplyPreviews([]);
-                          setReplyFiles([]);
-                        }}
-                        className="px-4 py-1.5 rounded-xl text-xs font-semibold
-                          bg-white/5 backdrop-blur-sm
-                          text-[#7a8aa8]
-                          border border-white/10
-                          hover:bg-white/10 hover:text-[#e8eaf0]
-                          transition-all"
-                      >
-                        Huỷ
-                      </button>
-                    </div>
-
-                    {/* Reply image previews (smaller size) */}
-                    {replyPreviews.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {replyPreviews.map((preview, index) => (
-                          <div
-                            key={index}
-                            className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/10 bg-[#0a1422]"
-                          >
-                            <img
-                              src={preview}
-                              alt="preview"
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeReplyImage(index)}
-                              className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-600"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <div className="mt-3">
+                <CommentInput
+                  avatarUrl={userProfile?.avatarUrl}
+                  displayName={userProfile?.displayName}
+                  placeholder={`Trả lời ${comment.author?.displayName ?? ""}...`}
+                  onSubmit={handleReplySubmit}
+                  loading={replySubmitting}
+                  autoFocus
+                  compact
+                  onCancel={() => setReplying(false)}
+                />
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Hidden file input for reply */}
-      <input
-        type="file"
-        ref={replyFileInputRef}
-        accept="image/jpeg,image/png,image/gif,image/webp"
-        multiple
-        onChange={handleReplyFileSelect}
-        style={{ display: "none" }}
-      />
 
       {/* Nested replies */}
       {comment.replies && comment.replies.length > 0 && (
