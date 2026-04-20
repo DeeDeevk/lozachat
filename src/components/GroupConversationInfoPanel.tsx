@@ -18,25 +18,25 @@ import { decodeChatPayload } from "@/utils/chatMessageCodec";
 import type { GroupJoinRequest } from "@/types/store";
 
 interface GroupConversationInfoPanelProps {
-  visible: boolean;
-  onClose: () => void;
   conversation: Conversation;
   messages: Message[];
   currentUserId?: string;
-  onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
-  onRemoveMember?: (targetUserId: string) => void;
-  // Bổ sung các props từ web
+  onDeleteConversation?: () => void;
+  onManageGroup?: () => void;
   onLeaveGroup?: () => void;
+  onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
   onDissolveGroup?: () => void;
-  onDeleteHistory?: () => void;
+  onRemoveMember?: (targetUserId: string) => void;
+  onAddMember?: (targetUserId: string) => Promise<void>;
+  pendingRequests?: GroupJoinRequest[];
   onReviewRequest?: (
     requestId: string,
     action: "approved" | "rejected",
   ) => Promise<void>;
+  isAdminOrOwner?: boolean;
   onUpdateSettings?: (settings: {
     requireApprovalToJoin: boolean;
   }) => Promise<void>;
-  pendingRequests?: GroupJoinRequest[];
 }
 
 interface ExpandableSectionProps {
