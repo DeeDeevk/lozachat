@@ -18,25 +18,25 @@ import { decodeChatPayload } from "@/utils/chatMessageCodec";
 import type { GroupJoinRequest } from "@/types/store";
 
 interface GroupConversationInfoPanelProps {
+  visible: boolean;
+  onClose: () => void;
   conversation: Conversation;
   messages: Message[];
   currentUserId?: string;
-  onDeleteConversation?: () => void;
-  onManageGroup?: () => void;
-  onLeaveGroup?: () => void;
   onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
-  onDissolveGroup?: () => void;
   onRemoveMember?: (targetUserId: string) => void;
-  onAddMember?: (targetUserId: string) => Promise<void>;
-  pendingRequests?: GroupJoinRequest[];
+  // Bổ sung các props từ web
+  onLeaveGroup?: () => void;
+  onDissolveGroup?: () => void;
+  onDeleteHistory?: () => void;
   onReviewRequest?: (
     requestId: string,
     action: "approved" | "rejected",
   ) => Promise<void>;
-  isAdminOrOwner?: boolean;
   onUpdateSettings?: (settings: {
     requireApprovalToJoin: boolean;
   }) => Promise<void>;
+  pendingRequests?: GroupJoinRequest[];
 }
 
 interface ExpandableSectionProps {
@@ -185,7 +185,9 @@ export default function GroupConversationInfoPanel({
   console.log("participants:", conversation.participants);
   console.log("currentUserId:", currentUserId);
   console.log("currentParticipant:", currentParticipant);
-  const isOwner = currentParticipant?.role === "owner";
+  const isOwner =
+    currentParticipant?.role === "owner" ||
+    currentParticipant?.role === "admin";
   const isAdmin = currentParticipant?.role === "admin"; // ✅ đặt ở đây
 
   console.log("isOwner:", isOwner);
@@ -1246,7 +1248,7 @@ export default function GroupConversationInfoPanel({
         </div>
       </ExpandableSection>
 
-      {isOwner && (
+      {(isOwner || isAdmin) && (
         <div
           style={{
             borderBottom: "1px solid rgba(148,163,184,0.15)",
