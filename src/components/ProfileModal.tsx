@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { userService } from "@/services/userService";
 import { useChangePasswordStore } from "@/stores/useOtpStore";
+import { useNavigate } from "react-router-dom";
 
 interface UserProfile {
   _id: string;
@@ -46,9 +47,11 @@ export default function ProfileModal({
     clearState,
   } = useChangePasswordStore();
 
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitError, setSubmitError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // ── Profile form ──
   const [form, setForm] = useState({
@@ -161,6 +164,18 @@ export default function ProfileModal({
       toast.error("Cập nhật thất bại. Vui lòng thử lại.");
     }
   };
+
+  const handleDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await userService.deleteMe();
+      onClose();
+      navigate("/signin");
+      // logout hoặc redirect về trang đăng nhập
+    } catch (error) {
+      console.error("Lỗi xóa tài khoản:", error);
+    }
+  }
 
   // ── Change password handlers ──
   const validateCp = () => {
@@ -557,9 +572,44 @@ export default function ProfileModal({
                   {submitError}
                 </p>
               )}
-              <button className="pm-btn-primary" onClick={handleSave}>
-                Cập nhật thông tin
-              </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  style={{ padding: "11px 20px", background: "transparent", border: "1px solid #ef4444", borderRadius: 8, color: "#ef4444", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  Xóa tài khoản
+                </button>
+
+                <button className="pm-btn-primary" onClick={handleSave}>
+                  Cập nhật thông tin
+                </button>
+              </div>
+
+              {/* Modal xác nhận xóa */}
+              {showDeleteConfirm && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
+                  <div style={{ background: "#1e2433", borderRadius: 12, padding: 28, width: 320, border: "1px solid #2d3748" }}>
+                    <h3 style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>Xóa tài khoản</h3>
+                    <p style={{ color: "#9ca3af", fontSize: 13, margin: "0 0 24px", lineHeight: 1.6 }}>
+                      Bạn có chắc muốn xóa tài khoản? Tất cả dữ liệu sẽ bị mất vĩnh viễn và không thể hoàn tác.
+                    </p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        style={{ flex: 1, padding: "9px 0", background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#e2e8f0", fontSize: 13, cursor: "pointer" }}
+                        onClick={() => setShowDeleteConfirm(false)}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        style={{ flex: 1, padding: "9px 0", background: "#ef4444", border: "none", borderRadius: 8, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                        onClick={handleDelete}
+                      >
+                        Xác nhận xóa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

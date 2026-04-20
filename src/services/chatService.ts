@@ -127,7 +127,9 @@ export const chatService = {
   async fetchPinnedMessages(
     conversationId: string,
   ): Promise<{ pinnedMessages: PinnedMessage[] }> {
-    const res = await api.get(`/conversations/${conversationId}/pinned-messages`);
+    const res = await api.get(
+      `/conversations/${conversationId}/pinned-messages`,
+    );
     return { pinnedMessages: res.data.pinnedMessages || [] };
   },
   async updateConversationTheme(
