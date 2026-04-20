@@ -1,5 +1,10 @@
 import api from "@/lib/axios";
-import type { ConversationResponse, Message } from "@/types/chat";
+import type {
+  ConversationResponse,
+  Message,
+  MessageReaction,
+  PinnedMessage,
+} from "@/types/chat";
 
 interface FetchMessageProps {
   messages: Message[];
@@ -112,10 +117,53 @@ export const chatService = {
   async fetchPinnedMessages(conversationId: string): Promise<Message[]> {
     const res = await api.get(`/conversations/${conversationId}/pins`);
     return res.data.pinnedMessages;
+  },
+  async updateGroupInfo(
+    conversationId: string,
+    formData: FormData,
+  ): Promise<{ message: string; conversation: any }> {
+    const res = await api.patch(`/conversations/${conversationId}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
   async editMessage(messageId: string, content: string): Promise<Message> {
-  const res = await api.patch(`/messages/${messageId}/edit`, { content });
-  return res.data.message;
-},
+    const res = await api.patch(`/messages/${messageId}/edit`, { content });
+    return res.data.message;
+  },
+  async deleteConversationForMe(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}`);
+  },
+  async leaveGroup(conversationId: string, newOwnerId?: string): Promise<void> {
+    await api.post(`/conversations/${conversationId}/leave`, { newOwnerId });
+  },
+  async removeMember(
+    conversationId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/members`, {
+      data: { targetUserId },
+    });
+  },
+  async reactMessage(
+    messageId: string,
+    emoji: string,
+  ): Promise<{ reactions: MessageReaction[] }> {
+    const res = await api.patch(`/messages/${messageId}/react`, { emoji });
+    return { reactions: res.data.reactions || [] };
+  },
+  async updateConversationTheme(
+    conversationId: string,
+    themeId: string,
+  ): Promise<{ conversationId: string; themeId: string }> {
+    const res = await api.patch(`/conversations/${conversationId}/theme`, {
+      themeId,
+    });
+    return {
+      conversationId: res.data.conversationId,
+      themeId: res.data.themeId,
+    };
+  },
   updateMemberRole: async (
     conversationId: string,
     targetUserId: string,
@@ -129,5 +177,41 @@ export const chatService = {
       },
     );
     return response.data;
+  },
+  async dissolveGroup(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/dissolve`);
+  },
+  async addMemberToGroup(conversationId: string, targetUserId: string) {
+    const res = await api.post(`/conversations/${conversationId}/members`, {
+      targetUserId,
+    });
+    return res.data;
+  },
+
+  async reviewJoinRequest(
+    conversationId: string,
+    requestId: string,
+    action: "approved" | "rejected",
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/join-requests/${requestId}`,
+      { action },
+    );
+    return res.data;
+  },
+
+  async getPendingJoinRequests(conversationId: string) {
+    const res = await api.get(`/conversations/${conversationId}/join-requests`);
+    return res.data.requests;
+  },
+  async updateGroupSettings(
+    conversationId: string,
+    settings: { requireApprovalToJoin?: boolean },
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/settings`,
+      settings,
+    );
+    return res.data;
   },
 };
