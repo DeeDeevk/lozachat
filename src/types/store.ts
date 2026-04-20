@@ -2,6 +2,23 @@ import type { Socket } from "socket.io-client";
 import type { Conversation, Message } from "./chat";
 import type { UploadAttachmentResponse } from "@/services/chatService";
 
+export interface GroupJoinRequest {
+  _id: string;
+  conversationId: string;
+  invitedUserId: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  invitedBy: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
 export interface ChatState {
   conversations: Conversation[];
   messages: Record<
@@ -43,8 +60,17 @@ export interface ChatState {
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
   //update
-  editMessage: (messageId: string, conversationId: string, content: string) => Promise<void>;
-  applyEditMessage: (messageId: string, conversationId: string, newContent: string, editedAt: string) => void;
+  editMessage: (
+    messageId: string,
+    conversationId: string,
+    content: string,
+  ) => Promise<void>;
+  applyEditMessage: (
+    messageId: string,
+    conversationId: string,
+    newContent: string,
+    editedAt: string,
+  ) => void;
   updateLastRead: (
     userId: string,
     conversationId: string,
@@ -76,6 +102,26 @@ export interface ChatState {
     conversationId: string,
     targetUserId: string,
     role: "admin" | "member",
+  ) => void;
+  joinRequests: Record<string, GroupJoinRequest[]>;
+  addMemberToGroup: (
+    conversationId: string,
+    targetUserId: string,
+  ) => Promise<{ needsApproval: boolean }>;
+
+  reviewJoinRequest: (
+    conversationId: string,
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => Promise<void>;
+
+  fetchJoinRequests: (conversationId: string) => Promise<void>;
+
+  addJoinRequest: (request: GroupJoinRequest) => void;
+
+  addMemberToConversation: (
+    conversationId: string,
+    member: Conversation["participants"][0],
   ) => void;
 }
 

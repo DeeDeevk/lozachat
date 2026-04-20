@@ -100,9 +100,9 @@ export const chatService = {
     return res.data.conversation;
   },
   async editMessage(messageId: string, content: string): Promise<Message> {
-  const res = await api.patch(`/messages/${messageId}/edit`, { content });
-  return res.data.message;
-},
+    const res = await api.patch(`/messages/${messageId}/edit`, { content });
+    return res.data.message;
+  },
   updateMemberRole: async (
     conversationId: string,
     targetUserId: string,
@@ -116,5 +116,38 @@ export const chatService = {
       },
     );
     return response.data;
+  },
+  async addMemberToGroup(conversationId: string, targetUserId: string) {
+    const res = await api.post(`/conversations/${conversationId}/members`, {
+      targetUserId,
+    });
+    return res.data;
+  },
+
+  async reviewJoinRequest(
+    conversationId: string,
+    requestId: string,
+    action: "approved" | "rejected",
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/join-requests/${requestId}`,
+      { action },
+    );
+    return res.data;
+  },
+
+  async getPendingJoinRequests(conversationId: string) {
+    const res = await api.get(`/conversations/${conversationId}/join-requests`);
+    return res.data.requests;
+  },
+  async updateGroupSettings(
+    conversationId: string,
+    settings: { requireApprovalToJoin?: boolean },
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/settings`,
+      settings,
+    );
+    return res.data;
   },
 };

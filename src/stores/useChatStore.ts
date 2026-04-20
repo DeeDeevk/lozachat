@@ -27,6 +27,7 @@ export const useChatStore = create<ChatState>()(
       activeConversationId: null,
       convoLoading: false,
       messageLoading: false,
+      joinRequests: {},
       setActiveConversation: (id) => set({ activeConversationId: id }),
       reset: () => {
         set({
@@ -525,6 +526,60 @@ export const useChatStore = create<ChatState>()(
                     p._id === targetUserId ? { ...p, role } : p,
                   ),
                 }
+              : c,
+          ),
+        }));
+      },
+      addMemberToGroup: async (conversationId, targetUserId) => {
+        const res = await chatService.addMemberToGroup(
+          conversationId,
+          targetUserId,
+        );
+        return {
+          needsApproval: res.message?.includes("chờ") ?? false,
+        };
+      },
+
+      reviewJoinRequest: async (conversationId, requestId, action) => {
+        await chatService.reviewJoinRequest(conversationId, requestId, action);
+        set((state) => ({
+          joinRequests: {
+            ...state.joinRequests,
+            [conversationId]: (state.joinRequests[conversationId] ?? []).filter(
+              (r) => r._id !== requestId,
+            ),
+          },
+        }));
+      },
+
+      fetchJoinRequests: async (conversationId) => {
+        const requests =
+          await chatService.getPendingJoinRequests(conversationId);
+        set((state) => ({
+          joinRequests: {
+            ...state.joinRequests,
+            [conversationId]: requests,
+          },
+        }));
+      },
+
+      addJoinRequest: (request) => {
+        set((state) => ({
+          joinRequests: {
+            ...state.joinRequests,
+            [request.conversationId]: [
+              ...(state.joinRequests[request.conversationId] ?? []),
+              request,
+            ],
+          },
+        }));
+      },
+
+      addMemberToConversation: (conversationId, member) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? { ...c, participants: [...c.participants, member] }
               : c,
           ),
         }));

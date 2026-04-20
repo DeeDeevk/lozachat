@@ -51,6 +51,7 @@ import {
   Key,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
+import AddMemberModal from "@/components/AddMemberModal";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -445,6 +446,7 @@ export default function ChatPage() {
     messages,
     activeConversationId,
     setActiveConversation,
+    updateConversation,
     sendDirectMessage,
     sendGroupMessage,
     recallMessage,
@@ -454,6 +456,10 @@ export default function ChatPage() {
     updateStrangerStatus,
     forwardMessage,
     editMessage,
+    addMemberToGroup,
+    reviewJoinRequest,
+    joinRequests,
+    fetchJoinRequests,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -469,6 +475,7 @@ export default function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [voteViewer, setVoteViewer] = useState<{
     x: number;
     y: number;
@@ -546,7 +553,9 @@ export default function ChatPage() {
     if (!activeConversationId || !socket) return;
 
     const joinRoom = () => {
-      socket.emit("join-conversation", { conversationId: activeConversationId });
+      socket.emit("join-conversation", {
+        conversationId: activeConversationId,
+      });
     };
 
     if (socket.connected) {
@@ -642,6 +651,19 @@ export default function ChatPage() {
     [conversations, activeConversationId],
   );
 
+  const isAdminOrOwner = useMemo(() => {
+    if (!activeConversation?.group) return false;
+    const me = activeConversation.participants.find(
+      (p) => p._id === user?.userId,
+    );
+    return me?.role === "owner" || me?.role === "admin";
+  }, [activeConversation, user?.userId]);
+  useEffect(() => {
+    if (isAdminOrOwner && activeConversationId) {
+      fetchJoinRequests(activeConversationId);
+    }
+  }, [activeConversationId, isAdminOrOwner]);
+
   const otherUser = useMemo(
     () => activeConversation?.participants.find((p) => p._id !== user?.userId),
     [activeConversation, user?.userId],
@@ -667,7 +689,10 @@ export default function ChatPage() {
       color: "white",
     };
 
-    if (activeChatTheme.mode === "image" && activeChatTheme.appBackgroundImage) {
+    if (
+      activeChatTheme.mode === "image" &&
+      activeChatTheme.appBackgroundImage
+    ) {
       base.background = `linear-gradient(180deg, rgba(2,6,23,.62) 0%, rgba(2,6,23,.82) 100%), url(${activeChatTheme.appBackgroundImage}) center/cover no-repeat`;
       return base;
     }
@@ -721,7 +746,9 @@ export default function ChatPage() {
             video: true,
             audio: false,
           });
-          videoStream.getVideoTracks().forEach((track) => existing.addTrack(track));
+          videoStream
+            .getVideoTracks()
+            .forEach((track) => existing.addTrack(track));
           setLocalStreamState(existing);
         } catch (error) {
           console.warn("Unable to add video track to existing stream", error);
@@ -738,7 +765,10 @@ export default function ChatPage() {
       });
     } catch (error) {
       if (kind !== "video") throw error;
-      console.warn("Falling back to audio-only call because video device is unavailable", error);
+      console.warn(
+        "Falling back to audio-only call because video device is unavailable",
+        error,
+      );
       stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: false,
@@ -903,7 +933,12 @@ export default function ChatPage() {
   }, [isCameraOff]);
 
   const upgradeVoiceToVideo = useCallback(async () => {
-    if (callStatus !== "in-call" || callKind !== "voice" || !callConversationId || !socket) {
+    if (
+      callStatus !== "in-call" ||
+      callKind !== "voice" ||
+      !callConversationId ||
+      !socket
+    ) {
       return;
     }
 
@@ -917,7 +952,9 @@ export default function ChatPage() {
 
       const existingVideoTracks = stream.getVideoTracks();
       existingVideoTracks.forEach((track) => {
-        const alreadySent = peer.getSenders().some((sender) => sender.track?.id === track.id);
+        const alreadySent = peer
+          .getSenders()
+          .some((sender) => sender.track?.id === track.id);
         if (!alreadySent) {
           peer.addTrack(track, stream);
         }
@@ -986,9 +1023,7 @@ export default function ChatPage() {
       cleanupCall();
     };
 
-    const onAnswer = async (payload: {
-      answer: RTCSessionDescriptionInit;
-    }) => {
+    const onAnswer = async (payload: { answer: RTCSessionDescriptionInit }) => {
       try {
         if (!peerRef.current) return;
         await peerRef.current.setRemoteDescription(payload.answer);
@@ -1014,9 +1049,9 @@ export default function ChatPage() {
         if (payload.kind === "video") {
           const peer = peerRef.current;
           stream.getVideoTracks().forEach((track) => {
-            const alreadyAdded = peer.getSenders().some(
-              (sender) => sender.track?.id === track.id,
-            );
+            const alreadyAdded = peer
+              .getSenders()
+              .some((sender) => sender.track?.id === track.id);
             if (!alreadyAdded) {
               peer.addTrack(track, stream);
             }
@@ -1229,7 +1264,8 @@ export default function ChatPage() {
 
   // For group seen: build a map of messageId -> list of participants who have read up to that message
   const groupSeenMap = useMemo(() => {
-    if (!activeConversation?.group) return new Map<string, Conversation["participants"]>();
+    if (!activeConversation?.group)
+      return new Map<string, Conversation["participants"]>();
     const map = new Map<string, Conversation["participants"]>();
     // For each participant (not me), find their lastReadMessageId and mark that message
     activeConversation.participants.forEach((p) => {
@@ -1858,13 +1894,15 @@ export default function ChatPage() {
                 {callLabel}
               </div>
               <div style={{ color: "#cbd5e1", fontSize: 12 }}>
-                {formatCallDuration(payload.call.durationSeconds || 0)} • {finishedAt}
+                {formatCallDuration(payload.call.durationSeconds || 0)} •{" "}
+                {finishedAt}
               </div>
-              {payload.call.upgradedFrom === "voice" && payload.call.upgradedTo === "video" && (
-                <div style={{ color: "#93c5fd", fontSize: 11 }}>
-                  Đã nâng cấp từ gọi thoại sang video
-                </div>
-              )}
+              {payload.call.upgradedFrom === "voice" &&
+                payload.call.upgradedTo === "video" && (
+                  <div style={{ color: "#93c5fd", fontSize: 11 }}>
+                    Đã nâng cấp từ gọi thoại sang video
+                  </div>
+                )}
             </div>
           </div>
         );
@@ -2163,6 +2201,18 @@ export default function ChatPage() {
           fetchMessages(conversationId);
           setReplyingTo(null);
           setContextMenu(null);
+          const selectedConv = conversations.find(
+            (c) => c._id === conversationId,
+          );
+          if (selectedConv && user?.userId) {
+            updateConversation({
+              ...selectedConv,
+              unreadCounts: {
+                ...selectedConv.unreadCounts,
+                [user.userId]: 0, // Reset số tin nhắn chưa đọc của user hiện tại về 0
+              },
+            });
+          }
         }}
         isOpen={true}
         onClose={() => undefined}
@@ -2409,7 +2459,10 @@ export default function ChatPage() {
                               key={theme.id}
                               className="theme-option"
                               onClick={() => {
-                                setThemeForConversation(activeConversationId, theme.id);
+                                setThemeForConversation(
+                                  activeConversationId,
+                                  theme.id,
+                                );
                                 setShowThemePicker(false);
                               }}
                               style={{
@@ -2456,6 +2509,7 @@ export default function ChatPage() {
                   {activeConversation.group && (
                     <button
                       title="Thêm thành viên"
+                      onClick={() => setShowAddMemberModal(true)}
                       style={{ ...actionIconStyle, width: 36, height: 36 }}
                       className="action-btn"
                     >
@@ -2506,10 +2560,7 @@ export default function ChatPage() {
               </div>
 
               {/* Messages */}
-              <div
-                ref={messagesContainerRef}
-                style={messagesAreaStyle}
-              >
+              <div ref={messagesContainerRef} style={messagesAreaStyle}>
                 {displayMessages.map((message, index) => {
                   const isMine = message.senderId === user?.userId;
                   const isGroup = !!activeConversation.group;
@@ -3506,6 +3557,12 @@ export default function ChatPage() {
               conversation={activeConversation}
               messages={displayMessages}
               currentUserId={user?.userId}
+              isAdminOrOwner={isAdminOrOwner}
+              pendingRequests={
+                activeConversationId
+                  ? (joinRequests[activeConversationId] ?? [])
+                  : []
+              }
               onDeleteConversation={() => {
                 setActiveConversation(null);
                 alert("Xóa lịch sử trò chuyện thành công");
@@ -3528,6 +3585,51 @@ export default function ChatPage() {
                 } catch (error) {
                   console.error("Lỗi khi cập nhật role:", error);
                   alert("Không thể cập nhật quyền thành viên");
+                }
+              }}
+              onAddMember={async (targetUserId) => {
+                if (!activeConversationId) return;
+                try {
+                  const result = await addMemberToGroup(
+                    activeConversationId,
+                    targetUserId,
+                  );
+                  if (result.needsApproval) {
+                    toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+                  } else {
+                    toast.success("Đã thêm thành viên vào nhóm");
+                  }
+                } catch {
+                  toast.error("Không thể thêm thành viên");
+                }
+              }}
+              onReviewRequest={async (requestId, action) => {
+                if (!activeConversationId) return;
+                try {
+                  await reviewJoinRequest(
+                    activeConversationId,
+                    requestId,
+                    action,
+                  );
+                  toast.success(
+                    action === "approved"
+                      ? "Đã duyệt thành viên"
+                      : "Đã từ chối",
+                  );
+                } catch {
+                  toast.error("Không thể xử lý yêu cầu");
+                }
+              }}
+              onUpdateSettings={async (settings) => {
+                if (!activeConversationId) return;
+                try {
+                  await chatService.updateGroupSettings(
+                    activeConversationId,
+                    settings,
+                  );
+                  toast.success("Đã cập nhật cài đặt nhóm");
+                } catch (error) {
+                  toast.error("Không thể cập nhật cài đặt");
                 }
               }}
             />
@@ -3619,9 +3721,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {callKind === "voice" && (
-            <audio ref={remoteAudioRef} autoPlay />
-          )}
+          {callKind === "voice" && <audio ref={remoteAudioRef} autoPlay />}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             {callStatus === "incoming" ? (
@@ -3958,6 +4058,32 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           />
         </div>
+      )}
+      {showAddMemberModal && activeConversation?.group && (
+        <AddMemberModal
+          conversationId={activeConversationId!}
+          currentParticipantIds={activeConversation.participants.map(
+            (p) => p._id,
+          )}
+          onClose={() => setShowAddMemberModal(false)}
+          onAdd={async (targetUserId) => {
+            if (!activeConversationId) return;
+            try {
+              const result = await addMemberToGroup(
+                activeConversationId,
+                targetUserId,
+              );
+              if (result.needsApproval) {
+                toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+              } else {
+                toast.success("Đã thêm thành viên vào nhóm");
+              }
+              setShowAddMemberModal(false);
+            } catch {
+              toast.error("Không thể thêm thành viên");
+            }
+          }}
+        />
       )}
 
       {/* Forward modal */}
