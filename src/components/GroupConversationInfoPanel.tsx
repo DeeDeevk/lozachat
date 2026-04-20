@@ -11,9 +11,11 @@ import {
   Settings,
   Edit,
   UserMinus,
+  UserPlus,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
 import { decodeChatPayload } from "@/utils/chatMessageCodec";
+import type { GroupJoinRequest } from "@/types/store";
 
 interface GroupConversationInfoPanelProps {
   conversation: Conversation;
@@ -25,6 +27,16 @@ interface GroupConversationInfoPanelProps {
   onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
   onDissolveGroup?: () => void;
   onRemoveMember?: (targetUserId: string) => void;
+  onAddMember?: (targetUserId: string) => Promise<void>;
+  pendingRequests?: GroupJoinRequest[];
+  onReviewRequest?: (
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => Promise<void>;
+  isAdminOrOwner?: boolean;
+  onUpdateSettings?: (settings: {
+    requireApprovalToJoin: boolean;
+  }) => Promise<void>;
 }
 
 interface ExpandableSectionProps {
@@ -135,6 +147,11 @@ export default function GroupConversationInfoPanel({
   onUpdateMemberRole,
   onDissolveGroup,
   onRemoveMember,
+  onAddMember,
+  pendingRequests,
+  onReviewRequest,
+  isAdminOrOwner,
+  onUpdateSettings,
 }: GroupConversationInfoPanelProps) {
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
@@ -155,6 +172,7 @@ export default function GroupConversationInfoPanel({
     memberName: string;
   } | null>(null);
 
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   useEffect(() => {
     const handleClickOutside = () => setMenuOpenId(null);
     document.addEventListener("click", handleClickOutside);
@@ -370,6 +388,17 @@ export default function GroupConversationInfoPanel({
       [section]: !prev[section],
     }));
   };
+
+  const uniquePendingRequests = useMemo(() => {
+    if (!pendingRequests) return [];
+    const map = new Map();
+    pendingRequests.forEach((req) => {
+      // Dùng ID của người được mời làm key (để 1 người chỉ có 1 thẻ duy nhất)
+      const uId = req.invitedUserId?._id || req.invitedUserId;
+      map.set(uId, req);
+    });
+    return Array.from(map.values());
+  }, [pendingRequests]);
 
   return (
     <div
@@ -667,6 +696,137 @@ export default function GroupConversationInfoPanel({
             />
           </div>
 
+          {/* {onAddMember && (
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: 8,
+                border: "1px dashed rgba(59,130,246,0.4)",
+                background: "rgba(59,130,246,0.05)",
+                color: "#60a5fa",
+                fontSize: 12,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <UserPlus size={14} />
+              Thêm thành viên
+            </button>
+          )} */}
+
+          {/* Danh sách chờ duyệt — chỉ owner/admin thấy */}
+          {isAdminOrOwner &&
+            uniquePendingRequests &&
+            uniquePendingRequests.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "#94a3b8",
+                    margin: "0 0 6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Chờ duyệt ({uniquePendingRequests.length})
+                </p>
+                {uniquePendingRequests.map((req) => (
+                  <div
+                    key={req._id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      background: "rgba(15,23,42,0.6)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {/* Avatar */}
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: "50%",
+                        background: "#1e293b",
+                        border: "1px solid rgba(148,163,184,0.2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#94a3b8",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {req.invitedUserId.displayName?.[0]?.toUpperCase()}
+                    </div>
+
+                    {/* Text */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          color: "#f1f5f9",
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {req.invitedUserId.displayName}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>
+                        mời bởi {req.invitedBy.displayName}
+                      </p>
+                    </div>
+
+                    {/* Buttons */}
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "approved")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(37,99,235,0.4)",
+                          background: "rgba(37,99,235,0.15)",
+                          color: "#93c5fd",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Duyệt
+                      </button>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "rejected")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(148,163,184,0.2)",
+                          background: "rgba(148,163,184,0.08)",
+                          color: "#64748b",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           {/* Members list */}
           {filteredMembers.map((member) => (
             <div
@@ -736,13 +896,14 @@ export default function GroupConversationInfoPanel({
                       style={{
                         fontSize: 10,
                         fontWeight: 600,
-                        color: member.role === "owner" ? "#f59e0b" : "#3b82f6",
+                        color: member.role === "owner" ? "#eab308" : "#94a3b8",
                         background:
                           member.role === "owner"
-                            ? "rgba(245,158,11,0.15)"
-                            : "rgba(59,130,246,0.15)",
+                            ? "rgba(234,179,8,0.1)"
+                            : "rgba(148,163,184,0.1)",
+                        border: `1px solid ${member.role === "owner" ? "rgba(234,179,8,0.25)" : "rgba(148,163,184,0.2)"}`,
                         padding: "1px 6px",
-                        borderRadius: 4,
+                        borderRadius: 5,
                       }}
                     >
                       {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
@@ -1084,6 +1245,83 @@ export default function GroupConversationInfoPanel({
           ))}
         </div>
       </ExpandableSection>
+
+      {isOwner && (
+        <div
+          style={{
+            borderBottom: "1px solid rgba(148,163,184,0.15)",
+            padding: "14px 16px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#f1f5f9",
+              margin: "0 0 12px",
+            }}
+          >
+            Cài đặt nhóm
+          </p>
+
+          {/* Toggle: Phê duyệt thành viên mới */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: 13, color: "#e2e8f0" }}>
+                Chế độ phê duyệt thành viên mới
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
+                Thành viên mới cần được duyệt trước khi vào nhóm
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                // Lấy trạng thái hiện tại (mặc định false nếu chưa có)
+                const current =
+                  conversation.group?.settings?.requireApprovalToJoin ?? false;
+                // Gọi hàm update với trạng thái ngược lại
+                await onUpdateSettings?.({ requireApprovalToJoin: !current });
+              }}
+              style={{
+                width: 40,
+                height: 22,
+                borderRadius: 999,
+                border: "none",
+                background: conversation.group?.settings?.requireApprovalToJoin
+                  ? "#2563eb" // Màu xanh khi bật
+                  : "rgba(148,163,184,0.3)", // Màu xám khi tắt
+                cursor: onUpdateSettings ? "pointer" : "not-allowed",
+                position: "relative",
+                flexShrink: 0,
+                transition: "background 0.2s",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: conversation.group?.settings?.requireApprovalToJoin
+                    ? 21
+                    : 3,
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  background: "white",
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                }}
+              />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Leave & Delete Buttons */}
       <div

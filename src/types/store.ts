@@ -1,6 +1,28 @@
 import type { Socket } from "socket.io-client";
-import type { Conversation, Message } from "./chat";
+import type {
+  Conversation,
+  Message,
+  MessageReaction,
+  PinnedMessage,
+} from "./chat";
 import type { UploadAttachmentResponse } from "@/services/chatService";
+
+export interface GroupJoinRequest {
+  _id: string;
+  conversationId: string;
+  invitedUserId: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  invitedBy: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+}
 
 export interface ChatState {
   conversations: Conversation[];
@@ -54,6 +76,29 @@ export interface ChatState {
     newContent: string,
     editedAt: string,
   ) => void;
+  reactMessage: (
+    messageId: string,
+    conversationId: string,
+    emoji: string,
+  ) => Promise<void>;
+  applyMessageReactions: (
+    messageId: string,
+    conversationId: string,
+    reactions: MessageReaction[],
+  ) => void;
+  togglePinMessage: (
+    messageId: string,
+    conversationId: string,
+  ) => Promise<void>;
+  fetchPinnedMessages: (conversationId: string) => Promise<PinnedMessage[]>;
+  applyPinnedMessages: (
+    conversationId: string,
+    pinnedMessages: PinnedMessage[],
+  ) => void;
+  updateConversationTheme: (
+    conversationId: string,
+    themeId: string,
+  ) => Promise<void>;
   updateLastRead: (
     userId: string,
     conversationId: string,
@@ -70,7 +115,7 @@ export interface ChatState {
   clearTypingUsers: (conversationId: string) => void;
   updateStrangerStatus: (
     conversationId: string,
-    action: "accepted" | "decline",
+    action: "accepted" | "declined",
   ) => Promise<void>;
   forwardMessage: (
     message: Message,
@@ -89,6 +134,26 @@ export interface ChatState {
   deleteConversationForMe: (conversationId: string) => Promise<void>;
   leaveGroup: (conversationId: string) => Promise<void>;
   dissolveGroup: (conversationId: string) => Promise<void>;
+  joinRequests: Record<string, GroupJoinRequest[]>;
+  addMemberToGroup: (
+    conversationId: string,
+    targetUserId: string,
+  ) => Promise<{ needsApproval: boolean }>;
+
+  reviewJoinRequest: (
+    conversationId: string,
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => Promise<void>;
+
+  fetchJoinRequests: (conversationId: string) => Promise<void>;
+
+  addJoinRequest: (request: GroupJoinRequest) => void;
+
+  addMemberToConversation: (
+    conversationId: string,
+    member: Conversation["participants"][0],
+  ) => void;
 }
 
 export interface FriendUpdateEvent {

@@ -29,6 +29,22 @@ export interface LastMessage {
   };
 }
 
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export interface PinnedMessage {
+  messageId: string;
+  senderId?: string;
+  content?: string | null;
+  createdAt?: string;
+  isRecalled?: boolean;
+  pinnedAt: string;
+  pinnedBy?: string;
+}
+
 export interface Conversation {
   _id: string;
   type: "direct" | "group";
@@ -38,11 +54,14 @@ export interface Conversation {
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;
   unreadCounts: Record<string, number>; // key = userId, value = unread count
+  chatThemeId?: string;
+  pinnedMessages?: PinnedMessage[];
   createdAt: string;
   updatedAt: string;
   isStranger: boolean;
   strangerStatus: "pending" | "accepted" | "declined";
   initiatorId?: string;
+  pinnedMessages?: Message[];
 }
 
 export interface ConversationResponse {
@@ -63,6 +82,7 @@ export interface Message {
   deletedFor?: string[];
   isEdited?: boolean;
   editedAt?: string;
+  reactions?: MessageReaction[];
 }
 
 export type ChatMessageKind =
@@ -73,6 +93,7 @@ export type ChatMessageKind =
   | "file"
   | "audio"
   | "sticker"
+  | "call"
   | "poll"
   | "poll_vote";
 
@@ -101,6 +122,18 @@ export interface ReplyMeta {
   preview: string;
 }
 
+export interface CallMeta {
+  callType: "voice" | "video";
+  status: "ended";
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  initiatedBy: string;
+  endedBy?: string;
+  upgradedFrom?: "voice" | "video";
+  upgradedTo?: "voice" | "video";
+}
+
 export interface ChatStructuredPayload {
   version: 1;
   kind: ChatMessageKind;
@@ -110,6 +143,7 @@ export interface ChatStructuredPayload {
   attachments?: ChatAttachment[];
   stickerUrl?: string;
   reply?: ReplyMeta;
+  call?: CallMeta;
   poll?: {
     id: string;
     question: string;

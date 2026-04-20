@@ -107,6 +107,13 @@ const registerSocketEvents = (
       ),
     }));
   });
+  socket.off("group-join-request");
+  socket.off("join-request-reviewed");
+  socket.off("added-to-group");
+  socket.off("group-settings-updated");
+  socket.off("message-reacted");
+  socket.off("conversation:pins-updated");
+  socket.off("conversation:theme-updated");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -135,6 +142,26 @@ const registerSocketEvents = (
         .applyEditMessage(messageId, conversationId, newContent, editedAt);
     },
   );
+  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
+  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
+});
+  socket.on("message-reacted", ({ messageId, conversationId, reactions }) => {
+    useChatStore
+      .getState()
+      .applyMessageReactions(messageId, conversationId, reactions || []);
+  });
+  socket.on("conversation:pins-updated", ({ conversationId, pinnedMessages }) => {
+    useChatStore
+      .getState()
+      .applyPinnedMessages(conversationId, pinnedMessages || []);
+  });
+  socket.on("conversation:theme-updated", ({ conversationId, themeId }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId ? { ...c, chatThemeId: themeId } : c,
+      ),
+    }));
+  });
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     const existingConv = useChatStore
@@ -214,6 +241,8 @@ const registerSocketEvents = (
       console.log("New conversation from socket:", conversation);
       useChatStore.getState().addConversation(conversation);
     }
+
+    socket.emit("join-conversation", { conversationId: conversation.id });
   });
   socket.on("stranger-removed", ({ conversationId }) => {
     useChatStore.setState((state) => ({
@@ -231,6 +260,7 @@ const registerSocketEvents = (
         avatarUrl: p.userId?.avatarUrl || p.avatarUrl || null,
         joinedAt: p.joinedAt,
         lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+        role: p.role,
       }),
     );
 
@@ -275,6 +305,55 @@ const registerSocketEvents = (
     useChatStore
       .getState()
       .updateMemberRole(conversationId, targetUserId, role);
+  });
+  socket.on("group-join-request", ({ conversationId, request }) => {
+    useChatStore.getState().addJoinRequest(request);
+  });
+
+  // Người được mời biết kết quả duyệt
+  socket.on("join-request-reviewed", ({ conversationId, status }) => {
+    if (status === "rejected") {
+      // Có thể toast thông báo bị từ chối ở đây
+      console.log(`Yêu cầu vào nhóm ${conversationId} bị từ chối`);
+    }
+    // Nếu approved thì "added-to-group" sẽ được emit tiếp theo
+  });
+
+  // Được thêm vào nhóm thành công
+  socket.on("added-to-group", ({ conversation }) => {
+    const formatted = {
+      ...conversation,
+      participants: (conversation.participants || []).map((p: any) => ({
+        _id: p.userId?._id || p._id,
+        displayName: p.userId?.displayName || p.displayName,
+        avatarUrl: p.userId?.avatarUrl || p.avatarUrl || null,
+        joinedAt: p.joinedAt,
+        lastReadMessageId: p.lastReadMessageId?.toString() ?? null,
+        role: p.role,
+      })),
+    };
+
+    const existing = useChatStore
+      .getState()
+      .conversations.find((c) => c._id === formatted._id);
+
+    if (existing) {
+      useChatStore.getState().updateConversation(formatted);
+    } else {
+      useChatStore.getState().addConversation(formatted);
+    }
+
+    // Join socket room
+    socket.emit("join-conversation", { conversationId: formatted._id });
+  });
+  socket.on("group-settings-updated", ({ conversationId, settings }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId && c.group
+          ? { ...c, group: { ...c.group, settings } }
+          : c,
+      ),
+    }));
   });
 };
 
