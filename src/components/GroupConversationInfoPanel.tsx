@@ -174,7 +174,9 @@ export default function GroupConversationInfoPanel({
   console.log("participants:", conversation.participants);
   console.log("currentUserId:", currentUserId);
   console.log("currentParticipant:", currentParticipant);
-  const isOwner = currentParticipant?.role === "owner";
+  const isOwner =
+    currentParticipant?.role === "owner" ||
+    currentParticipant?.role === "admin";
   console.log("isOwner:", isOwner);
   // Helper: Get display participants (first 3)
   const getDisplayParticipants = useMemo(() => {
@@ -628,7 +630,7 @@ export default function GroupConversationInfoPanel({
             />
           </div>
 
-          {onAddMember && (
+          {/* {onAddMember && (
             <button
               onClick={() => setShowAddMemberModal(true)}
               style={{
@@ -649,70 +651,116 @@ export default function GroupConversationInfoPanel({
               <UserPlus size={14} />
               Thêm thành viên
             </button>
-          )}
+          )} */}
 
           {/* Danh sách chờ duyệt — chỉ owner/admin thấy */}
-          {isAdminOrOwner && uniquePendingRequests && uniquePendingRequests.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#f59e0b", margin: "0 0 6px" }}>
-                Chờ duyệt ({uniquePendingRequests.length})
-              </p>
-              {uniquePendingRequests.map((req) => (
-                <div
-                  key={req._id}
+          {isAdminOrOwner &&
+            uniquePendingRequests &&
+            uniquePendingRequests.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    background: "rgba(245,158,11,0.08)",
-                    border: "1px solid rgba(245,158,11,0.2)",
-                    marginBottom: 6,
+                    fontSize: 11,
+                    color: "#94a3b8",
+                    margin: "0 0 6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    fontWeight: 600,
                   }}
                 >
-                  <div style={{ flex: 1, fontSize: 12, color: "#f1f5f9" }}>
-                    <span style={{ fontWeight: 600 }}>
-                      {req.invitedUserId.displayName}
-                    </span>
-                    <span style={{ color: "#94a3b8" }}>
-                      {" "}
-                      được mời bởi {req.invitedBy.displayName}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => onReviewRequest?.(req._id, "approved")}
+                  Chờ duyệt ({uniquePendingRequests.length})
+                </p>
+                {uniquePendingRequests.map((req) => (
+                  <div
+                    key={req._id}
                     style={{
-                      padding: "3px 8px",
-                      borderRadius: 6,
-                      border: "none",
-                      background: "rgba(16,185,129,0.2)",
-                      color: "#10b981",
-                      fontSize: 11,
-                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      background: "rgba(15,23,42,0.6)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                      marginBottom: 6,
                     }}
                   >
-                    Duyệt
-                  </button>
-                  <button
-                    onClick={() => onReviewRequest?.(req._id, "rejected")}
-                    style={{
-                      padding: "3px 8px",
-                      borderRadius: 6,
-                      border: "none",
-                      background: "rgba(248,113,113,0.1)",
-                      color: "#f87171",
-                      fontSize: 11,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Từ chối
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                    {/* Avatar */}
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: "50%",
+                        background: "#1e293b",
+                        border: "1px solid rgba(148,163,184,0.2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#94a3b8",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {req.invitedUserId.displayName?.[0]?.toUpperCase()}
+                    </div>
 
+                    {/* Text */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          color: "#f1f5f9",
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {req.invitedUserId.displayName}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>
+                        mời bởi {req.invitedBy.displayName}
+                      </p>
+                    </div>
+
+                    {/* Buttons */}
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "approved")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(37,99,235,0.4)",
+                          background: "rgba(37,99,235,0.15)",
+                          color: "#93c5fd",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Duyệt
+                      </button>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "rejected")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(148,163,184,0.2)",
+                          background: "rgba(148,163,184,0.08)",
+                          color: "#64748b",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           {/* Members list */}
           {filteredMembers.map((member) => (
             <div
@@ -782,13 +830,14 @@ export default function GroupConversationInfoPanel({
                       style={{
                         fontSize: 10,
                         fontWeight: 600,
-                        color: member.role === "owner" ? "#f59e0b" : "#3b82f6",
+                        color: member.role === "owner" ? "#eab308" : "#94a3b8",
                         background:
                           member.role === "owner"
-                            ? "rgba(245,158,11,0.15)"
-                            : "rgba(59,130,246,0.15)",
+                            ? "rgba(234,179,8,0.1)"
+                            : "rgba(148,163,184,0.1)",
+                        border: `1px solid ${member.role === "owner" ? "rgba(234,179,8,0.25)" : "rgba(148,163,184,0.2)"}`,
                         padding: "1px 6px",
-                        borderRadius: 4,
+                        borderRadius: 5,
                       }}
                     >
                       {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
