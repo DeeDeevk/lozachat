@@ -28,6 +28,22 @@ export interface LastMessage {
   };
 }
 
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export interface PinnedMessage {
+  messageId: string;
+  senderId?: string;
+  content?: string | null;
+  createdAt?: string;
+  isRecalled?: boolean;
+  pinnedAt: string;
+  pinnedBy?: string;
+}
+
 export interface Conversation {
   _id: string;
   type: "direct" | "group";
@@ -37,6 +53,8 @@ export interface Conversation {
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;
   unreadCounts: Record<string, number>; // key = userId, value = unread count
+  chatThemeId?: string;
+  pinnedMessages?: PinnedMessage[];
   createdAt: string;
   updatedAt: string;
   isStranger: boolean;
@@ -62,6 +80,7 @@ export interface Message {
   deletedFor?: string[];
   isEdited?: boolean;
   editedAt?: string;
+  reactions?: MessageReaction[];
 }
 
 export type ChatMessageKind =

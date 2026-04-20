@@ -29,6 +29,9 @@ const registerSocketEvents = (
   socket.off("join-request-reviewed");
   socket.off("added-to-group");
   socket.off("group-settings-updated");
+  socket.off("message-reacted");
+  socket.off("conversation:pins-updated");
+  socket.off("conversation:theme-updated");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -49,14 +52,26 @@ const registerSocketEvents = (
   socket.on("user-stop-typing", ({ userId, conversationId }) => {
     useChatStore.getState().removeTypingUser(userId, conversationId);
   });
-  socket.on(
-    "message-edited",
-    ({ messageId, conversationId, newContent, editedAt }) => {
-      useChatStore
-        .getState()
-        .applyEditMessage(messageId, conversationId, newContent, editedAt);
-    },
-  );
+  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
+  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
+});
+  socket.on("message-reacted", ({ messageId, conversationId, reactions }) => {
+    useChatStore
+      .getState()
+      .applyMessageReactions(messageId, conversationId, reactions || []);
+  });
+  socket.on("conversation:pins-updated", ({ conversationId, pinnedMessages }) => {
+    useChatStore
+      .getState()
+      .applyPinnedMessages(conversationId, pinnedMessages || []);
+  });
+  socket.on("conversation:theme-updated", ({ conversationId, themeId }) => {
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c._id === conversationId ? { ...c, chatThemeId: themeId } : c,
+      ),
+    }));
+  });
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     useChatStore.getState().addMessage(message);

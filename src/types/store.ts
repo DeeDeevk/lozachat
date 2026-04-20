@@ -1,5 +1,10 @@
 import type { Socket } from "socket.io-client";
-import type { Conversation, Message } from "./chat";
+import type {
+  Conversation,
+  Message,
+  MessageReaction,
+  PinnedMessage,
+} from "./chat";
 import type { UploadAttachmentResponse } from "@/services/chatService";
 
 export interface GroupJoinRequest {
@@ -71,6 +76,29 @@ export interface ChatState {
     newContent: string,
     editedAt: string,
   ) => void;
+  reactMessage: (
+    messageId: string,
+    conversationId: string,
+    emoji: string,
+  ) => Promise<void>;
+  applyMessageReactions: (
+    messageId: string,
+    conversationId: string,
+    reactions: MessageReaction[],
+  ) => void;
+  togglePinMessage: (
+    messageId: string,
+    conversationId: string,
+  ) => Promise<void>;
+  fetchPinnedMessages: (conversationId: string) => Promise<PinnedMessage[]>;
+  applyPinnedMessages: (
+    conversationId: string,
+    pinnedMessages: PinnedMessage[],
+  ) => void;
+  updateConversationTheme: (
+    conversationId: string,
+    themeId: string,
+  ) => Promise<void>;
   updateLastRead: (
     userId: string,
     conversationId: string,
