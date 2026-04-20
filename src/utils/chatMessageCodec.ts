@@ -44,6 +44,10 @@ export const getSafeMessagePreview = (content?: string | null, fallback = "Tin n
     case "sticker":
       return "Da gui nhan dan";
     case "call": {
+      if (payload.call?.status === "started") {
+        const label = payload.call?.callType === "video" ? "video" : "voice";
+        return `Cuoc goi ${label} dang dien ra`;
+      }
       const duration = payload.call?.durationSeconds ?? 0;
       const minutes = Math.floor(duration / 60)
         .toString()
