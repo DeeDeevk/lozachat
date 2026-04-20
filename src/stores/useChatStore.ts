@@ -196,11 +196,27 @@ export const useChatStore = create<ChatState>()(
         }
       },
       updateConversation: (conversation) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
+        set((state) => {
+          const updated = state.conversations.map((c) =>
             c._id === conversation._id ? { ...c, ...conversation } : c,
-          ),
-        }));
+          );
+
+          if (conversation.lastMessage) {
+            return {
+              conversations: updated.sort((a, b) => {
+                const aTime = a.lastMessage?.createdAt
+                  ? new Date(a.lastMessage.createdAt).getTime()
+                  : 0;
+                const bTime = b.lastMessage?.createdAt
+                  ? new Date(b.lastMessage.createdAt).getTime()
+                  : 0;
+                return bTime - aTime;
+              }),
+            };
+          }
+
+          return { conversations: updated };
+        });
       },
       addConversation: (conversation) => {
         set((state) => {
@@ -598,6 +614,82 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
       },
+      deleteConversationForMe: async (conversationId: string) => {
+        try {
+          await chatService.deleteConversationForMe(conversationId);
+          const { user } = useAuthStore.getState();
+          const userId = user?.userId ?? "";
+
+          set((state) => ({
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+            conversations: state.conversations.map((c) =>
+              c._id === conversationId
+                ? {
+                    ...c,
+                    lastMessage: null as any,
+                    // ✅ Reset đúng key userId về 0 thay vì xóa cả object
+                    unreadCounts: {
+                      ...(c as any).unreadCounts,
+                      [userId]: 0,
+                    } as any,
+                  }
+                : c,
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi xóa tin nhắn:", error);
+          throw error;
+        }
+      },
+      dissolveGroup: async (conversationId: string) => {
+        try {
+          await chatService.dissolveGroup(conversationId);
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (c) => c._id !== conversationId,
+            ),
+            activeConversationId:
+              state.activeConversationId === conversationId
+                ? null
+                : state.activeConversationId,
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi giải tán nhóm:", error);
+          throw error;
+        }
+      },
+      leaveGroup: async (conversationId: string, newOwnerId?: string) => {
+        try {
+          await chatService.leaveGroup(conversationId, newOwnerId);
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (c) => c._id !== conversationId,
+            ),
+            activeConversationId:
+              state.activeConversationId === conversationId
+                ? null
+                : state.activeConversationId,
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi rời nhóm:", error);
+          throw error;
+        } 
+      },
+
       addMemberToGroup: async (conversationId, targetUserId) => {
         const res = await chatService.addMemberToGroup(
           conversationId,

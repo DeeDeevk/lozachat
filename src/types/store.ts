@@ -131,6 +131,9 @@ export interface ChatState {
     targetUserId: string,
     role: "admin" | "member",
   ) => void;
+  deleteConversationForMe: (conversationId: string) => Promise<void>;
+  leaveGroup: (conversationId: string) => Promise<void>;
+  dissolveGroup: (conversationId: string) => Promise<void>;
   joinRequests: Record<string, GroupJoinRequest[]>;
   addMemberToGroup: (
     conversationId: string,

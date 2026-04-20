@@ -104,9 +104,33 @@ export const chatService = {
     const res = await api.post("/conversations", payload);
     return res.data.conversation;
   },
+
+  async updateGroupInfo(
+    conversationId: string,
+    formData: FormData,
+  ): Promise<{ message: string; conversation: any }> {
+    const res = await api.patch(`/conversations/${conversationId}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
   async editMessage(messageId: string, content: string): Promise<Message> {
     const res = await api.patch(`/messages/${messageId}/edit`, { content });
     return res.data.message;
+  },
+  async deleteConversationForMe(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}`);
+  },
+  async leaveGroup(conversationId: string, newOwnerId?: string): Promise<void> {
+    await api.post(`/conversations/${conversationId}/leave`, { newOwnerId });
+  },
+  async removeMember(
+    conversationId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/members`, {
+      data: { targetUserId },
+    });
   },
   async reactMessage(
     messageId: string,
@@ -157,6 +181,9 @@ export const chatService = {
       },
     );
     return response.data;
+  },
+  async dissolveGroup(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/dissolve`);
   },
   async addMemberToGroup(conversationId: string, targetUserId: string) {
     const res = await api.post(`/conversations/${conversationId}/members`, {

@@ -54,9 +54,11 @@ import {
   Video,
   X,
   Key,
+  LogOut,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
+import EditGroupModal from "@/components/EditGroupModal";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -257,11 +259,9 @@ function formatCallDuration(totalSeconds: number) {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-
   if (hours > 0) {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
-
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -346,7 +346,7 @@ function GroupSeenAvatars({ seenParticipants }: GroupSeenAvatarsProps) {
   );
 }
 
-// --- SENDER AVATAR (for group chat) ---
+// --- SENDER AVATAR ---
 interface SenderAvatarProps {
   participant:
     | {
@@ -429,7 +429,6 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
           <Key size={12} color="#eab308" strokeWidth={3} />
         </div>
       )}
-
       {participant?.role === "admin" && (
         <div
           style={{
@@ -480,6 +479,11 @@ export default function ChatPage() {
     togglePinMessage,
     fetchPinnedMessages,
     updateConversationTheme,
+    // From doc 14 features
+    dissolveGroup,
+    leaveGroup,
+    deleteConversationForMe,
+    updateMemberRole,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -496,6 +500,7 @@ export default function ChatPage() {
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [voteViewer, setVoteViewer] = useState<{
     x: number;
     y: number;
@@ -517,6 +522,13 @@ export default function ChatPage() {
     message: Message;
   } | null>(null);
   const [isPinnedModalOpen, setIsPinnedModalOpen] = useState(false);
+
+  // Doc 14 modal states
+  const [showDissolveConfirm, setShowDissolveConfirm] = useState(false);
+  const [showLeaveGroupConfirm, setShowLeaveGroupConfirm] = useState(false);
+  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string>("");
+  const [showDeleteConvConfirm, setShowDeleteConvConfirm] = useState(false);
+
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const reactionMenuRef = useRef<HTMLDivElement>(null);
@@ -539,12 +551,12 @@ export default function ChatPage() {
   );
   const [forwardSearch, setForwardSearch] = useState("");
   const [selectedConvs, setSelectedConvs] = useState<string[]>([]);
-  // Edit message
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editInput, setEditInput] = useState("");
-  // Info panel
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [showThemePicker, setShowThemePicker] = useState(false);
+
+  // Call states
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callKind, setCallKind] = useState<CallKind | null>(null);
   const [callConversationId, setCallConversationId] = useState<string | null>(
@@ -555,7 +567,8 @@ export default function ChatPage() {
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isVideoPiPActive, setIsVideoPiPActive] = useState(false);
   const [isUpgradeRequestPending, setIsUpgradeRequestPending] = useState(false);
-  const [isUpgradeRequestIncoming, setIsUpgradeRequestIncoming] = useState(false);
+  const [isUpgradeRequestIncoming, setIsUpgradeRequestIncoming] =
+    useState(false);
   const [upgradeRequesterName, setUpgradeRequesterName] = useState("");
   const [callConnectedAt, setCallConnectedAt] = useState<number | null>(null);
   const [callElapsedSeconds, setCallElapsedSeconds] = useState(0);
@@ -563,6 +576,7 @@ export default function ChatPage() {
   const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(
     null,
   );
+
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
@@ -570,6 +584,7 @@ export default function ChatPage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+
   const selectedByConversation = useChatThemeStore(
     (state) => state.selectedByConversation,
   );
@@ -577,33 +592,47 @@ export default function ChatPage() {
     (state) => state.setThemeForConversation,
   );
 
-  // ─── Fetch conversations on mount ───────────────────────────────────────────
+  // ─── participantsCache: giữ avatar/tên người đã rời nhóm (from doc 14) ─────
+  const participantsCache = useMemo(() => {
+    const cache = new Map<
+      string,
+      { displayName: string; avatarUrl?: string | null; role?: string }
+    >();
+    conversations.forEach((c) => {
+      c.participants.forEach((p) => {
+        if (!cache.has(p._id)) {
+          cache.set(p._id, {
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl,
+            role: p.role,
+          });
+        }
+      });
+    });
+    return cache;
+  }, [conversations]);
+
+  // ─── Fetch on mount ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
   useEffect(() => {
-    if (activeConversationId) {
-      fetchMessages(activeConversationId);
-    }
+    if (activeConversationId) fetchMessages(activeConversationId);
   }, [activeConversationId]);
 
   useEffect(() => {
     if (!activeConversationId || !socket) return;
-
     const joinRoom = () => {
       socket.emit("join-conversation", {
         conversationId: activeConversationId,
       });
     };
-
     if (socket.connected) {
       joinRoom();
       return;
     }
-
     socket.once("connect", joinRoom);
-
     return () => {
       socket.off("connect", joinRoom);
     };
@@ -636,21 +665,16 @@ export default function ChatPage() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (contextMenuRef.current && !contextMenuRef.current.contains(target)) {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(target))
         setContextMenu(null);
-      }
-      if (popupRef.current && !popupRef.current.contains(target)) {
+      if (popupRef.current && !popupRef.current.contains(target))
         setActivePopup(null);
-      }
-      if (themeMenuRef.current && !themeMenuRef.current.contains(target)) {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(target))
         setShowThemePicker(false);
-      }
-      if (reactionMenuRef.current && !reactionMenuRef.current.contains(target)) {
+      if (reactionMenuRef.current && !reactionMenuRef.current.contains(target))
         setReactionMenu(null);
-      }
-      if (pinnedModalRef.current && !pinnedModalRef.current.contains(target)) {
+      if (pinnedModalRef.current && !pinnedModalRef.current.contains(target))
         setIsPinnedModalOpen(false);
-      }
       setVoteViewer(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -670,13 +694,11 @@ export default function ChatPage() {
       setCallElapsedSeconds(0);
       return;
     }
-
     const tick = () => {
       setCallElapsedSeconds(
         Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000)),
       );
     };
-
     tick();
     const timerId = window.setInterval(tick, 1000);
     return () => window.clearInterval(timerId);
@@ -707,14 +729,19 @@ export default function ChatPage() {
     );
     return me?.role === "owner" || me?.role === "admin";
   }, [activeConversation, user?.userId]);
+
   useEffect(() => {
     if (isAdminOrOwner && activeConversationId) {
       fetchJoinRequests(activeConversationId);
     }
   }, [activeConversationId, isAdminOrOwner]);
+
   useEffect(() => {
     if (!activeConversationId || !activeConversation?.chatThemeId) return;
-    setThemeForConversation(activeConversationId, activeConversation.chatThemeId);
+    setThemeForConversation(
+      activeConversationId,
+      activeConversation.chatThemeId,
+    );
   }, [
     activeConversation?.chatThemeId,
     activeConversationId,
@@ -742,7 +769,12 @@ export default function ChatPage() {
       );
       return participant?.displayName || "Người dùng";
     },
-    [activeConversation?.participants, user?.userId, user?.username, userProfile?.displayName],
+    [
+      activeConversation?.participants,
+      user?.userId,
+      user?.username,
+      userProfile?.displayName,
+    ],
   );
 
   const otherUser = useMemo(
@@ -769,7 +801,6 @@ export default function ChatPage() {
       flexDirection: "column",
       color: "white",
     };
-
     if (
       activeChatTheme.mode === "image" &&
       activeChatTheme.appBackgroundImage
@@ -777,7 +808,6 @@ export default function ChatPage() {
       base.background = `linear-gradient(180deg, rgba(2,6,23,.62) 0%, rgba(2,6,23,.82) 100%), url(${activeChatTheme.appBackgroundImage}) center/cover no-repeat`;
       return base;
     }
-
     base.background = activeChatTheme.appBackground;
     return base;
   }, [activeChatTheme]);
@@ -792,6 +822,154 @@ export default function ChatPage() {
     [activeChatTheme.messageAreaOverlay],
   );
 
+  const currentMessages = useMemo(() => {
+    if (!activeConversationId) return [];
+    const data = messages[activeConversationId];
+    if (!data) return [];
+    return Array.isArray(data) ? data : (data.items ?? []);
+  }, [messages, activeConversationId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeConversationId, currentMessages.length]);
+
+  const otherLastReadMessageId = useMemo(
+    () =>
+      activeConversation?.participants.find((p) => p._id !== user?.userId)
+        ?.lastReadMessageId ?? null,
+    [activeConversation, user?.userId],
+  );
+
+  const typingUsers = useMemo(() => {
+    if (!activeConversationId) return [];
+    return (typingUsersByConv[activeConversationId] || []).filter(
+      (id) => id !== user?.userId,
+    );
+  }, [typingUsersByConv, activeConversationId, user?.userId]);
+
+  const conversationListItems: ConversationListItem[] = useMemo(
+    () =>
+      conversations.map((c: Conversation) => ({
+        _id: c._id,
+        group: c.group,
+        participants: c.participants.map((p) => ({
+          _id: p._id,
+          displayName: p.displayName,
+          avatarUrl: p.avatarUrl || undefined,
+        })),
+        lastMessage: c.lastMessage
+          ? {
+              content: c.lastMessage.content,
+              createdAt: c.lastMessage.createdAt,
+            }
+          : undefined,
+        unread: c.unreadCounts?.[user?.userId || ""] || 0,
+        pinned: false,
+        isStranger: c.isStranger,
+        strangerStatus: c.strangerStatus,
+      })),
+    [conversations, user?.userId],
+  );
+
+  const pollAggregates = useMemo(() => {
+    const map = new Map<string, PollAggregate>();
+    currentMessages.forEach((message) => {
+      const payload = decodeChatPayload(message.content);
+      if (!payload) return;
+      if (payload.kind === "poll" && payload.poll) {
+        const existing = map.get(payload.poll.id);
+        const latestActivityAt = existing?.latestActivityAt
+          ? new Date(existing.latestActivityAt).getTime() >
+            new Date(message.createdAt).getTime()
+            ? existing.latestActivityAt
+            : message.createdAt
+          : message.createdAt;
+        map.set(payload.poll.id, {
+          question: payload.poll.question,
+          options: payload.poll.options,
+          createdBy: payload.poll.createdBy,
+          votes: existing?.votes || [],
+          latestActivityAt,
+        });
+      }
+      if (payload.kind === "poll_vote" && payload.pollVote) {
+        const aggregate = map.get(payload.pollVote.pollId) || {
+          question: "Bình chọn",
+          options: [],
+          createdBy: payload.pollVote.userId,
+          votes: [] as Array<PollVote & { createdAt: string }>,
+          latestActivityAt: message.createdAt,
+        };
+        const voteIndex = aggregate.votes.findIndex(
+          (v) => v.userId === payload.pollVote?.userId,
+        );
+        const nextVote = { ...payload.pollVote, createdAt: message.createdAt };
+        if (voteIndex >= 0) {
+          const oldTime = new Date(
+            aggregate.votes[voteIndex].createdAt,
+          ).getTime();
+          const newTime = new Date(message.createdAt).getTime();
+          if (newTime >= oldTime) aggregate.votes[voteIndex] = nextVote;
+        } else {
+          aggregate.votes.push(nextVote);
+        }
+        aggregate.latestActivityAt = new Date(
+          Math.max(
+            new Date(aggregate.latestActivityAt).getTime(),
+            new Date(message.createdAt).getTime(),
+          ),
+        ).toISOString();
+        map.set(payload.pollVote.pollId, aggregate);
+      }
+    });
+    return map;
+  }, [currentMessages]);
+
+  const displayMessages = useMemo(() => {
+    const pollActivityOrder = new Map<string, number>();
+    pollAggregates.forEach((aggregate, pollId) => {
+      pollActivityOrder.set(
+        pollId,
+        new Date(aggregate.latestActivityAt).getTime(),
+      );
+    });
+    return currentMessages
+      .filter((message) => {
+        const payload = decodeChatPayload(message.content);
+        return payload?.kind !== "poll_vote";
+      })
+      .map((message, index) => {
+        const payload = decodeChatPayload(message.content);
+        let displayTime = new Date(message.createdAt).getTime();
+        if (payload?.kind === "poll" && payload.poll) {
+          const latestPollActivity = pollActivityOrder.get(payload.poll.id);
+          if (latestPollActivity)
+            displayTime = Math.max(displayTime, latestPollActivity);
+        }
+        return { message, index, displayTime };
+      })
+      .sort((a, b) => {
+        if (a.displayTime !== b.displayTime)
+          return a.displayTime - b.displayTime;
+        return a.index - b.index;
+      })
+      .map((item) => item.message);
+  }, [currentMessages, pollAggregates]);
+
+  const groupSeenMap = useMemo(() => {
+    if (!activeConversation?.group)
+      return new Map<string, Conversation["participants"]>();
+    const map = new Map<string, Conversation["participants"]>();
+    activeConversation.participants.forEach((p) => {
+      if (p._id === user?.userId) return;
+      if (!p.lastReadMessageId) return;
+      const existing = map.get(p.lastReadMessageId) || [];
+      map.set(p.lastReadMessageId, [...existing, p]);
+    });
+    return map;
+  }, [activeConversation, user?.userId]);
+
+  // ─── Call helpers ─────────────────────────────────────────────────────────────
   const cleanupCall = useCallback(() => {
     if (peerRef.current) {
       peerRef.current.onicecandidate = null;
@@ -799,12 +977,10 @@ export default function ChatPage() {
       peerRef.current.close();
       peerRef.current = null;
     }
-
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
     }
-
     pendingOfferRef.current = null;
     setRemoteStream(null);
     setLocalStreamState(null);
@@ -836,12 +1012,11 @@ export default function ChatPage() {
             .forEach((track) => existing.addTrack(track));
           setLocalStreamState(existing);
         } catch (error) {
-          console.warn("Unable to add video track to existing stream", error);
+          console.warn("Unable to add video track", error);
         }
       }
       return existing;
     }
-
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -850,10 +1025,6 @@ export default function ChatPage() {
       });
     } catch (error) {
       if (kind !== "video") throw error;
-      console.warn(
-        "Falling back to audio-only call because video device is unavailable",
-        error,
-      );
       stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: false,
@@ -872,9 +1043,7 @@ export default function ChatPage() {
         peerRef.current.close();
         peerRef.current = null;
       }
-
       const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-
       peer.onicecandidate = (event) => {
         if (!event.candidate || !socket) return;
         socket.emit("call:ice-candidate", {
@@ -882,13 +1051,9 @@ export default function ChatPage() {
           candidate: event.candidate,
         });
       };
-
       peer.ontrack = (event) => {
-        if (event.streams?.[0]) {
-          setRemoteStream(event.streams[0]);
-        }
+        if (event.streams?.[0]) setRemoteStream(event.streams[0]);
       };
-
       peerRef.current = peer;
       return peer;
     },
@@ -901,26 +1066,21 @@ export default function ChatPage() {
         toast.error("Không thể bắt đầu cuộc gọi lúc này");
         return;
       }
-
       try {
         cleanupCall();
         setCallConversationId(activeConversationId);
         setCallKind(kind);
         setCallStatus("outgoing");
-
         const stream = await ensureLocalStream(kind);
         const peer = createPeer(activeConversationId);
-
         stream.getTracks().forEach((track) => {
           peer.addTrack(track, stream);
         });
-
         const offer = await peer.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: kind === "video",
         });
         await peer.setLocalDescription(offer);
-
         socket.emit("call:initiate", {
           conversationId: activeConversationId,
           kind,
@@ -932,14 +1092,7 @@ export default function ChatPage() {
         cleanupCall();
       }
     },
-    [
-      activeConversation,
-      activeConversationId,
-      cleanupCall,
-      createPeer,
-      ensureLocalStream,
-      socket,
-    ],
+    [activeConversationId, cleanupCall, createPeer, ensureLocalStream, socket],
   );
 
   const acceptIncomingCall = useCallback(async () => {
@@ -949,15 +1102,12 @@ export default function ChatPage() {
       setCallStatus("connecting");
       const stream = await ensureLocalStream(callKind);
       const peer = createPeer(callConversationId);
-
       stream.getTracks().forEach((track) => {
         peer.addTrack(track, stream);
       });
-
       await peer.setRemoteDescription(pendingOfferRef.current);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-
       socket.emit("call:accept", { conversationId: callConversationId });
       socket.emit("call:answer", {
         conversationId: callConversationId,
@@ -980,16 +1130,14 @@ export default function ChatPage() {
   ]);
 
   const rejectIncomingCall = useCallback(() => {
-    if (callConversationId && socket) {
+    if (callConversationId && socket)
       socket.emit("call:reject", { conversationId: callConversationId });
-    }
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
   const endCall = useCallback(() => {
-    if (callConversationId && socket) {
+    if (callConversationId && socket)
       socket.emit("call:end", { conversationId: callConversationId });
-    }
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
@@ -1015,34 +1163,24 @@ export default function ChatPage() {
 
   const sendUpgradeOffer = useCallback(async () => {
     if (!callConversationId || !socket) return;
-
     const stream = await ensureLocalStream("video");
     const peer = peerRef.current;
     if (!peer) return;
-
     const videoTracks = stream.getVideoTracks();
-    if (videoTracks.length === 0) {
-      throw new Error("No camera track available");
-    }
-
+    if (videoTracks.length === 0) throw new Error("No camera track available");
     setCallKind("video");
     setIsCameraOff(false);
-
     videoTracks.forEach((track) => {
       const alreadySent = peer
         .getSenders()
         .some((sender) => sender.track?.id === track.id);
-      if (!alreadySent) {
-        peer.addTrack(track, stream);
-      }
+      if (!alreadySent) peer.addTrack(track, stream);
     });
-
     const offer = await peer.createOffer({
       offerToReceiveAudio: true,
       offerToReceiveVideo: true,
     });
     await peer.setLocalDescription(offer);
-
     socket.emit("call:upgrade-offer", {
       conversationId: callConversationId,
       kind: "video",
@@ -1057,10 +1195,8 @@ export default function ChatPage() {
       !callConversationId ||
       !socket ||
       isUpgradeRequestPending
-    ) {
+    )
       return;
-    }
-
     socket.emit("call:upgrade-request", {
       conversationId: callConversationId,
       kind: "video",
@@ -1101,19 +1237,19 @@ export default function ChatPage() {
       toast.error("Chưa có video đối phương để bật cửa sổ nổi");
       return;
     }
-
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
         setIsVideoPiPActive(false);
         return;
       }
-
-      if (!document.pictureInPictureEnabled || !videoEl.requestPictureInPicture) {
+      if (
+        !document.pictureInPictureEnabled ||
+        !videoEl.requestPictureInPicture
+      ) {
         toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
         return;
       }
-
       await videoEl.requestPictureInPicture();
       setIsVideoPiPActive(true);
     } catch (error) {
@@ -1146,7 +1282,6 @@ export default function ChatPage() {
       setIsVideoPiPActive(false);
       return;
     }
-
     void document.exitPictureInPicture().catch(() => undefined);
     setIsVideoPiPActive(false);
   }, [callKind]);
@@ -1174,7 +1309,6 @@ export default function ChatPage() {
     const onAccepted = () => {
       setCallStatus((prev) => (prev === "outgoing" ? "connecting" : prev));
     };
-
     const onRejected = () => {
       toast.error("Cuộc gọi đã bị từ chối");
       cleanupCall();
@@ -1216,9 +1350,7 @@ export default function ChatPage() {
             const alreadyAdded = peer
               .getSenders()
               .some((sender) => sender.track?.id === track.id);
-            if (!alreadyAdded) {
-              peer.addTrack(track, stream);
-            }
+            if (!alreadyAdded) peer.addTrack(track, stream);
           });
         }
         await peerRef.current.setRemoteDescription(payload.offer);
@@ -1264,7 +1396,6 @@ export default function ChatPage() {
         });
         return;
       }
-
       setIsUpgradeRequestIncoming(true);
       setUpgradeRequesterName(payload.fromDisplayName || "Người dùng");
       toast("Bạn nhận được yêu cầu nâng cấp video");
@@ -1275,7 +1406,6 @@ export default function ChatPage() {
       kind: CallKind;
     }) => {
       if (payload.conversationId !== callConversationId) return;
-
       try {
         await sendUpgradeOffer();
       } catch (error) {
@@ -1351,158 +1481,6 @@ export default function ChatPage() {
     };
   }, [cleanupCall]);
 
-  const currentMessages = useMemo(() => {
-    if (!activeConversationId) return [];
-    const data = messages[activeConversationId];
-    if (!data) return [];
-    return Array.isArray(data) ? data : (data.items ?? []);
-  }, [messages, activeConversationId]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConversationId, currentMessages.length]);
-
-  const otherLastReadMessageId = useMemo(
-    () =>
-      activeConversation?.participants.find((p) => p._id !== user?.userId)
-        ?.lastReadMessageId ?? null,
-    [activeConversation, user?.userId],
-  );
-
-  const typingUsers = useMemo(() => {
-    if (!activeConversationId) return [];
-    return (typingUsersByConv[activeConversationId] || []).filter(
-      (id) => id !== user?.userId,
-    );
-  }, [typingUsersByConv, activeConversationId, user?.userId]);
-
-  const conversationListItems: ConversationListItem[] = useMemo(
-    () =>
-      conversations.map((c: Conversation) => ({
-        _id: c._id,
-        group: c.group,
-        participants: c.participants.map((p) => ({
-          _id: p._id,
-          displayName: p.displayName,
-          avatarUrl: p.avatarUrl || undefined,
-        })),
-        lastMessage: c.lastMessage
-          ? {
-              content: c.lastMessage.content,
-              createdAt: c.lastMessage.createdAt,
-            }
-          : undefined,
-        unread: c.unreadCounts?.[user?.userId || ""] || 0,
-        pinned: false,
-        isStranger: c.isStranger,
-        strangerStatus: c.strangerStatus,
-      })),
-    [conversations, user?.userId],
-  );
-
-  const pollAggregates = useMemo(() => {
-    const map = new Map<string, PollAggregate>();
-    currentMessages.forEach((message) => {
-      const payload = decodeChatPayload(message.content);
-      if (!payload) return;
-
-      if (payload.kind === "poll" && payload.poll) {
-        const existing = map.get(payload.poll.id);
-        const latestActivityAt = existing?.latestActivityAt
-          ? new Date(existing.latestActivityAt).getTime() >
-            new Date(message.createdAt).getTime()
-            ? existing.latestActivityAt
-            : message.createdAt
-          : message.createdAt;
-        map.set(payload.poll.id, {
-          question: payload.poll.question,
-          options: payload.poll.options,
-          createdBy: payload.poll.createdBy,
-          votes: existing?.votes || [],
-          latestActivityAt,
-        });
-      }
-
-      if (payload.kind === "poll_vote" && payload.pollVote) {
-        const aggregate = map.get(payload.pollVote.pollId) || {
-          question: "Bình chọn",
-          options: [],
-          createdBy: payload.pollVote.userId,
-          votes: [] as Array<PollVote & { createdAt: string }>,
-          latestActivityAt: message.createdAt,
-        };
-        const voteIndex = aggregate.votes.findIndex(
-          (v) => v.userId === payload.pollVote?.userId,
-        );
-        const nextVote = { ...payload.pollVote, createdAt: message.createdAt };
-        if (voteIndex >= 0) {
-          const oldTime = new Date(
-            aggregate.votes[voteIndex].createdAt,
-          ).getTime();
-          const newTime = new Date(message.createdAt).getTime();
-          if (newTime >= oldTime) aggregate.votes[voteIndex] = nextVote;
-        } else {
-          aggregate.votes.push(nextVote);
-        }
-        aggregate.latestActivityAt = new Date(
-          Math.max(
-            new Date(aggregate.latestActivityAt).getTime(),
-            new Date(message.createdAt).getTime(),
-          ),
-        ).toISOString();
-        map.set(payload.pollVote.pollId, aggregate);
-      }
-    });
-    return map;
-  }, [currentMessages]);
-
-  const displayMessages = useMemo(() => {
-    const pollActivityOrder = new Map<string, number>();
-    pollAggregates.forEach((aggregate, pollId) => {
-      pollActivityOrder.set(
-        pollId,
-        new Date(aggregate.latestActivityAt).getTime(),
-      );
-    });
-
-    return currentMessages
-      .filter((message) => {
-        const payload = decodeChatPayload(message.content);
-        return payload?.kind !== "poll_vote";
-      })
-      .map((message, index) => {
-        const payload = decodeChatPayload(message.content);
-        let displayTime = new Date(message.createdAt).getTime();
-        if (payload?.kind === "poll" && payload.poll) {
-          const latestPollActivity = pollActivityOrder.get(payload.poll.id);
-          if (latestPollActivity)
-            displayTime = Math.max(displayTime, latestPollActivity);
-        }
-        return { message, index, displayTime };
-      })
-      .sort((a, b) => {
-        if (a.displayTime !== b.displayTime)
-          return a.displayTime - b.displayTime;
-        return a.index - b.index;
-      })
-      .map((item) => item.message);
-  }, [currentMessages, pollAggregates]);
-
-  // For group seen: build a map of messageId -> list of participants who have read up to that message
-  const groupSeenMap = useMemo(() => {
-    if (!activeConversation?.group)
-      return new Map<string, Conversation["participants"]>();
-    const map = new Map<string, Conversation["participants"]>();
-    // For each participant (not me), find their lastReadMessageId and mark that message
-    activeConversation.participants.forEach((p) => {
-      if (p._id === user?.userId) return;
-      if (!p.lastReadMessageId) return;
-      const existing = map.get(p.lastReadMessageId) || [];
-      map.set(p.lastReadMessageId, [...existing, p]);
-    });
-    return map;
-  }, [activeConversation, user?.userId]);
-
   // ─── Callbacks ───────────────────────────────────────────────────────────────
   const canRecall = useCallback(
     (message: Message) => {
@@ -1539,6 +1517,28 @@ export default function ChatPage() {
     ],
   );
 
+  const showLozaBotSuggestions = useMemo(
+    () => LOZA_BOT_MENTION_REGEX.test(input.trim()),
+    [input],
+  );
+
+  const mentionDraft = useMemo(() => {
+    const match = input.match(BOT_MENTION_TRIGGER_REGEX);
+    if (!match) return null;
+    const keyword = match[2] || "";
+    if (!LOZA_BOT_NAME.toLowerCase().startsWith(keyword.toLowerCase()))
+      return null;
+    if (keyword.toLowerCase() === LOZA_BOT_NAME.toLowerCase()) return null;
+    const start = input.length - keyword.length - 1;
+    return { start };
+  }, [input]);
+
+  const applyLozaBotMention = useCallback(() => {
+    if (!mentionDraft) return;
+    const before = input.slice(0, mentionDraft.start);
+    setInput(`${before}@${LOZA_BOT_NAME} `);
+  }, [input, mentionDraft]);
+
   const sendTextMessage = useCallback(async () => {
     if (!input.trim() || !activeConversationId || sending) return;
     try {
@@ -1570,21 +1570,17 @@ export default function ChatPage() {
 
       if (isBotMention && botMatch?.[2]) {
         const botRequest = botMatch[2].trim();
-        const lastOwnIndex = [...displayMessages]
-          .reverse()
-          .findIndex((m) => {
-            if (m.senderId !== user?.userId) return false;
-            const p = decodeChatPayload(m.content);
-            const text = p?.text || m.content || "";
-            return !LOZA_BOT_MENTION_REGEX.test(text.trim());
-          });
-
+        const lastOwnIndex = [...displayMessages].reverse().findIndex((m) => {
+          if (m.senderId !== user?.userId) return false;
+          const p = decodeChatPayload(m.content);
+          const text = p?.text || m.content || "";
+          return !LOZA_BOT_MENTION_REGEX.test(text.trim());
+        });
         const startIndex =
           lastOwnIndex < 0
             ? 0
             : Math.max(0, displayMessages.length - 1 - lastOwnIndex);
         const contextWindow = displayMessages.slice(startIndex);
-
         const contextMessages = contextWindow.map((m) => {
           const preview = getSafeMessagePreview(m.content);
           const senderName =
@@ -1595,7 +1591,6 @@ export default function ChatPage() {
                   user?.userId,
                   activeConversation?.participants || [],
                 );
-
           return {
             sender: (m.senderId === user?.userId ? "me" : "other") as
               | "me"
@@ -1605,7 +1600,6 @@ export default function ChatPage() {
             content: preview,
           };
         });
-
         const safeContextMessages =
           contextMessages.length > 0
             ? contextMessages
@@ -1618,7 +1612,6 @@ export default function ChatPage() {
                   content: botRequest,
                 },
               ];
-
         try {
           const answer = await lozaBotService.ask({
             conversationId: activeConversationId,
@@ -1626,19 +1619,15 @@ export default function ChatPage() {
             fromLastOwnMessage: true,
             messages: safeContextMessages,
           });
-
           const botReply =
             answer?.trim() || "Mình chưa có dữ liệu để tóm tắt lúc này.";
           const systemContent = `{{system}}🤖 LozaBot: ${botReply}`;
-
           if (activeConversation?.group) {
             await sendGroupMessage(activeConversationId, {
               content: systemContent,
             });
           } else if (otherUser?._id) {
-            await sendDirectMessage(otherUser._id, {
-              content: systemContent,
-            });
+            await sendDirectMessage(otherUser._id, { content: systemContent });
           }
         } catch (botError) {
           console.error("LozaBot request error", botError);
@@ -1648,9 +1637,8 @@ export default function ChatPage() {
 
       setInput("");
       setReplyingTo(null);
-      if (socket?.connected) {
+      if (socket?.connected)
         socket.emit("stop-typing", { conversationId: activeConversationId });
-      }
     } catch (error) {
       console.error("Send message error", error);
       alert("Không thể gửi tin nhắn");
@@ -1658,10 +1646,10 @@ export default function ChatPage() {
       setSending(false);
     }
   }, [
+    activeConversation?.group,
     activeConversation?.participants,
     activeConversationId,
     displayMessages,
-    getSenderName,
     input,
     otherUser?._id,
     replyingTo,
@@ -1674,31 +1662,6 @@ export default function ChatPage() {
     user?.userId,
     userProfile?.displayName,
   ]);
-
-  const showLozaBotSuggestions = useMemo(
-    () => LOZA_BOT_MENTION_REGEX.test(input.trim()),
-    [input],
-  );
-
-  const mentionDraft = useMemo(() => {
-    const match = input.match(BOT_MENTION_TRIGGER_REGEX);
-    if (!match) return null;
-    const keyword = match[2] || "";
-    if (!LOZA_BOT_NAME.toLowerCase().startsWith(keyword.toLowerCase())) {
-      return null;
-    }
-    if (keyword.toLowerCase() === LOZA_BOT_NAME.toLowerCase()) {
-      return null;
-    }
-    const start = input.length - keyword.length - 1;
-    return { start };
-  }, [input]);
-
-  const applyLozaBotMention = useCallback(() => {
-    if (!mentionDraft) return;
-    const before = input.slice(0, mentionDraft.start);
-    setInput(`${before}@${LOZA_BOT_NAME} `);
-  }, [input, mentionDraft]);
 
   const sendAttachmentMessage = useCallback(
     async (file: File, kind: "image" | "file" | "audio") => {
@@ -1728,12 +1691,12 @@ export default function ChatPage() {
     },
     [sendStructuredMessage, uploadAttachment],
   );
+
   const MAX_FILES = 10;
-  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  const MAX_SIZE = 10 * 1024 * 1024;
 
   const handleSelectImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-
     if (!files.length) return;
     if (files.length > MAX_FILES) {
       alert("Tối đa 10 ảnh");
@@ -1744,10 +1707,8 @@ export default function ChatPage() {
       toast.error(`File ${invalid.name} vượt quá 10MB`);
       return;
     }
-
     try {
       setSending(true);
-
       const uploadedList = await Promise.all(
         files.map((file) => uploadAttachment(file)),
       );
@@ -1757,13 +1718,7 @@ export default function ChatPage() {
         mimeType: u.mimeType,
         size: u.size,
       }));
-
-      // 👉 gửi 1 message duy nhất
-      await sendStructuredMessage({
-        version: 1,
-        kind: "image",
-        attachments,
-      });
+      await sendStructuredMessage({ version: 1, kind: "image", attachments });
     } catch (err) {
       console.error(err);
       alert("Upload nhiều ảnh thất bại");
@@ -1773,6 +1728,7 @@ export default function ChatPage() {
       e.target.value = "";
     }
   };
+
   const stopRecording = useCallback(() => {
     const recorder = recordingRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
@@ -1801,7 +1757,6 @@ export default function ChatPage() {
       recordingShouldSendRef.current = true;
       recordingStreamRef.current = stream;
       recordingRecorderRef.current = recorder;
-
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordingChunksRef.current.push(e.data);
       };
@@ -1832,7 +1787,6 @@ export default function ChatPage() {
           setActivePopup(null);
         }
       };
-
       recorder.start();
       setIsRecording(true);
       setRecordSeconds(0);
@@ -1939,7 +1893,6 @@ export default function ChatPage() {
       const mine = (message.reactions || []).find(
         (r) => r.userId === user?.userId,
       );
-
       setReactionMenu({
         x: Math.max(8, Math.min(window.innerWidth - 320, rect.left - 110)),
         y: Math.max(8, rect.top - 56),
@@ -2047,32 +2000,27 @@ export default function ChatPage() {
       );
     });
   }, []);
+
   const handleSelectFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-
     if (!files.length) return;
-
     if (files.length > 10) {
       alert("Tối đa 10 file");
       return;
     }
-
     const invalid = files.find((f) => f.size > 10 * 1024 * 1024);
     if (invalid) {
       alert(`File ${invalid.name} vượt quá 10MB`);
       return;
     }
-
     try {
       setSending(true);
       const imageFiles = files.filter((f) => f.type.startsWith("image/"));
       const otherFiles = files.filter((f) => !f.type.startsWith("image/"));
-
       if (imageFiles.length > 0) {
         const uploadedImages = await Promise.all(
           imageFiles.map((file) => uploadAttachment(file)),
         );
-
         await sendStructuredMessage({
           version: 1,
           kind: "image",
@@ -2084,7 +2032,6 @@ export default function ChatPage() {
           })),
         });
       }
-
       for (const file of otherFiles) {
         const uploaded = await uploadAttachment(file);
         await sendStructuredMessage({
@@ -2118,9 +2065,7 @@ export default function ChatPage() {
         );
       }
       const payload = decodeChatPayload(message.content);
-      if (!payload) {
-        return <div>{renderLinks(message.content || "")}</div>;
-      }
+      if (!payload) return <div>{renderLinks(message.content || "")}</div>;
 
       if (payload.kind === "reply") {
         return (
@@ -2146,32 +2091,66 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "emoji") {
+      if (payload.kind === "emoji")
         return (
           <span style={{ fontSize: 28, lineHeight: "34px" }}>
             {payload.emoji || "🙂"}
           </span>
         );
-      }
 
-      if (payload.kind === "image" && payload.attachment?.url) {
+      if (payload.kind === "image" && payload.attachments?.length) {
+        const atts = payload.attachments ?? [];
+        if (atts.length === 1) {
+          const img = atts[0];
+          return (
+            <div style={{ display: "flex", maxWidth: 280 }}>
+              <img
+                src={img.url}
+                alt={img.name || "image"}
+                style={{
+                  width: "100%",
+                  borderRadius: 12,
+                  cursor: "zoom-in",
+                  display: "block",
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (img.url) setImagePreviewUrl(img.url);
+                }}
+              />
+            </div>
+          );
+        }
+
+        // ── Nhiều ảnh: 
         return (
-          <img
-            src={payload.attachment.url}
-            alt={payload.attachment.name || "image"}
+          <div
             style={{
-              width: "100%",
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 4,
               maxWidth: 280,
-              borderRadius: 12,
-              cursor: "zoom-in",
-              display: "block",
             }}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (payload.attachment?.url)
-                setImagePreviewUrl(payload.attachment.url);
-            }}
-          />
+          >
+            {atts.map((img, index) => (
+              <img
+                key={img.url || index}
+                src={img.url}
+                alt={img.name || "image"}
+                style={{
+                  width: "100%",
+                  height: 120,
+                  objectFit: "cover",
+                  borderRadius: 10,
+                  cursor: "zoom-in",
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (img.url) setImagePreviewUrl(img.url);
+                }}
+              />
+            ))}
+          </div>
         );
       }
 
@@ -2207,10 +2186,7 @@ export default function ChatPage() {
                 href={file.url}
                 target="_blank"
                 rel="noreferrer"
-                style={{
-                  color: "#e2e8f0",
-                  textDecoration: "underline",
-                }}
+                style={{ color: "#e2e8f0", textDecoration: "underline" }}
               >
                 {file.name}
               </a>
@@ -2218,6 +2194,7 @@ export default function ChatPage() {
           </div>
         );
       }
+
       if (payload.kind === "image" && payload.attachments?.length) {
         return (
           <div
@@ -2298,7 +2275,6 @@ export default function ChatPage() {
         const finishedAt = payload.call.endedAt
           ? formatMessageDateTime(payload.call.endedAt)
           : "Đang diễn ra";
-
         return (
           <div
             onClick={(event) => {
@@ -2319,7 +2295,6 @@ export default function ChatPage() {
               gap: 12,
               cursor: "pointer",
             }}
-            title="Nhấn để gọi lại bằng thoại"
           >
             <div
               style={{
@@ -2352,11 +2327,6 @@ export default function ChatPage() {
               <div style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
                 Nhấn để gọi lại bằng thoại
               </div>
-              {payload.call.upgradedFrom === "voice" && payload.call.upgradedTo === "video" && (
-                <div style={{ color: "#93c5fd", fontSize: 11 }}>
-                  Đã nâng cấp từ gọi thoại sang video
-                </div>
-              )}
             </div>
           </div>
         );
@@ -2368,7 +2338,6 @@ export default function ChatPage() {
           (v) => v.userId === user?.userId,
         )?.optionId;
         const totalVotes = aggregate?.votes.length || 0;
-
         return (
           <div
             style={{
@@ -2416,7 +2385,6 @@ export default function ChatPage() {
                 <span>Chọn một câu trả lời</span>
               </div>
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {payload.poll.options.map((option) => {
                 const voters =
@@ -2436,7 +2404,6 @@ export default function ChatPage() {
                     avatarUrl: participant?.avatarUrl || undefined,
                   };
                 });
-
                 return (
                   <button
                     key={option.id}
@@ -2582,7 +2549,6 @@ export default function ChatPage() {
                 );
               })}
             </div>
-
             {!votedOption && (
               <button
                 onClick={() => {
@@ -2612,9 +2578,8 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "poll_vote") {
+      if (payload.kind === "poll_vote")
         return <span style={{ color: "#cbd5e1" }}>Đã cập nhật bình chọn</span>;
-      }
 
       return (
         <div>
@@ -2662,10 +2627,7 @@ export default function ChatPage() {
           if (selectedConv && user?.userId) {
             updateConversation({
               ...selectedConv,
-              unreadCounts: {
-                ...selectedConv.unreadCounts,
-                [user.userId]: 0, // Reset số tin nhắn chưa đọc của user hiện tại về 0
-              },
+              unreadCounts: { ...selectedConv.unreadCounts, [user.userId]: 0 },
             });
           }
         }}
@@ -2673,7 +2635,6 @@ export default function ChatPage() {
         onClose={() => undefined}
       />
 
-      {/* Main Chat Area + Info Panel Container */}
       <div style={{ display: "flex", flex: 1, position: "relative" }}>
         {/* Chat Area */}
         <div style={chatAreaStyle}>
@@ -2689,82 +2650,103 @@ export default function ChatPage() {
                   justifyContent: "space-between",
                 }}
               >
-                {/* Left: Avatar + Name + Status */}
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {/* Avatar */}
                   {activeConversation.group ? (
-                    <div
-                      style={{ position: "relative", width: 40, height: 40 }}
-                    >
-                      {activeConversation.participants
-                        .slice(0, 3)
-                        .map((p, idx) => {
-                          const positions = [
-                            { top: 0, left: 0, zIndex: 3 },
-                            { top: 0, right: 0, zIndex: 2 },
-                            {
-                              bottom: 0,
-                              left: "50%",
-                              transform: "translateX(-50%)",
-                              zIndex: 1,
-                            },
-                          ];
-                          const pos = positions[idx];
-                          const colors = [
-                            "#3b82f6",
-                            "#10b981",
-                            "#8b5cf6",
-                            "#f59e0b",
-                            "#ef4444",
-                            "#06b6d4",
-                            "#ec4899",
-                          ];
-                          let hash = 0;
-                          for (let i = 0; i < p.displayName.length; i++)
-                            hash =
-                              p.displayName.charCodeAt(i) +
-                              ((hash << 5) - hash);
-                          const avatarColor =
-                            colors[Math.abs(hash) % colors.length];
-                          return (
-                            <div
-                              key={p._id}
-                              style={{
-                                position: "absolute",
-                                width: idx === 0 ? 28 : 22,
-                                height: idx === 0 ? 28 : 22,
-                                borderRadius: "50%",
-                                border: "2px solid #0f172a",
-                                overflow: "hidden",
-                                background: p.avatarUrl
-                                  ? undefined
-                                  : avatarColor,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "white",
-                                fontWeight: 700,
-                                fontSize: idx === 0 ? 10 : 8,
-                                ...pos,
-                              }}
-                            >
-                              {p.avatarUrl ? (
-                                <img
-                                  src={p.avatarUrl}
-                                  alt={p.displayName}
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                />
-                              ) : (
-                                p.displayName?.slice(0, 2).toUpperCase()
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
+                    activeConversation.group.avatar ? (
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(99,102,241,0.3)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={activeConversation.group.avatar}
+                          alt={activeConversation.group.name || "Nhóm"}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        style={{ position: "relative", width: 40, height: 40 }}
+                      >
+                        {activeConversation.participants
+                          .slice(0, 3)
+                          .map((p, idx) => {
+                            const positions = [
+                              { top: 0, left: 0, zIndex: 3 },
+                              { top: 0, right: 0, zIndex: 2 },
+                              {
+                                bottom: 0,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                zIndex: 1,
+                              },
+                            ];
+                            const pos = positions[idx];
+                            const colors = [
+                              "#3b82f6",
+                              "#10b981",
+                              "#8b5cf6",
+                              "#f59e0b",
+                              "#ef4444",
+                              "#06b6d4",
+                              "#ec4899",
+                            ];
+                            let hash = 0;
+                            for (let i = 0; i < p.displayName.length; i++)
+                              hash =
+                                p.displayName.charCodeAt(i) +
+                                ((hash << 5) - hash);
+                            const avatarColor =
+                              colors[Math.abs(hash) % colors.length];
+                            return (
+                              <div
+                                key={p._id}
+                                style={{
+                                  position: "absolute",
+                                  width: idx === 0 ? 28 : 22,
+                                  height: idx === 0 ? 28 : 22,
+                                  borderRadius: "50%",
+                                  border: "2px solid #0f172a",
+                                  overflow: "hidden",
+                                  background: p.avatarUrl
+                                    ? undefined
+                                    : avatarColor,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "white",
+                                  fontWeight: 700,
+                                  fontSize: idx === 0 ? 10 : 8,
+                                  ...pos,
+                                }}
+                              >
+                                {p.avatarUrl ? (
+                                  <img
+                                    src={p.avatarUrl}
+                                    alt={p.displayName}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
+                                  p.displayName?.slice(0, 2).toUpperCase()
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )
                   ) : (
                     <div
                       style={{
@@ -2789,7 +2771,6 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Name + Status */}
                   <div
                     style={{ display: "flex", flexDirection: "column", gap: 2 }}
                   >
@@ -2844,7 +2825,6 @@ export default function ChatPage() {
                     </div>
                   </div>
 
-                  {/* Stranger badge */}
                   {!activeConversation.group &&
                     activeConversation.strangerStatus === "accepted" &&
                     activeConversation.isStranger === true && (
@@ -2867,7 +2847,6 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {/* Right: Action buttons */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div ref={themeMenuRef} style={{ position: "relative" }}>
                     <button
@@ -2883,7 +2862,6 @@ export default function ChatPage() {
                     >
                       <Palette size={18} />
                     </button>
-
                     {showThemePicker && activeConversationId && (
                       <div
                         style={{
@@ -2908,18 +2886,22 @@ export default function ChatPage() {
                             theme.mode === "image" && theme.appBackgroundImage
                               ? `linear-gradient(180deg, rgba(15,23,42,.25) 0%, rgba(15,23,42,.55) 100%), url(${theme.appBackgroundImage}) center/cover no-repeat`
                               : theme.appBackground;
-
                           return (
                             <button
                               key={theme.id}
                               className="theme-option"
                               onClick={() => {
-                                setThemeForConversation(activeConversationId, theme.id);
+                                setThemeForConversation(
+                                  activeConversationId,
+                                  theme.id,
+                                );
                                 void updateConversationTheme(
                                   activeConversationId,
                                   theme.id,
                                 ).catch(() => {
-                                  toast.error("Không thể đồng bộ giao diện chat");
+                                  toast.error(
+                                    "Không thể đồng bộ giao diện chat",
+                                  );
                                 });
                                 setShowThemePicker(false);
                               }}
@@ -3046,6 +3028,7 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              {/* Pinned messages banner */}
               {pinnedMessages.length > 0 && (
                 <div
                   style={{
@@ -3078,7 +3061,9 @@ export default function ChatPage() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {getSafeMessagePreview(pinnedMessages[0].content || "Tin nhắn")}
+                      {getSafeMessagePreview(
+                        pinnedMessages[0].content || "Tin nhắn",
+                      )}
                     </span>
                   </div>
                   <button
@@ -3102,23 +3087,33 @@ export default function ChatPage() {
                   const payload = decodeChatPayload(message.content);
                   const messageKey =
                     message._id?.toString() || `${message.createdAt}-${index}`;
-                  // Sender participant (for group avatar)
+
+                  // Tìm sender — ưu tiên participants hiện tại, fallback về cache (from doc 14)
                   const senderParticipant = !isMine
                     ? isGroup
-                      ? activeConversation.participants.find(
+                      ? (activeConversation.participants.find(
                           (p) => p._id === message.senderId,
-                        )
+                        ) ??
+                        (() => {
+                          const cached = participantsCache.get(
+                            message.senderId,
+                          );
+                          return cached
+                            ? { _id: message.senderId, ...cached }
+                            : {
+                                _id: message.senderId,
+                                displayName: "Người dùng",
+                                avatarUrl: null,
+                              };
+                        })())
                       : otherUser
                     : undefined;
 
-                  // Direct chat: single seen avatar
                   const isLastRead =
                     !isGroup &&
                     otherLastReadMessageId &&
                     message._id?.toString() ===
                       otherLastReadMessageId.toString();
-
-                  // Group chat: who has read up to this message
                   const groupSeenParticipants = isGroup
                     ? groupSeenMap.get(message._id?.toString()) || []
                     : [];
@@ -3166,7 +3161,6 @@ export default function ChatPage() {
                         marginBottom: 10,
                       }}
                     >
-                      {/* Sender name for group (not mine) */}
                       {isGroup && !isMine && (
                         <div
                           style={{
@@ -3183,7 +3177,6 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      {/* Bubble row */}
                       <div
                         style={{
                           display: "flex",
@@ -3192,18 +3185,17 @@ export default function ChatPage() {
                           alignItems: "flex-end",
                         }}
                       >
-                        {/* Group: sender avatar on the left (only for others) */}
                         {!isMine && senderParticipant && (
                           <SenderAvatar participant={senderParticipant} />
                         )}
-
-                        {/* Spacer to align my messages in group (no avatar on right) */}
                         {isGroup && isMine && <div style={{ width: 0 }} />}
 
                         {isMine && !message.isRecalled && (
                           <>
                             <button
-                              onClick={(e) => handleOpenReactionMenu(e, message)}
+                              onClick={(e) =>
+                                handleOpenReactionMenu(e, message)
+                              }
                               style={actionDotsStyle}
                               className="action-btn"
                               title="Thả cảm xúc"
@@ -3270,7 +3262,9 @@ export default function ChatPage() {
                         {!isMine && !message.isRecalled && (
                           <>
                             <button
-                              onClick={(e) => handleOpenReactionMenu(e, message)}
+                              onClick={(e) =>
+                                handleOpenReactionMenu(e, message)
+                              }
                               style={actionDotsStyle}
                               className="action-btn"
                               title="Thả cảm xúc"
@@ -3300,18 +3294,21 @@ export default function ChatPage() {
                             flexWrap: "wrap",
                           }}
                         >
-                          {(Object.entries(
-                            (message.reactions || []).reduce(
-                              (
-                                acc: Record<string, number>,
-                                reaction: MessageReaction,
-                              ) => {
-                                acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1;
-                                return acc;
-                              },
-                              {} as Record<string, number>,
-                            ),
-                          ) as Array<[string, number]>).map(([emoji, count]) => (
+                          {(
+                            Object.entries(
+                              (message.reactions || []).reduce(
+                                (
+                                  acc: Record<string, number>,
+                                  reaction: MessageReaction,
+                                ) => {
+                                  acc[reaction.emoji] =
+                                    (acc[reaction.emoji] || 0) + 1;
+                                  return acc;
+                                },
+                                {} as Record<string, number>,
+                              ),
+                            ) as Array<[string, number]>
+                          ).map(([emoji, count]) => (
                             <button
                               key={`${message._id}-${emoji}`}
                               onClick={(event) => {
@@ -3321,7 +3318,10 @@ export default function ChatPage() {
                                 setReactionViewer({
                                   x: Math.max(
                                     8,
-                                    Math.min(window.innerWidth - 320, rect.left - 120),
+                                    Math.min(
+                                      window.innerWidth - 320,
+                                      rect.left - 120,
+                                    ),
                                   ),
                                   y: rect.bottom + 6,
                                   message,
@@ -3343,7 +3343,6 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      {/* Edited + timestamp */}
                       {expandedMessageKey === messageKey && (
                         <div
                           style={{
@@ -3378,7 +3377,6 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      {/* Direct chat: avatar seen */}
                       {isMine &&
                         !message.isRecalled &&
                         isLastRead &&
@@ -3405,7 +3403,6 @@ export default function ChatPage() {
                           </div>
                         )}
 
-                      {/* Group chat: seen avatars stack */}
                       {isMine &&
                         !message.isRecalled &&
                         isGroup &&
@@ -3420,7 +3417,7 @@ export default function ChatPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Stranger pending banners */}
+              {/* Stranger banners */}
               {activeConversation.isStranger &&
                 activeConversation.strangerStatus === "pending" &&
                 activeConversation.initiatorId === user?.userId && (
@@ -3461,114 +3458,116 @@ export default function ChatPage() {
                         (p) => p._id !== user?.userId,
                       );
                       return (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            marginBottom: 10,
-                          }}
-                        >
-                          {sender?.avatarUrl ? (
-                            <img
-                              src={sender.avatarUrl}
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "50%",
-                                objectFit: "cover",
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "50%",
-                                background: "#2563eb",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#fff",
-                                fontWeight: 700,
-                                fontSize: 14,
-                              }}
-                            >
-                              {sender?.displayName?.[0]?.toUpperCase()}
-                            </div>
-                          )}
-                          <div>
-                            <div
-                              style={{
-                                color: "#f1f5f9",
-                                fontWeight: 600,
-                                fontSize: 14,
-                              }}
-                            >
-                              {sender?.displayName}
-                            </div>
-                            <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                              Muốn nhắn tin với bạn
+                        <>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              marginBottom: 10,
+                            }}
+                          >
+                            {sender?.avatarUrl ? (
+                              <img
+                                src={sender.avatarUrl}
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: "50%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: "50%",
+                                  background: "#2563eb",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: "#fff",
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {sender?.displayName?.[0]?.toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div
+                                style={{
+                                  color: "#f1f5f9",
+                                  fontWeight: 600,
+                                  fontSize: 14,
+                                }}
+                              >
+                                {sender?.displayName}
+                              </div>
+                              <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                                Muốn nhắn tin với bạn
+                              </div>
                             </div>
                           </div>
-                        </div>
+                          <p
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: 13,
+                              marginBottom: 12,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            Đây là người chưa kết bạn với bạn. Bạn có muốn nhận
+                            tin nhắn từ họ không?
+                          </p>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() =>
+                                updateStrangerStatus(
+                                  activeConversation._id,
+                                  "accepted",
+                                )
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "8px 0",
+                                borderRadius: 10,
+                                border: "none",
+                                background: "#2563eb",
+                                color: "#fff",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✓ Chấp nhận
+                            </button>
+                            <button
+                              onClick={() =>
+                                updateStrangerStatus(
+                                  activeConversation._id,
+                                  "declined",
+                                )
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "8px 0",
+                                borderRadius: 10,
+                                border: "1px solid rgba(248,113,113,0.4)",
+                                background: "rgba(248,113,113,0.1)",
+                                color: "#fca5a5",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✗ Từ chối
+                            </button>
+                          </div>
+                        </>
                       );
                     })()}
-                    <p
-                      style={{
-                        color: "#94a3b8",
-                        fontSize: 13,
-                        marginBottom: 12,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Đây là người chưa kết bạn với bạn. Bạn có muốn nhận tin
-                      nhắn từ họ không?
-                    </p>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() =>
-                          updateStrangerStatus(
-                            activeConversation._id,
-                            "accepted",
-                          )
-                        }
-                        style={{
-                          flex: 1,
-                          padding: "8px 0",
-                          borderRadius: 10,
-                          border: "none",
-                          background: "#2563eb",
-                          color: "#fff",
-                          fontWeight: 600,
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✓ Chấp nhận
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateStrangerStatus(
-                            activeConversation._id,
-                            "declined",
-                          )
-                        }
-                        style={{
-                          flex: 1,
-                          padding: "8px 0",
-                          borderRadius: 10,
-                          border: "1px solid rgba(248,113,113,0.4)",
-                          background: "rgba(248,113,113,0.1)",
-                          color: "#fca5a5",
-                          fontWeight: 600,
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✗ Từ chối
-                      </button>
-                    </div>
                   </div>
                 )}
 
@@ -3605,7 +3604,6 @@ export default function ChatPage() {
                   borderTop: "1px solid rgba(255,255,255,.08)",
                 }}
               >
-                {/* Reply banner */}
                 {replyingTo && (
                   <div
                     style={{
@@ -3661,7 +3659,6 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* Edit banner */}
                 {editingMessage && (
                   <div
                     style={{
@@ -3749,7 +3746,6 @@ export default function ChatPage() {
                 )}
 
                 <div style={{ position: "relative" }} ref={popupRef}>
-                  {/* Media popup */}
                   {activePopup === "media" && (
                     <div style={popupBoxStyle}>
                       <div
@@ -3780,7 +3776,6 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Audio popup */}
                   {activePopup === "audio" && (
                     <div style={popupBoxStyle}>
                       <div
@@ -3852,7 +3847,6 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Sticker popup */}
                   {activePopup === "sticker" && (
                     <div style={{ ...popupBoxStyle, width: 340 }}>
                       <div
@@ -3920,7 +3914,6 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Poll popup */}
                   {activePopup === "poll" && (
                     <div style={{ ...popupBoxStyle, width: 340 }}>
                       <div
@@ -3968,7 +3961,6 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Hidden file inputs */}
                   <input
                     ref={imageInputRef}
                     type="file"
@@ -3985,7 +3977,6 @@ export default function ChatPage() {
                     onChange={handleSelectFiles}
                   />
 
-                  {/* Input bar */}
                   <div
                     style={{
                       display: "flex",
@@ -4089,7 +4080,6 @@ export default function ChatPage() {
                       }}
                     />
 
-                    {/* Emoji picker */}
                     <div
                       style={{ position: "relative", display: "inline-flex" }}
                     >
@@ -4128,7 +4118,6 @@ export default function ChatPage() {
                       </button>
                     </div>
 
-                    {/* Send button */}
                     <button
                       onClick={() => void sendTextMessage()}
                       disabled={sending || !input.trim()}
@@ -4167,7 +4156,9 @@ export default function ChatPage() {
                         <button
                           key={suggestion}
                           type="button"
-                          onClick={() => setInput(`@${LOZA_BOT_NAME} ${suggestion}`)}
+                          onClick={() =>
+                            setInput(`@${LOZA_BOT_NAME} ${suggestion}`)
+                          }
                           style={{
                             border: "1px solid rgba(96,165,250,.45)",
                             background: "rgba(37,99,235,.12)",
@@ -4246,17 +4237,10 @@ export default function ChatPage() {
                   ? (joinRequests[activeConversationId] ?? [])
                   : []
               }
-              onDeleteConversation={() => {
-                setActiveConversation(null);
-                alert("Xóa lịch sử trò chuyện thành công");
-              }}
-              onManageGroup={() => {
-                alert("Tính năng quản lý nhóm sẽ được triển khai");
-              }}
-              onLeaveGroup={() => {
-                setActiveConversation(null);
-                alert("Bạn đã rời khỏi nhóm");
-              }}
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              onManageGroup={() => setShowEditModal(true)}
+              onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
+              onDissolveGroup={() => setShowDissolveConfirm(true)}
               onUpdateMemberRole={async (targetUserId, role) => {
                 if (!activeConversationId) return;
                 try {
@@ -4268,6 +4252,20 @@ export default function ChatPage() {
                 } catch (error) {
                   console.error("Lỗi khi cập nhật role:", error);
                   alert("Không thể cập nhật quyền thành viên");
+                }
+              }}
+              onRemoveMember={async (targetUserId) => {
+                if (!activeConversationId) return;
+                try {
+                  await chatService.removeMember(
+                    activeConversationId,
+                    targetUserId,
+                  );
+                } catch (error: any) {
+                  toast.error(
+                    error?.response?.data?.message ||
+                      "Không thể xóa thành viên",
+                  );
                 }
               }}
               onAddMember={async (targetUserId) => {
@@ -4311,7 +4309,7 @@ export default function ChatPage() {
                     settings,
                   );
                   toast.success("Đã cập nhật cài đặt nhóm");
-                } catch (error) {
+                } catch {
                   toast.error("Không thể cập nhật cài đặt");
                 }
               }}
@@ -4321,14 +4319,452 @@ export default function ChatPage() {
               conversation={activeConversation}
               messages={displayMessages}
               currentUserId={user?.userId}
-              onDeleteConversation={() => {
-                setActiveConversation(null);
-                alert("Xóa lịch sử trò chuyện thành công");
-              }}
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
             />
           ))}
+
+        {showEditModal && activeConversation && (
+          <EditGroupModal
+            conversation={activeConversation}
+            onClose={() => setShowEditModal(false)}
+          />
+        )}
       </div>
 
+      {/* ─── Modals (from doc 14) ─────────────────────────────────────────────── */}
+
+      {/* Delete conversation confirm */}
+      {showDeleteConvConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowDeleteConvConfirm(false)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #111827 0%, #1a1f3a 100%)",
+              borderRadius: 16,
+              padding: "28px 24px",
+              width: "100%",
+              maxWidth: 380,
+              border: "1px solid rgba(148,163,184,0.12)",
+              boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <Trash2 size={22} color="#f87171" />
+            </div>
+            <h3
+              style={{
+                margin: "0 0 8px",
+                fontSize: 17,
+                fontWeight: 700,
+                color: "#f1f5f9",
+                textAlign: "center",
+              }}
+            >
+              Xóa lịch sử trò chuyện
+            </h3>
+            <p
+              style={{
+                margin: "0 0 24px",
+                fontSize: 13,
+                color: "#94a3b8",
+                textAlign: "center",
+                lineHeight: 1.6,
+              }}
+            >
+              Toàn bộ tin nhắn sẽ bị xóa khỏi thiết bị của bạn.
+              <br />
+              Hành động này không thể hoàn tác.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowDeleteConvConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(148,163,184,0.2)",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  if (!activeConversationId) return;
+                  setShowDeleteConvConfirm(false);
+                  try {
+                    await deleteConversationForMe(activeConversationId);
+                    toast.success("Xóa lịch sử trò chuyện thành công");
+                  } catch (error: any) {
+                    toast.error(
+                      error?.response?.data?.message ||
+                        "Có lỗi xảy ra, vui lòng thử lại",
+                    );
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#dc2626",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave group confirm */}
+      {showLeaveGroupConfirm &&
+        (() => {
+          const isOwner =
+            activeConversation?.participants.find((p) => p._id === user?.userId)
+              ?.role === "owner";
+          const otherMembers =
+            activeConversation?.participants.filter(
+              (p) => p._id !== user?.userId,
+            ) ?? [];
+          return (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.6)",
+                backdropFilter: "blur(6px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+              }}
+              onClick={() => {
+                setShowLeaveGroupConfirm(false);
+                setSelectedNewOwnerId("");
+              }}
+            >
+              <div
+                style={{
+                  background:
+                    "linear-gradient(145deg, #111827 0%, #1a1f3a 100%)",
+                  borderRadius: 16,
+                  padding: "28px 24px",
+                  width: "100%",
+                  maxWidth: 400,
+                  border: "1px solid rgba(248,113,113,0.15)",
+                  boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    background: "rgba(248,113,113,0.12)",
+                    border: "1px solid rgba(248,113,113,0.25)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 16px",
+                  }}
+                >
+                  <LogOut size={22} color="#f87171" />
+                </div>
+                <h3
+                  style={{
+                    margin: "0 0 8px",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: "#f1f5f9",
+                    textAlign: "center",
+                  }}
+                >
+                  Rời khỏi nhóm
+                </h3>
+                {isOwner ? (
+                  <>
+                    <p
+                      style={{
+                        margin: "0 0 16px",
+                        fontSize: 13,
+                        color: "#94a3b8",
+                        textAlign: "center",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Bạn là trưởng nhóm. Hãy chọn người để trao quyền trước khi
+                      rời.
+                    </p>
+                    <div style={{ marginBottom: 20 }}>
+                      <label
+                        style={{
+                          fontSize: 12,
+                          color: "#94a3b8",
+                          display: "block",
+                          marginBottom: 6,
+                        }}
+                      >
+                        Trao quyền trưởng nhóm cho
+                      </label>
+                      <select
+                        value={selectedNewOwnerId}
+                        onChange={(e) => setSelectedNewOwnerId(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148,163,184,0.2)",
+                          background: "#1e293b",
+                          color: "#f1f5f9",
+                          fontSize: 13,
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      >
+                        <option value="">-- Chọn thành viên --</option>
+                        {otherMembers.map((m) => (
+                          <option key={m._id} value={m._id}>
+                            {m.displayName}
+                            {m.role === "admin" ? " (Phó nhóm)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <p
+                    style={{
+                      margin: "0 0 24px",
+                      fontSize: 13,
+                      color: "#94a3b8",
+                      textAlign: "center",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Bạn sẽ không còn nhận được tin nhắn từ nhóm này.
+                    <br />
+                    Bạn có chắc muốn rời không?
+                  </p>
+                )}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => {
+                      setShowLeaveGroupConfirm(false);
+                      setSelectedNewOwnerId("");
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      borderRadius: 10,
+                      border: "1px solid rgba(148,163,184,0.2)",
+                      background: "transparent",
+                      color: "#94a3b8",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    disabled={isOwner && !selectedNewOwnerId}
+                    onClick={async () => {
+                      if (!activeConversationId) return;
+                      if (isOwner && !selectedNewOwnerId) return;
+                      setShowLeaveGroupConfirm(false);
+                      try {
+                        await leaveGroup(
+                          activeConversationId,
+                          isOwner ? selectedNewOwnerId : undefined,
+                        );
+                        setSelectedNewOwnerId("");
+                        toast.success("Đã rời khỏi nhóm");
+                      } catch (error: any) {
+                        toast.error(
+                          error?.response?.data?.message ||
+                            "Có lỗi xảy ra, vui lòng thử lại",
+                        );
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      borderRadius: 10,
+                      border: "none",
+                      background:
+                        isOwner && !selectedNewOwnerId ? "#334155" : "#dc2626",
+                      color: "white",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor:
+                        isOwner && !selectedNewOwnerId
+                          ? "not-allowed"
+                          : "pointer",
+                      boxShadow:
+                        isOwner && !selectedNewOwnerId
+                          ? "none"
+                          : "0 4px 14px rgba(220,38,38,0.3)",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    Rời nhóm
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* Dissolve group confirm */}
+      {showDissolveConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowDissolveConfirm(false)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #111827 0%, #1a1f3a 100%)",
+              borderRadius: 16,
+              padding: "28px 24px",
+              width: "100%",
+              maxWidth: 380,
+              border: "1px solid rgba(239,68,68,0.2)",
+              boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <Trash2 size={22} color="#ef4444" />
+            </div>
+            <h3
+              style={{
+                margin: "0 0 8px",
+                fontSize: 17,
+                fontWeight: 700,
+                color: "#f1f5f9",
+                textAlign: "center",
+              }}
+            >
+              Giải tán nhóm
+            </h3>
+            <p
+              style={{
+                margin: "0 0 24px",
+                fontSize: 13,
+                color: "#94a3b8",
+                textAlign: "center",
+                lineHeight: 1.6,
+              }}
+            >
+              Nhóm sẽ bị giải tán với tất cả thành viên.
+              <br />
+              Hành động này không thể hoàn tác.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowDissolveConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(148,163,184,0.2)",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  if (!activeConversationId) return;
+                  setShowDissolveConfirm(false);
+                  try {
+                    await dissolveGroup(activeConversationId);
+                    toast.success("Đã giải tán nhóm thành công");
+                  } catch {
+                    toast.error("Có lỗi xảy ra, vui lòng thử lại");
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#dc2626",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
+                }}
+              >
+                Giải tán
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Call UI ─────────────────────────────────────────────────────────────── */}
       {callStatus !== "idle" && (
         <>
           {callKind === "video" ? (
@@ -4337,7 +4773,8 @@ export default function ChatPage() {
                 position: "fixed",
                 inset: 0,
                 zIndex: 72,
-                background: "radial-gradient(circle at 25% 20%, rgba(30,64,175,.35), rgba(2,6,23,.92) 60%)",
+                background:
+                  "radial-gradient(circle at 25% 20%, rgba(30,64,175,.35), rgba(2,6,23,.92) 60%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -4370,7 +4807,6 @@ export default function ChatPage() {
                     inset: 0,
                   }}
                 />
-
                 <div
                   style={{
                     position: "absolute",
@@ -4380,7 +4816,6 @@ export default function ChatPage() {
                     pointerEvents: "none",
                   }}
                 />
-
                 <div
                   style={{
                     position: "relative",
@@ -4398,7 +4833,9 @@ export default function ChatPage() {
                         ? `${incomingCallerName || "Người dùng"} đang gọi video`
                         : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
                     </div>
-                    <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2 }}>
+                    <div
+                      style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2 }}
+                    >
                       {callStatus === "outgoing"
                         ? "Đang đổ chuông"
                         : callStatus === "connecting"
@@ -4425,7 +4862,6 @@ export default function ChatPage() {
                     {isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"}
                   </button>
                 </div>
-
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -4445,7 +4881,6 @@ export default function ChatPage() {
                     zIndex: 2,
                   }}
                 />
-
                 <div
                   style={{
                     marginTop: "auto",
@@ -4565,7 +5000,8 @@ export default function ChatPage() {
                   : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
               </div>
               <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
-                Cuộc gọi thoại • {callStatus === "outgoing"
+                Cuộc gọi thoại •{" "}
+                {callStatus === "outgoing"
                   ? "Đang đổ chuông"
                   : callStatus === "connecting"
                     ? "Đang kết nối"
@@ -4574,66 +5010,92 @@ export default function ChatPage() {
                       : "Đang chờ phản hồi"}
               </div>
               {callStatus === "in-call" && (
-                <div style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}>
+                <div
+                  style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}
+                >
                   Thời lượng: {formatCallDuration(callElapsedSeconds)}
                 </div>
               )}
 
-              {callStatus === "in-call" && callKind === "voice" && isUpgradeRequestIncoming && (
-                <div
-                  style={{
-                    marginBottom: 10,
-                    borderRadius: 10,
-                    border: "1px solid rgba(96,165,250,.35)",
-                    background: "rgba(59,130,246,.12)",
-                    padding: "8px 10px",
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#dbeafe", marginBottom: 8 }}>
-                    {upgradeRequesterName || "Đối phương"} muốn nâng cấp lên video.
-                  </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button
-                      onClick={rejectUpgradeRequest}
+              {callStatus === "in-call" &&
+                callKind === "voice" &&
+                isUpgradeRequestIncoming && (
+                  <div
+                    style={{
+                      marginBottom: 10,
+                      borderRadius: 10,
+                      border: "1px solid rgba(96,165,250,.35)",
+                      background: "rgba(59,130,246,.12)",
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <div
                       style={{
-                        border: "1px solid rgba(248,113,113,.35)",
-                        background: "rgba(248,113,113,.12)",
-                        color: "#fecaca",
-                        borderRadius: 8,
-                        padding: "6px 10px",
-                        cursor: "pointer",
-                        fontWeight: 600,
+                        fontSize: 12,
+                        color: "#dbeafe",
+                        marginBottom: 8,
                       }}
                     >
-                      Từ chối
-                    </button>
-                    <button
-                      onClick={acceptUpgradeRequest}
+                      {upgradeRequesterName || "Đối phương"} muốn nâng cấp lên
+                      video.
+                    </div>
+                    <div
                       style={{
-                        border: "none",
-                        background: "#2563eb",
-                        color: "white",
-                        borderRadius: 8,
-                        padding: "6px 10px",
-                        cursor: "pointer",
-                        fontWeight: 600,
+                        display: "flex",
+                        gap: 8,
+                        justifyContent: "flex-end",
                       }}
                     >
-                      Chấp nhận
-                    </button>
+                      <button
+                        onClick={rejectUpgradeRequest}
+                        style={{
+                          border: "1px solid rgba(248,113,113,.35)",
+                          background: "rgba(248,113,113,.12)",
+                          color: "#fecaca",
+                          borderRadius: 8,
+                          padding: "6px 10px",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Từ chối
+                      </button>
+                      <button
+                        onClick={acceptUpgradeRequest}
+                        style={{
+                          border: "none",
+                          background: "#2563eb",
+                          color: "white",
+                          borderRadius: 8,
+                          padding: "6px 10px",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Chấp nhận
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {callStatus === "in-call" && callKind === "voice" && isUpgradeRequestPending && (
-                <div style={{ fontSize: 12, color: "#93c5fd", marginBottom: 10 }}>
-                  Đang chờ đối phương chấp nhận nâng cấp video...
-                </div>
-              )}
+                )}
+              {callStatus === "in-call" &&
+                callKind === "voice" &&
+                isUpgradeRequestPending && (
+                  <div
+                    style={{ fontSize: 12, color: "#93c5fd", marginBottom: 10 }}
+                  >
+                    Đang chờ đối phương chấp nhận nâng cấp video...
+                  </div>
+                )}
 
               <audio ref={remoteAudioRef} autoPlay />
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                }}
+              >
                 {callStatus === "incoming" ? (
                   <>
                     <button
@@ -4685,21 +5147,26 @@ export default function ChatPage() {
                         </button>
                         <button
                           onClick={() => void upgradeVoiceToVideo()}
-                          disabled={isUpgradeRequestPending || isUpgradeRequestIncoming}
+                          disabled={
+                            isUpgradeRequestPending || isUpgradeRequestIncoming
+                          }
                           style={{
                             border: "1px solid rgba(96,165,250,.35)",
                             background:
-                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                              isUpgradeRequestPending ||
+                              isUpgradeRequestIncoming
                                 ? "rgba(51,65,85,.35)"
                                 : "rgba(59,130,246,.14)",
                             color:
-                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                              isUpgradeRequestPending ||
+                              isUpgradeRequestIncoming
                                 ? "#94a3b8"
                                 : "#bfdbfe",
                             borderRadius: 10,
                             padding: "7px 10px",
                             cursor:
-                              isUpgradeRequestPending || isUpgradeRequestIncoming
+                              isUpgradeRequestPending ||
+                              isUpgradeRequestIncoming
                                 ? "not-allowed"
                                 : "pointer",
                             fontWeight: 600,
@@ -4843,6 +5310,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* Reaction menu */}
       {reactionMenu && (
         <div
           ref={reactionMenuRef}
@@ -4866,7 +5334,9 @@ export default function ChatPage() {
             return (
               <button
                 key={`${reactionMenu.message._id}-${emoji}`}
-                onClick={() => void handlePickReaction(reactionMenu.message._id, emoji)}
+                onClick={() =>
+                  void handlePickReaction(reactionMenu.message._id, emoji)
+                }
                 style={{
                   border: active
                     ? "1px solid rgba(96,165,250,.85)"
@@ -4906,6 +5376,7 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* Reaction viewer */}
       {reactionViewer && (
         <div
           style={{
@@ -4944,35 +5415,46 @@ export default function ChatPage() {
               <X size={16} />
             </button>
           </div>
-
-          <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              maxHeight: 220,
+              overflowY: "auto",
+            }}
+          >
             {(reactionViewer.message.reactions || []).length === 0 ? (
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>Không có cảm xúc</div>
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                Không có cảm xúc
+              </div>
             ) : (
-              (reactionViewer.message.reactions || []).map((reaction, index) => (
-                <div
-                  key={`${reaction.userId}-${reaction.emoji}-${index}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    background: "rgba(30,41,59,.55)",
-                    border: "1px solid rgba(148,163,184,.2)",
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                  }}
-                >
-                  <span style={{ color: "#e2e8f0", fontSize: 13 }}>
-                    {getUserDisplayNameById(reaction.userId)}
-                  </span>
-                  <span style={{ fontSize: 18 }}>{reaction.emoji}</span>
-                </div>
-              ))
+              (reactionViewer.message.reactions || []).map(
+                (reaction, index) => (
+                  <div
+                    key={`${reaction.userId}-${reaction.emoji}-${index}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(30,41,59,.55)",
+                      border: "1px solid rgba(148,163,184,.2)",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <span style={{ color: "#e2e8f0", fontSize: 13 }}>
+                      {getUserDisplayNameById(reaction.userId)}
+                    </span>
+                    <span style={{ fontSize: 18 }}>{reaction.emoji}</span>
+                  </div>
+                ),
+              )
             )}
           </div>
         </div>
       )}
 
+      {/* Pinned messages modal */}
       {isPinnedModalOpen && (
         <div
           style={{
@@ -5023,18 +5505,24 @@ export default function ChatPage() {
                 Đóng
               </button>
             </div>
-
             <div style={{ display: "grid", gap: 8 }}>
               {pinnedMessages.length === 0 ? (
-                <div style={{ color: "#94a3b8", fontSize: 13 }}>Chưa có tin ghim</div>
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>
+                  Chưa có tin ghim
+                </div>
               ) : (
                 pinnedMessages.map((item) => (
                   <button
                     key={item.messageId}
                     onClick={() => {
                       setIsPinnedModalOpen(false);
-                      const target = document.getElementById(`msg-${item.messageId}`);
-                      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      const target = document.getElementById(
+                        `msg-${item.messageId}`,
+                      );
+                      target?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
                     }}
                     style={{
                       border: "1px solid rgba(148,163,184,.25)",
@@ -5046,7 +5534,9 @@ export default function ChatPage() {
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                    <div
+                      style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}
+                    >
                       {getSafeMessagePreview(item.content || "Tin nhắn")}
                     </div>
                     <div style={{ fontSize: 11, color: "#94a3b8" }}>
@@ -5060,7 +5550,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Vote viewer popup */}
+      {/* Vote viewer */}
       {voteViewer && (
         <div
           style={{
@@ -5199,6 +5689,8 @@ export default function ChatPage() {
           />
         </div>
       )}
+
+      {/* Add member modal */}
       {showAddMemberModal && activeConversation?.group && (
         <AddMemberModal
           conversationId={activeConversationId!}
@@ -5297,13 +5789,12 @@ export default function ChatPage() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => {
-                          if (e.target.checked) {
+                          if (e.target.checked)
                             setSelectedConvs((prev) => [...prev, conv._id]);
-                          } else {
+                          else
                             setSelectedConvs((prev) =>
                               prev.filter((id) => id !== conv._id),
                             );
-                          }
                         }}
                       />
                       <span style={{ color: "white", fontSize: 14 }}>
