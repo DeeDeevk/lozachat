@@ -13,26 +13,44 @@ const REACTION_TYPES: ReactionType[] = ["like", "love", "haha", "wow", "sad", "a
 
 export const ReactionBar = ({ postId, reactions, currentUserId, onReact }: Props) => {
   const [showPicker, setShowPicker] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
-  const showTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const myReaction = reactions.find((r) => r.userId === currentUserId);
   const totalCount = reactions.length;
 
-  const grouped = REACTION_TYPES.reduce((acc, type) => {
-    const count = reactions.filter((r) => r.type === type).length;
-    if (count > 0) acc[type] = count;
-    return acc;
-  }, {} as Partial<Record<ReactionType, number>>);
+  // Nhóm reactions theo type, sắp xếp theo số lượng giảm dần
+  const grouped = REACTION_TYPES.reduce(
+    (acc, type) => {
+      const count = reactions.filter((r) => r.type === type).length;
+      if (count > 0) acc[type] = count;
+      return acc;
+    },
+    {} as Partial<Record<ReactionType, number>>,
+  );
 
   const handleWrapperEnter = () => {
+  if (hideTimer.current) {
     clearTimeout(hideTimer.current);
-    showTimer.current = setTimeout(() => setShowPicker(true), 400);
-  };
+  }
+  showTimer.current = setTimeout(() => setShowPicker(true), 350);
+};
 
-  const handleWrapperLeave = () => {
+const handleWrapperLeave = () => {
+  if (showTimer.current) {
     clearTimeout(showTimer.current);
-    hideTimer.current = setTimeout(() => setShowPicker(false), 150);
+  }
+  hideTimer.current = setTimeout(() => setShowPicker(false), 150);
+};
+
+  const handleMainClick = () => {
+    if (myReaction) {
+      // Đã react → click để bỏ react (gửi cùng type để toggle)
+      onReact(postId, myReaction.type);
+    } else {
+      // Chưa react → mặc định like
+      onReact(postId, "like");
+    }
   };
 
   return (
@@ -42,9 +60,10 @@ export const ReactionBar = ({ postId, reactions, currentUserId, onReact }: Props
         onMouseEnter={handleWrapperEnter}
         onMouseLeave={handleWrapperLeave}
       >
+        {/* ─── Reaction picker ──────────────────────────────────── */}
         {showPicker && (
           <div
-            className="absolute bottom-full left-0 mb-1 loza-pop"
+            className="absolute bottom-full left-0 mb-1"
             style={{
               background: "var(--loza-bg-elevated)",
               border: "1px solid var(--loza-border-bright)",
@@ -60,7 +79,10 @@ export const ReactionBar = ({ postId, reactions, currentUserId, onReact }: Props
             {REACTION_TYPES.map((type) => (
               <button
                 key={type}
-                onClick={() => { onReact(postId, type); setShowPicker(false); }}
+                onClick={() => {
+                  onReact(postId, type);
+                  setShowPicker(false);
+                }}
                 title={REACTION_LABEL[type]}
                 style={{
                   background: "transparent",
@@ -90,8 +112,9 @@ export const ReactionBar = ({ postId, reactions, currentUserId, onReact }: Props
           </div>
         )}
 
+        {/* ─── Main react button ────────────────────────────────── */}
         <button
-          onClick={() => onReact(postId, myReaction?.type === "like" ? "like" : "like")}
+          onClick={handleMainClick}
           style={{
             background: myReaction
               ? "color-mix(in srgb, var(--loza-accent) 14%, transparent)"
@@ -128,14 +151,21 @@ export const ReactionBar = ({ postId, reactions, currentUserId, onReact }: Props
         </button>
       </div>
 
+      {/* ─── Reaction summary ─────────────────────────────────────── */}
       {totalCount > 0 && (
-        <div className="flex items-center gap-1.5" style={{ color: "var(--loza-muted)", fontSize: "12px" }}>
+        <div
+          className="flex items-center gap-1.5"
+          style={{ color: "var(--loza-muted)", fontSize: "12px" }}
+        >
           <div className="flex">
             {(Object.entries(grouped) as [ReactionType, number][])
               .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([type]) => (
-                <span key={type} style={{ fontSize: "14px", lineHeight: 1, marginRight: "-2px" }}>
+                <span
+                  key={type}
+                  style={{ fontSize: "14px", lineHeight: 1, marginRight: "-2px" }}
+                >
                   {REACTION_EMOJI[type]}
                 </span>
               ))}

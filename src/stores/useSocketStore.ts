@@ -16,6 +16,7 @@ const registerSocketEvents = (
   socket.off("new-message");
   socket.off("message-recalled");
   socket.off("message-read");
+  socket.off("message-edited");
   socket.off("user-typing");
   socket.off("user-stop-typing");
   socket.off("stranger-declined");
@@ -23,6 +24,7 @@ const registerSocketEvents = (
   socket.off("stranger-request");
   socket.off("stranger-removed");
   socket.off("new-group-created");
+  socket.off("member-role-updated");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -43,6 +45,9 @@ const registerSocketEvents = (
   socket.on("user-stop-typing", ({ userId, conversationId }) => {
     useChatStore.getState().removeTypingUser(userId, conversationId);
   });
+  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
+  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
+});
 
   socket.on("new-message", ({ message, conversation, unreadCounts }) => {
     useChatStore.getState().addMessage(message);
@@ -139,6 +144,12 @@ const registerSocketEvents = (
     };
     useChatStore.getState().addConversation(formattedConvo);
     socket.emit("join-conversation", { conversationId: conversation._id });
+  });
+
+  socket.on("member-role-updated", ({ conversationId, targetUserId, role }) => {
+    useChatStore
+      .getState()
+      .updateMemberRole(conversationId, targetUserId, role);
   });
 };
 

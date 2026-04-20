@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import type { Message } from "@/types/chat";
+import { useSocketStore } from "./useSocketStore";
 
 const dedupeMessages = (items: Message[]) => {
   const seen = new Set<string>();
@@ -314,7 +315,60 @@ export const useChatStore = create<ChatState>()(
             },
           };
         }),
+      editMessage: async (
+        messageId: string,
+        conversationId: string,
+        content: string,
+      ) => {
+        try {
+          await chatService.editMessage(messageId, content);
+          get().applyEditMessage(
+            messageId,
+            conversationId,
+            content,
+            new Date().toISOString(),
+          );
+        } catch (error) {
+          console.error("Lỗi khi sửa tin nhắn:", error);
+          throw error;
+        }
+      },
 
+      applyEditMessage: (
+        messageId: string,
+        conversationId: string,
+        newContent: string,
+        editedAt: string,
+      ) => {
+        set((state) => {
+          const convo = state.messages[conversationId];
+          if (!convo) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...convo,
+                items: convo.items.map((m) =>
+                  m._id === messageId
+                    ? { ...m, content: newContent, isEdited: true, editedAt }
+                    : m,
+                ),
+              },
+            },
+
+            // Cập nhật lastMessage nếu tin nhắn đó là tin cuối cùng
+            conversations: state.conversations.map((c) =>
+              c._id === conversationId && c.lastMessage?._id === messageId
+                ? {
+                    ...c,
+                    lastMessage: { ...c.lastMessage, content: newContent },
+                  }
+                : c,
+            ),
+          };
+        });
+      },
       removeTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           const current = state.typingUsersByConv[conversationId] || [];
@@ -429,6 +483,13 @@ export const useChatStore = create<ChatState>()(
               activeConversationId: formattedConvo._id,
             };
           });
+
+          const socket = useSocketStore.getState().socket;
+          if (socket?.connected) {
+            socket.emit("join-conversation", {
+              conversationId: formattedConvo._id,
+            });
+          }
         } catch (error) {
           console.error("Lỗi khi tạo conversation:", error);
           throw error;
@@ -481,5 +542,24 @@ export const useChatStore = create<ChatState>()(
         }
       },
     })
+      updateMemberRole: (conversationId, targetUserId, role) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? {
+                  ...c,
+                  participants: c.participants.map((p) =>
+                    p._id === targetUserId ? { ...p, role } : p,
+                  ),
+                }
+              : c,
+          ),
+        }));
+      },
+    }),
+    {
+      name: "chat-storage",
+      partialize: (state) => ({ conversations: state.conversations }),
+    },
   ),
 );

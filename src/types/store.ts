@@ -42,6 +42,9 @@ export interface ChatState {
   //xoa
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
+  //update
+  editMessage: (messageId: string, conversationId: string, content: string) => Promise<void>;
+  applyEditMessage: (messageId: string, conversationId: string, newContent: string, editedAt: string) => void;
   updateLastRead: (
     userId: string,
     conversationId: string,
@@ -73,6 +76,11 @@ export interface ChatState {
   fetchPinnedMessages: (conversationId: string) => Promise<void>;
   pinMessage: (conversationId: string, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: string, messageId: string) => Promise<void>;
+  updateMemberRole: (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => void;
 }
 
 export interface FriendUpdateEvent {

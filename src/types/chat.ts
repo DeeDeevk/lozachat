@@ -61,6 +61,8 @@ export interface Message {
   isRecalled?: boolean;
   recalledAt?: string;
   deletedFor?: string[];
+  isEdited?: boolean;
+  editedAt?: string;
 }
 
 export type ChatMessageKind =
@@ -105,6 +107,7 @@ export interface ChatStructuredPayload {
   text?: string;
   emoji?: string;
   attachment?: ChatAttachment;
+  attachments?: ChatAttachment[];
   stickerUrl?: string;
   reply?: ReplyMeta;
   poll?: {
