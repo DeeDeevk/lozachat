@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import type { Message } from "@/types/chat";
+import { useSocketStore } from "./useSocketStore";
 
 const dedupeMessages = (items: Message[]) => {
   const seen = new Set<string>();
@@ -185,11 +186,27 @@ export const useChatStore = create<ChatState>()(
         }
       },
       updateConversation: (conversation) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
+        set((state) => {
+          const updated = state.conversations.map((c) =>
             c._id === conversation._id ? { ...c, ...conversation } : c,
-          ),
-        }));
+          );
+
+          if (conversation.lastMessage) {
+            return {
+              conversations: updated.sort((a, b) => {
+                const aTime = a.lastMessage?.createdAt
+                  ? new Date(a.lastMessage.createdAt).getTime()
+                  : 0;
+                const bTime = b.lastMessage?.createdAt
+                  ? new Date(b.lastMessage.createdAt).getTime()
+                  : 0;
+                return bTime - aTime;
+              }),
+            };
+          }
+
+          return { conversations: updated };
+        });
       },
       addConversation: (conversation) => {
         set((state) => {
@@ -314,7 +331,60 @@ export const useChatStore = create<ChatState>()(
             },
           };
         }),
+      editMessage: async (
+        messageId: string,
+        conversationId: string,
+        content: string,
+      ) => {
+        try {
+          await chatService.editMessage(messageId, content);
+          get().applyEditMessage(
+            messageId,
+            conversationId,
+            content,
+            new Date().toISOString(),
+          );
+        } catch (error) {
+          console.error("Lỗi khi sửa tin nhắn:", error);
+          throw error;
+        }
+      },
 
+      applyEditMessage: (
+        messageId: string,
+        conversationId: string,
+        newContent: string,
+        editedAt: string,
+      ) => {
+        set((state) => {
+          const convo = state.messages[conversationId];
+          if (!convo) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...convo,
+                items: convo.items.map((m) =>
+                  m._id === messageId
+                    ? { ...m, content: newContent, isEdited: true, editedAt }
+                    : m,
+                ),
+              },
+            },
+
+            // Cập nhật lastMessage nếu tin nhắn đó là tin cuối cùng
+            conversations: state.conversations.map((c) =>
+              c._id === conversationId && c.lastMessage?._id === messageId
+                ? {
+                    ...c,
+                    lastMessage: { ...c.lastMessage, content: newContent },
+                  }
+                : c,
+            ),
+          };
+        });
+      },
       removeTypingUser: (userId: string, conversationId: string) =>
         set((state) => {
           const current = state.typingUsersByConv[conversationId] || [];
@@ -429,11 +499,107 @@ export const useChatStore = create<ChatState>()(
               activeConversationId: formattedConvo._id,
             };
           });
+
+          const socket = useSocketStore.getState().socket;
+          if (socket?.connected) {
+            socket.emit("join-conversation", {
+              conversationId: formattedConvo._id,
+            });
+          }
         } catch (error) {
           console.error("Lỗi khi tạo conversation:", error);
           throw error;
         } finally {
           set({ convoLoading: false });
+        }
+      },
+      updateMemberRole: (conversationId, targetUserId, role) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? {
+                  ...c,
+                  participants: c.participants.map((p) =>
+                    p._id === targetUserId ? { ...p, role } : p,
+                  ),
+                }
+              : c,
+          ),
+        }));
+      },
+      deleteConversationForMe: async (conversationId: string) => {
+        try {
+          await chatService.deleteConversationForMe(conversationId);
+          const { user } = useAuthStore.getState();
+          const userId = user?.userId ?? "";
+
+          set((state) => ({
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+            conversations: state.conversations.map((c) =>
+              c._id === conversationId
+                ? {
+                    ...c,
+                    lastMessage: null as any,
+                    // ✅ Reset đúng key userId về 0 thay vì xóa cả object
+                    unreadCounts: {
+                      ...(c as any).unreadCounts,
+                      [userId]: 0,
+                    } as any,
+                  }
+                : c,
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi xóa tin nhắn:", error);
+          throw error;
+        }
+      },
+      dissolveGroup: async (conversationId: string) => {
+        try {
+          await chatService.dissolveGroup(conversationId);
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (c) => c._id !== conversationId,
+            ),
+            activeConversationId:
+              state.activeConversationId === conversationId
+                ? null
+                : state.activeConversationId,
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi giải tán nhóm:", error);
+          throw error;
+        }
+      },
+      leaveGroup: async (conversationId: string, newOwnerId?: string) => {
+        try {
+          await chatService.leaveGroup(conversationId, newOwnerId);
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (c) => c._id !== conversationId,
+            ),
+            activeConversationId:
+              state.activeConversationId === conversationId
+                ? null
+                : state.activeConversationId,
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(
+                ([key]) => key !== conversationId,
+              ),
+            ),
+          }));
+        } catch (error) {
+          console.error("Lỗi khi rời nhóm:", error);
+          throw error;
         }
       },
     }),

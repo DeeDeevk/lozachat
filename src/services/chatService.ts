@@ -101,12 +101,47 @@ export const chatService = {
   },
 
   async updateGroupInfo(
-  conversationId: string,
-  formData: FormData,
-): Promise<{ message: string; conversation: any }> {
-  const res = await api.patch(`/conversations/${conversationId}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return res.data;
-},
+    conversationId: string,
+    formData: FormData,
+  ): Promise<{ message: string; conversation: any }> {
+    const res = await api.patch(`/conversations/${conversationId}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
+  async editMessage(messageId: string, content: string): Promise<Message> {
+    const res = await api.patch(`/messages/${messageId}/edit`, { content });
+    return res.data.message;
+  },
+  async deleteConversationForMe(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}`);
+  },
+  async leaveGroup(conversationId: string, newOwnerId?: string): Promise<void> {
+    await api.post(`/conversations/${conversationId}/leave`, { newOwnerId });
+  },
+  async removeMember(
+    conversationId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/members`, {
+      data: { targetUserId },
+    });
+  },
+  updateMemberRole: async (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => {
+    const response = await api.patch(
+      `/conversations/${conversationId}/members/role`,
+      {
+        targetUserId,
+        role,
+      },
+    );
+    return response.data;
+  },
+  async dissolveGroup(conversationId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/dissolve`);
+  },
 };

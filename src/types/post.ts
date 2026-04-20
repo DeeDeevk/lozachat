@@ -10,7 +10,7 @@ export interface Author {
 export interface Reaction {
   userId: string;
   type: ReactionType;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface Post {
@@ -19,10 +19,36 @@ export interface Post {
   content: string;
   images: string[];
   reactions: Reaction[];
-  //comment
   commentsCount: number;
-  //
+  reactionsCount?: number; // virtual từ backend
   visibility: Visibility;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PostImage {
+  _id: string;
+  postId: string;
+  url: string;
+  order: number;
+  reactions: Reaction[];
+  reactionsCount: number;
+  commentsCount: number;
+  createdAt: string;
+}
+
+export interface Comment {
+  _id: string;
+  postId: string;
+  author: Author;
+  content: string;
+  parentId: string | { _id: string; author: Author; content: string } | null;
+  imageId: string | null;
+  images: string[];
+  reactions: Reaction[];
+  reactionsCount: number;
+  repliesCount: number;
+  isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,6 +63,11 @@ export interface Pagination {
 
 export interface PostsResponse {
   posts: Post[];
+  pagination: Pagination;
+}
+
+export interface CommentsResponse {
+  comments: Comment[];
   pagination: Pagination;
 }
 
@@ -58,11 +89,4 @@ export const REACTION_LABEL: Record<ReactionType, string> = {
   angry: "Phẫn nộ",
 };
 
-//comment
-export interface Comment {
-  _id: string;
-  author: Author;           
-  content: string;
-  createdAt: string;
-}
 export const COMMENT_PLACEHOLDER = "Viết bình luận...";

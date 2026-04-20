@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   File,
@@ -10,6 +10,7 @@ import {
   Search,
   Settings,
   Edit,
+  UserMinus,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
 import { decodeChatPayload } from "@/utils/chatMessageCodec";
@@ -21,6 +22,9 @@ interface GroupConversationInfoPanelProps {
   onDeleteConversation?: () => void;
   onManageGroup?: () => void;
   onLeaveGroup?: () => void;
+  onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
+  onDissolveGroup?: () => void;
+  onRemoveMember?: (targetUserId: string) => void;
 }
 
 interface ExpandableSectionProps {
@@ -128,6 +132,9 @@ export default function GroupConversationInfoPanel({
   onDeleteConversation,
   onManageGroup,
   onLeaveGroup,
+  onUpdateMemberRole,
+  onDissolveGroup,
+  onRemoveMember,
 }: GroupConversationInfoPanelProps) {
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
@@ -139,7 +146,31 @@ export default function GroupConversationInfoPanel({
   });
   const [searchMember, setSearchMember] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
+  // Thêm state trong component
+  const [removeConfirm, setRemoveConfirm] = useState<{
+    memberId: string;
+    memberName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setMenuOpenId(null);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  const currentParticipant = conversation.participants.find(
+    (p) => p._id === currentUserId,
+  );
+  console.log("participants:", conversation.participants);
+  console.log("currentUserId:", currentUserId);
+  console.log("currentParticipant:", currentParticipant);
+  const isOwner = currentParticipant?.role === "owner";
+  const isAdmin = currentParticipant?.role === "admin"; // ✅ đặt ở đây
+
+  console.log("isOwner:", isOwner);
   // Helper: Get display participants (first 3)
   const getDisplayParticipants = useMemo(() => {
     return (conversation.participants || []).slice(0, 3);
@@ -203,6 +234,30 @@ export default function GroupConversationInfoPanel({
           });
         }
       }
+
+      // ✅ Multiple attachments
+      if (payload.kind === "image" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          media.push({
+            type: "image",
+            url: att.url,
+            timestamp: msg.createdAt,
+            senderName: sender?.displayName,
+          });
+        });
+      }
+      if (payload.kind === "file" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          if (isImageFile(att.name)) {
+            media.push({
+              type: "image",
+              url: att.url,
+              timestamp: msg.createdAt,
+              senderName: sender?.displayName,
+            });
+          }
+        });
+      }
     });
 
     return media.sort(
@@ -235,6 +290,23 @@ export default function GroupConversationInfoPanel({
             senderName: sender?.displayName,
           });
         }
+      }
+
+      // ✅ Multiple attachments
+      if (payload.kind === "file" && payload.attachments?.length) {
+        const sender = conversation.participants.find(
+          (p) => p._id === msg.senderId,
+        );
+        payload.attachments.forEach((att) => {
+          if (!isImageFile(att.name)) {
+            files.push({
+              url: att.url,
+              name: att.name,
+              timestamp: msg.createdAt,
+              senderName: sender?.displayName,
+            });
+          }
+        });
       }
     });
 
@@ -599,54 +671,250 @@ export default function GroupConversationInfoPanel({
           {filteredMembers.map((member) => (
             <div
               key={member._id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px",
-                borderRadius: 8,
-                background: "rgba(148,163,184,0.08)",
+              style={{ position: "relative" }}
+              onMouseEnter={() => setHoveredMemberId(member._id)}
+              onMouseLeave={() => {
+                if (menuOpenId !== member._id) {
+                  setHoveredMemberId(null);
+                }
               }}
             >
               <div
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: member.avatarUrl
-                    ? `url(${member.avatarUrl}) center/cover`
-                    : "#3b82f6",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  flexShrink: 0,
+                  gap: 10,
+                  padding: "10px",
+                  borderRadius: 8,
+                  background: "rgba(148,163,184,0.08)",
+                  transition: "background 0.2s",
                 }}
               >
-                {!member.avatarUrl && member.displayName?.[0]?.toUpperCase()}
-              </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <p
+                {/* Avatar */}
+                <div
                   style={{
-                    margin: 0,
-                    fontSize: 13,
-                    color: "#f1f5f9",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: member.avatarUrl
+                      ? `url(${member.avatarUrl}) center/cover`
+                      : "#3b82f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    flexShrink: 0,
                   }}
                 >
-                  {member.displayName}
-                  {member._id === currentUserId && (
-                    <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                      {" "}
-                      (Bạn)
+                  {!member.avatarUrl && member.displayName?.[0]?.toUpperCase()}
+                </div>
+
+                {/* Name + badge */}
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      color: "#f1f5f9",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {member.displayName}
+                    {member._id === currentUserId && (
+                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                        {" "}
+                        (Bạn)
+                      </span>
+                    )}
+                  </p>
+                  {member.role && member.role !== "member" && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: member.role === "owner" ? "#f59e0b" : "#3b82f6",
+                        background:
+                          member.role === "owner"
+                            ? "rgba(245,158,11,0.15)"
+                            : "rgba(59,130,246,0.15)",
+                        padding: "1px 6px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
                     </span>
                   )}
-                </p>
+                </div>
+
+                {/* Nút "..." — owner hoặc admin thấy */}
+                {(isOwner || isAdmin) &&
+                  member._id !== currentUserId &&
+                  member.role !== "owner" &&
+                  // Admin không thấy nút với admin khác
+                  !(isAdmin && member.role === "admin") &&
+                  hoveredMemberId === member._id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenId(
+                          menuOpenId === member._id ? null : member._id,
+                        );
+                      }}
+                      style={{
+                        background: "rgba(148,163,184,0.15)",
+                        border: "none",
+                        color: "#94a3b8",
+                        cursor: "pointer",
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        fontSize: 16,
+                        lineHeight: 1,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ···
+                    </button>
+                  )}
               </div>
+
+              {/* Dropdown menu */}
+              {menuOpenId === member._id && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "100%",
+                    background: "#1e293b",
+                    border: "1px solid rgba(148,163,184,0.2)",
+                    borderRadius: 10,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                    zIndex: 10,
+                    minWidth: 180,
+                    overflow: "hidden",
+                  }}
+                  onMouseEnter={() => setHoveredMemberId(member._id)}
+                >
+                  {/* Chỉ owner mới thấy thêm/xóa phó nhóm */}
+                  {isOwner &&
+                    (member.role === "member" ? (
+                      <button
+                        onClick={() => {
+                          onUpdateMemberRole?.(member._id, "admin");
+                          setMenuOpenId(null);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 16px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#f1f5f9",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                        onMouseEnter={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "rgba(59,130,246,0.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "transparent";
+                        }}
+                      >
+                        Thêm phó nhóm
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          onUpdateMemberRole?.(member._id, "member");
+                          setMenuOpenId(null);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 16px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#f87171",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                        onMouseEnter={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "rgba(248,113,113,0.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "transparent";
+                        }}
+                      >
+                        ✕ Xóa phó nhóm
+                      </button>
+                    ))}
+
+                  {/* Divider nếu là owner và có cả 2 option */}
+                  {isOwner && (
+                    <div
+                      style={{
+                        height: 1,
+                        background: "rgba(148,163,184,0.1)",
+                        margin: "2px 0",
+                      }}
+                    />
+                  )}
+
+                  {/* Xóa thành viên — owner và admin đều thấy */}
+                  <button
+                    onClick={() => {
+                      setRemoveConfirm({
+                        memberId: member._id,
+                        memberName: member.displayName,
+                      });
+                      setMenuOpenId(null);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "11px 16px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#ef4444",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "rgba(239,68,68,0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "transparent";
+                    }}
+                  >
+                    🚫 Xóa khỏi nhóm
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -891,7 +1159,152 @@ export default function GroupConversationInfoPanel({
           <Trash2 size={16} />
           Xóa lịch sử trò chuyện
         </button>
+
+        {/* Chỉ hiện nút giải tán với owner */}
+        {isOwner && (
+          <button
+            onClick={onDissolveGroup}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 10,
+              border: "1px solid rgba(239,68,68,0.4)",
+              background: "rgba(239,68,68,0.1)",
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(239,68,68,0.2)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(239,68,68,0.1)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
+            }}
+          >
+            <Trash2 size={16} />
+            Giải tán nhóm
+          </button>
+        )}
       </div>
+      {/* Remove Member Confirm Modal */}
+      {removeConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 300,
+          }}
+          onClick={() => setRemoveConfirm(null)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #111827 0%, #1a1f3a 100%)",
+              borderRadius: 16,
+              padding: "28px 24px",
+              width: "100%",
+              maxWidth: 360,
+              border: "1px solid rgba(239,68,68,0.2)",
+              boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <UserMinus size={22} color="#ef4444" />
+            </div>
+            <h3
+              style={{
+                margin: "0 0 8px",
+                fontSize: 17,
+                fontWeight: 700,
+                color: "#f1f5f9",
+                textAlign: "center",
+              }}
+            >
+              Xóa thành viên
+            </h3>
+            <p
+              style={{
+                margin: "0 0 24px",
+                fontSize: 13,
+                color: "#94a3b8",
+                textAlign: "center",
+                lineHeight: 1.6,
+              }}
+            >
+              Bạn có chắc muốn xóa{" "}
+              <strong style={{ color: "#f1f5f9" }}>
+                {removeConfirm.memberName}
+              </strong>{" "}
+              khỏi nhóm không?
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(148,163,184,0.2)",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  onRemoveMember?.(removeConfirm.memberId);
+                  setRemoveConfirm(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#dc2626",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Image Preview Modal */}
       {selectedImage && (
         <div

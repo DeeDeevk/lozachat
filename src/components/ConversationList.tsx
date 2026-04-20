@@ -17,7 +17,7 @@ export interface Conversation {
   _id: string;
   group?: {
     name: string;
-    avatar?: string; 
+    avatar?: string;
   };
   participants: {
     _id: string;
@@ -130,14 +130,25 @@ export default function ConversationList({
   };
 
   // ── Filter ───────────────────────────────────────────────────────────────
-  const filteredConvs = conversations.filter((c) => {
-    const matchesSearch = getName(c)
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    if (activeTab === "group") return matchesSearch && !!c.group;
-    if (activeTab === "direct") return matchesSearch && !c.group;
-    return matchesSearch;
-  });
+  const filteredConvs = conversations
+    .filter((c) => {
+      const matchesSearch = getName(c)
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      if (activeTab === "group") return matchesSearch && !!c.group;
+      if (activeTab === "direct") return matchesSearch && !c.group;
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      const timeA = a.lastMessage?.createdAt
+        ? new Date(a.lastMessage.createdAt).getTime()
+        : 0;
+      const timeB = b.lastMessage?.createdAt
+        ? new Date(b.lastMessage.createdAt).getTime()
+        : 0;
+
+      return timeB - timeA;
+    });
 
   return (
     <>
@@ -235,7 +246,12 @@ export default function ConversationList({
             const avatarUrl = getAvatarUrl(conv);
             const online = isOnline(conv);
             const color = getAvatarColor(conv);
-            const unread = conv.unread ?? 0;
+            // Sửa lại để đọc đúng từ unreadCounts (MongoDB Map serialize thành object)
+            const unread =
+              (conv as any).unreadCounts?.[user?.userId ?? ""] ??
+              (conv as any).unreadCounts?.get?.(user?.userId ?? "") ??
+              conv.unread ??
+              0;
             const displayParticipants = getDisplayParticipants(conv);
             const count = displayParticipants.length;
 
@@ -247,147 +263,151 @@ export default function ConversationList({
               >
                 {/* Avatar */}
                 <div
-  style={{
-    position: "relative",
-    flexShrink: 0,
-    width: 44,
-    height: 44,
-  }}
->
-  {/* ✅ Nếu là nhóm và có group.avatar → hiện ảnh nhóm luôn */}
-  {conv.group?.avatar ? (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        borderRadius: 14,
-        overflow: "hidden",
-        boxShadow:
-          conv._id === activeId
-            ? "0 4px 12px rgba(59,130,246,0.5)"
-            : "none",
-      }}
-    >
-      <img
-        src={conv.group.avatar}
-        alt={conv.group.name}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-      />
-    </div>
-  ) : count <= 1 ? (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        borderRadius: 14,
-        overflow: "hidden",
-        boxShadow:
-          conv._id === activeId
-            ? "0 4px 12px rgba(59,130,246,0.5)"
-            : "none",
-      }}
-    >
-      {count === 1 ? (
-        <MiniAvatar p={displayParticipants[0]} fontSize={14} />
-      ) : (
-        <MiniAvatar p={{ displayName: name }} fontSize={14} />
-      )}
-    </div>
-  ) : count === 2 ? (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          overflow: "hidden",
-        }}
-      >
-        <MiniAvatar p={displayParticipants[0]} fontSize={10} />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          right: 0,
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          overflow: "hidden",
-          border: "2px solid rgba(8,14,28,.97)",
-          zIndex: 2,
-        }}
-      >
-        <MiniAvatar p={displayParticipants[1]} fontSize={10} />
-      </div>
-    </div>
-  ) : (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 8,
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          overflow: "hidden",
-          zIndex: 1,
-        }}
-      >
-        <MiniAvatar p={displayParticipants[0]} fontSize={9} />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          overflow: "hidden",
-          border: "2px solid rgba(8,14,28,.97)",
-          zIndex: 2,
-        }}
-      >
-        <MiniAvatar p={displayParticipants[1]} fontSize={9} />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          right: 0,
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          overflow: "hidden",
-          border: "2px solid rgba(8,14,28,.97)",
-          zIndex: 3,
-        }}
-      >
-        <MiniAvatar p={displayParticipants[2]} fontSize={9} />
-      </div>
-    </div>
-  )}
- 
-  {/* Dot Online: Chỉ hiện khi chat 1-1 */}
-  {online && count <= 1 && <div className="cl-online-dot" />}
-</div>
+                  style={{
+                    position: "relative",
+                    flexShrink: 0,
+                    width: 44,
+                    height: 44,
+                  }}
+                >
+                  {/* ✅ Nếu là nhóm và có group.avatar → hiện ảnh nhóm luôn */}
+                  {conv.group?.avatar ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        boxShadow:
+                          conv._id === activeId
+                            ? "0 4px 12px rgba(59,130,246,0.5)"
+                            : "none",
+                      }}
+                    >
+                      <img
+                        src={conv.group.avatar}
+                        alt={conv.group.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  ) : count <= 1 ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        boxShadow:
+                          conv._id === activeId
+                            ? "0 4px 12px rgba(59,130,246,0.5)"
+                            : "none",
+                      }}
+                    >
+                      {count === 1 ? (
+                        <MiniAvatar p={displayParticipants[0]} fontSize={14} />
+                      ) : (
+                        <MiniAvatar p={{ displayName: name }} fontSize={14} />
+                      )}
+                    </div>
+                  ) : count === 2 ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        position: "relative",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[0]} fontSize={10} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 2,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[1]} fontSize={10} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        position: "relative",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 8,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          zIndex: 1,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[0]} fontSize={9} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: 0,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 2,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[1]} fontSize={9} />
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          border: "2px solid rgba(8,14,28,.97)",
+                          zIndex: 3,
+                        }}
+                      >
+                        <MiniAvatar p={displayParticipants[2]} fontSize={9} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dot Online: Chỉ hiện khi chat 1-1 */}
+                  {online && count <= 1 && <div className="cl-online-dot" />}
+                </div>
 
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>

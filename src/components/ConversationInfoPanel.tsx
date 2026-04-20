@@ -616,6 +616,7 @@ export default function ConversationInfoPanel({
       const payload = decodeChatPayload(msg.content);
       if (!payload) return;
 
+      // Single attachment (cũ)
       if (payload.kind === "image" && payload.attachment) {
         media.push({
           type: "image",
@@ -630,7 +631,6 @@ export default function ConversationInfoPanel({
           timestamp: msg.createdAt,
         });
       } else if (payload.kind === "file" && payload.attachment) {
-        // Auto-detect image files and add them to media
         if (isImageFile(payload.attachment.name)) {
           media.push({
             type: "image",
@@ -639,9 +639,26 @@ export default function ConversationInfoPanel({
           });
         }
       }
+
+      // ✅ Multiple attachments (mới — gửi nhiều ảnh/file cùng lúc)
+      if (payload.kind === "image" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          media.push({ type: "image", url: att.url, timestamp: msg.createdAt });
+        });
+      }
+      if (payload.kind === "file" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          if (isImageFile(att.name)) {
+            media.push({
+              type: "image",
+              url: att.url,
+              timestamp: msg.createdAt,
+            });
+          }
+        });
+      }
     });
 
-    // Sort by newest first
     return media.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -649,18 +666,14 @@ export default function ConversationInfoPanel({
   }, [messages]);
 
   const fileList = useMemo(() => {
-    const files: Array<{
-      url: string;
-      name: string;
-      timestamp: string;
-    }> = [];
+    const files: Array<{ url: string; name: string; timestamp: string }> = [];
 
     messages.forEach((msg) => {
       const payload = decodeChatPayload(msg.content);
       if (!payload) return;
 
+      // Single attachment (cũ)
       if (payload.kind === "file" && payload.attachment) {
-        // Exclude image files (those are shown in media section)
         if (!isImageFile(payload.attachment.name)) {
           files.push({
             url: payload.attachment.url,
@@ -669,15 +682,27 @@ export default function ConversationInfoPanel({
           });
         }
       }
+
+      // ✅ Multiple attachments (mới)
+      if (payload.kind === "file" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          if (!isImageFile(att.name)) {
+            files.push({
+              url: att.url,
+              name: att.name,
+              timestamp: msg.createdAt,
+            });
+          }
+        });
+      }
     });
 
-    // Sort by newest first
     return files.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
   }, [messages]);
-
+  
   const links = useMemo(() => {
     const linkList: Array<{
       url: string;

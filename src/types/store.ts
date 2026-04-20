@@ -42,6 +42,18 @@ export interface ChatState {
   //xoa
   recallMessage: (messageId: string, conversationId: string) => Promise<void>;
   applyRecallMessage: (messageId: string, conversationId: string) => void;
+  //update
+  editMessage: (
+    messageId: string,
+    conversationId: string,
+    content: string,
+  ) => Promise<void>;
+  applyEditMessage: (
+    messageId: string,
+    conversationId: string,
+    newContent: string,
+    editedAt: string,
+  ) => void;
   updateLastRead: (
     userId: string,
     conversationId: string,
@@ -69,6 +81,14 @@ export interface ChatState {
     name?: string;
     memberIds: string[];
   }) => Promise<void>;
+  updateMemberRole: (
+    conversationId: string,
+    targetUserId: string,
+    role: "admin" | "member",
+  ) => void;
+  deleteConversationForMe: (conversationId: string) => Promise<void>;
+  leaveGroup: (conversationId: string) => Promise<void>;
+  dissolveGroup: (conversationId: string) => Promise<void>;
 }
 
 export interface FriendUpdateEvent {
