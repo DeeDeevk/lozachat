@@ -4,17 +4,18 @@ import {
   File,
   Link as LinkIcon,
   Trash2,
-  X,
   Bell,
   LogOut,
   Pin,
   Search,
   Settings,
-  ImagePlus,
   Edit,
+  UserMinus,
+  UserPlus,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
 import { decodeChatPayload } from "@/utils/chatMessageCodec";
+import type { GroupJoinRequest } from "@/types/store";
 
 interface GroupConversationInfoPanelProps {
   conversation: Conversation;
@@ -24,6 +25,18 @@ interface GroupConversationInfoPanelProps {
   onManageGroup?: () => void;
   onLeaveGroup?: () => void;
   onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
+  onDissolveGroup?: () => void;
+  onRemoveMember?: (targetUserId: string) => void;
+  onAddMember?: (targetUserId: string) => Promise<void>;
+  pendingRequests?: GroupJoinRequest[];
+  onReviewRequest?: (
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => Promise<void>;
+  isAdminOrOwner?: boolean;
+  onUpdateSettings?: (settings: {
+    requireApprovalToJoin: boolean;
+  }) => Promise<void>;
 }
 
 interface ExpandableSectionProps {
@@ -132,6 +145,13 @@ export default function GroupConversationInfoPanel({
   onManageGroup,
   onLeaveGroup,
   onUpdateMemberRole,
+  onDissolveGroup,
+  onRemoveMember,
+  onAddMember,
+  pendingRequests,
+  onReviewRequest,
+  isAdminOrOwner,
+  onUpdateSettings,
 }: GroupConversationInfoPanelProps) {
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
@@ -142,8 +162,17 @@ export default function GroupConversationInfoPanel({
     links: true,
   });
   const [searchMember, setSearchMember] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  // Thêm state trong component
+  const [removeConfirm, setRemoveConfirm] = useState<{
+    memberId: string;
+    memberName: string;
+  } | null>(null);
+
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   useEffect(() => {
     const handleClickOutside = () => setMenuOpenId(null);
     document.addEventListener("click", handleClickOutside);
@@ -157,6 +186,8 @@ export default function GroupConversationInfoPanel({
   console.log("currentUserId:", currentUserId);
   console.log("currentParticipant:", currentParticipant);
   const isOwner = currentParticipant?.role === "owner";
+  const isAdmin = currentParticipant?.role === "admin"; // ✅ đặt ở đây
+
   console.log("isOwner:", isOwner);
   // Helper: Get display participants (first 3)
   const getDisplayParticipants = useMemo(() => {
@@ -221,6 +252,30 @@ export default function GroupConversationInfoPanel({
           });
         }
       }
+
+      // ✅ Multiple attachments
+      if (payload.kind === "image" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          media.push({
+            type: "image",
+            url: att.url,
+            timestamp: msg.createdAt,
+            senderName: sender?.displayName,
+          });
+        });
+      }
+      if (payload.kind === "file" && payload.attachments?.length) {
+        payload.attachments.forEach((att) => {
+          if (isImageFile(att.name)) {
+            media.push({
+              type: "image",
+              url: att.url,
+              timestamp: msg.createdAt,
+              senderName: sender?.displayName,
+            });
+          }
+        });
+      }
     });
 
     return media.sort(
@@ -253,6 +308,23 @@ export default function GroupConversationInfoPanel({
             senderName: sender?.displayName,
           });
         }
+      }
+
+      // ✅ Multiple attachments
+      if (payload.kind === "file" && payload.attachments?.length) {
+        const sender = conversation.participants.find(
+          (p) => p._id === msg.senderId,
+        );
+        payload.attachments.forEach((att) => {
+          if (!isImageFile(att.name)) {
+            files.push({
+              url: att.url,
+              name: att.name,
+              timestamp: msg.createdAt,
+              senderName: sender?.displayName,
+            });
+          }
+        });
       }
     });
 
@@ -317,6 +389,17 @@ export default function GroupConversationInfoPanel({
     }));
   };
 
+  const uniquePendingRequests = useMemo(() => {
+    if (!pendingRequests) return [];
+    const map = new Map();
+    pendingRequests.forEach((req) => {
+      // Dùng ID của người được mời làm key (để 1 người chỉ có 1 thẻ duy nhất)
+      const uId = req.invitedUserId?._id || req.invitedUserId;
+      map.set(uId, req);
+    });
+    return Array.from(map.values());
+  }, [pendingRequests]);
+
   return (
     <div
       style={{
@@ -341,65 +424,79 @@ export default function GroupConversationInfoPanel({
         }}
       >
         {/* Avatar - Group with 2-3 members */}
-        <div
-          style={{
-            position: "relative",
-            width: 80,
-            height: 80,
-          }}
-        >
-          {getDisplayParticipants.slice(0, 3).map((p, idx) => {
-            const size = 80;
-            const positions = [
-              { top: 0, left: 0, zIndex: 3 },
-              { top: 0, right: 0, zIndex: 2 },
-              {
-                bottom: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 1,
-              },
-            ];
-            const pos = positions[idx];
+        <div style={{ position: "relative", width: 80, height: 80 }}>
+          {conversation.group?.avatar ? (
+            // ✅ Có ảnh nhóm → hiện ảnh nhóm
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                overflow: "hidden",
+                border: "2px solid rgba(99,102,241,0.3)",
+                boxShadow: "0 0 0 3px rgba(99,102,241,0.1)",
+              }}
+            >
+              <img
+                src={conversation.group.avatar}
+                alt={conversation.group?.name || "Nhóm"}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+          ) : (
+            // ❌ Không có ảnh nhóm → hiện cluster participants như cũ
+            getDisplayParticipants.slice(0, 3).map((p, idx) => {
+              const positions = [
+                { top: 0, left: 0, zIndex: 3 },
+                { top: 0, right: 0, zIndex: 2 },
+                {
+                  bottom: 0,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  zIndex: 1,
+                },
+              ];
+              const pos = positions[idx];
 
-            return (
-              <div
-                key={p._id}
-                style={{
-                  position: "absolute",
-                  width: idx === 0 ? 50 : 40,
-                  height: idx === 0 ? 50 : 40,
-                  borderRadius: "50%",
-                  border: "2px solid #0f172a",
-                  overflow: "hidden",
-                  background: p.avatarUrl
-                    ? undefined
-                    : getAvatarColor(p.displayName),
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: idx === 0 ? 16 : 12,
-                  ...pos,
-                }}
-              >
-                {p.avatarUrl ? (
-                  <img
-                    src={p.avatarUrl}
-                    alt={p.displayName}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  p.displayName?.slice(0, 2).toUpperCase()
-                )}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={p._id}
+                  style={{
+                    position: "absolute",
+                    width: idx === 0 ? 50 : 40,
+                    height: idx === 0 ? 50 : 40,
+                    borderRadius: "50%",
+                    border: "2px solid #0f172a",
+                    overflow: "hidden",
+                    background: p.avatarUrl
+                      ? undefined
+                      : getAvatarColor(p.displayName),
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: idx === 0 ? 16 : 12,
+                    ...pos,
+                  }}
+                >
+                  {p.avatarUrl ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt={p.displayName}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    p.displayName?.slice(0, 2).toUpperCase()
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Name + Edit button */}
@@ -599,6 +696,137 @@ export default function GroupConversationInfoPanel({
             />
           </div>
 
+          {/* {onAddMember && (
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: 8,
+                border: "1px dashed rgba(59,130,246,0.4)",
+                background: "rgba(59,130,246,0.05)",
+                color: "#60a5fa",
+                fontSize: 12,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <UserPlus size={14} />
+              Thêm thành viên
+            </button>
+          )} */}
+
+          {/* Danh sách chờ duyệt — chỉ owner/admin thấy */}
+          {isAdminOrOwner &&
+            uniquePendingRequests &&
+            uniquePendingRequests.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "#94a3b8",
+                    margin: "0 0 6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Chờ duyệt ({uniquePendingRequests.length})
+                </p>
+                {uniquePendingRequests.map((req) => (
+                  <div
+                    key={req._id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      background: "rgba(15,23,42,0.6)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {/* Avatar */}
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: "50%",
+                        background: "#1e293b",
+                        border: "1px solid rgba(148,163,184,0.2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#94a3b8",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {req.invitedUserId.displayName?.[0]?.toUpperCase()}
+                    </div>
+
+                    {/* Text */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          color: "#f1f5f9",
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {req.invitedUserId.displayName}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>
+                        mời bởi {req.invitedBy.displayName}
+                      </p>
+                    </div>
+
+                    {/* Buttons */}
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "approved")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(37,99,235,0.4)",
+                          background: "rgba(37,99,235,0.15)",
+                          color: "#93c5fd",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Duyệt
+                      </button>
+                      <button
+                        onClick={() => onReviewRequest?.(req._id, "rejected")}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 7,
+                          border: "1px solid rgba(148,163,184,0.2)",
+                          background: "rgba(148,163,184,0.08)",
+                          color: "#64748b",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           {/* Members list */}
           {filteredMembers.map((member) => (
             <div
@@ -668,13 +896,14 @@ export default function GroupConversationInfoPanel({
                       style={{
                         fontSize: 10,
                         fontWeight: 600,
-                        color: member.role === "owner" ? "#f59e0b" : "#3b82f6",
+                        color: member.role === "owner" ? "#eab308" : "#94a3b8",
                         background:
                           member.role === "owner"
-                            ? "rgba(245,158,11,0.15)"
-                            : "rgba(59,130,246,0.15)",
+                            ? "rgba(234,179,8,0.1)"
+                            : "rgba(148,163,184,0.1)",
+                        border: `1px solid ${member.role === "owner" ? "rgba(234,179,8,0.25)" : "rgba(148,163,184,0.2)"}`,
                         padding: "1px 6px",
-                        borderRadius: 4,
+                        borderRadius: 5,
                       }}
                     >
                       {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
@@ -682,10 +911,12 @@ export default function GroupConversationInfoPanel({
                   )}
                 </div>
 
-                {/* Nút "..." — chỉ owner thấy, không hiện trên chính mình và trên owner khác */}
-                {isOwner &&
+                {/* Nút "..." — owner hoặc admin thấy */}
+                {(isOwner || isAdmin) &&
                   member._id !== currentUserId &&
                   member.role !== "owner" &&
+                  // Admin không thấy nút với admin khác
+                  !(isAdmin && member.role === "admin") &&
                   hoveredMemberId === member._id && (
                     <button
                       onClick={(e) => {
@@ -726,75 +957,123 @@ export default function GroupConversationInfoPanel({
                     minWidth: 180,
                     overflow: "hidden",
                   }}
-                  // Giữ menu mở khi hover vào chính nó
                   onMouseEnter={() => setHoveredMemberId(member._id)}
                 >
-                  {member.role === "member" ? (
-                    <button
-                      onClick={() => {
-                        onUpdateMemberRole?.(member._id, "admin");
-                        setMenuOpenId(null);
-                      }}
+                  {/* Chỉ owner mới thấy thêm/xóa phó nhóm */}
+                  {isOwner &&
+                    (member.role === "member" ? (
+                      <button
+                        onClick={() => {
+                          onUpdateMemberRole?.(member._id, "admin");
+                          setMenuOpenId(null);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 16px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#f1f5f9",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                        onMouseEnter={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "rgba(59,130,246,0.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "transparent";
+                        }}
+                      >
+                        Thêm phó nhóm
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          onUpdateMemberRole?.(member._id, "member");
+                          setMenuOpenId(null);
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 16px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#f87171",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                        onMouseEnter={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "rgba(248,113,113,0.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.background = "transparent";
+                        }}
+                      >
+                        ✕ Xóa phó nhóm
+                      </button>
+                    ))}
+
+                  {/* Divider nếu là owner và có cả 2 option */}
+                  {isOwner && (
+                    <div
                       style={{
-                        width: "100%",
-                        padding: "11px 16px",
-                        background: "transparent",
-                        border: "none",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
+                        height: 1,
+                        background: "rgba(148,163,184,0.1)",
+                        margin: "2px 0",
                       }}
-                      onMouseEnter={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "rgba(59,130,246,0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "transparent";
-                      }}
-                    >
-                      Thêm phó nhóm
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        onUpdateMemberRole?.(member._id, "member");
-                        setMenuOpenId(null);
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "11px 16px",
-                        background: "transparent",
-                        border: "none",
-                        color: "#f87171",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "rgba(248,113,113,0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "transparent";
-                      }}
-                    >
-                      ✕ Xóa phó nhóm
-                    </button>
+                    />
                   )}
+
+                  {/* Xóa thành viên — owner và admin đều thấy */}
+                  <button
+                    onClick={() => {
+                      setRemoveConfirm({
+                        memberId: member._id,
+                        memberName: member.displayName,
+                      });
+                      setMenuOpenId(null);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "11px 16px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#ef4444",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "rgba(239,68,68,0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        "transparent";
+                    }}
+                  >
+                    🚫 Xóa khỏi nhóm
+                  </button>
                 </div>
               )}
             </div>
@@ -821,6 +1100,9 @@ export default function GroupConversationInfoPanel({
           {mediaFilesDisplay.map((media, index) => (
             <div
               key={index}
+              onClick={() => {
+                if (media.type === "image") setSelectedImage(media.url);
+              }}
               style={{
                 width: "100%",
                 paddingBottom: "100%",
@@ -964,6 +1246,83 @@ export default function GroupConversationInfoPanel({
         </div>
       </ExpandableSection>
 
+      {isOwner && (
+        <div
+          style={{
+            borderBottom: "1px solid rgba(148,163,184,0.15)",
+            padding: "14px 16px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#f1f5f9",
+              margin: "0 0 12px",
+            }}
+          >
+            Cài đặt nhóm
+          </p>
+
+          {/* Toggle: Phê duyệt thành viên mới */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: 13, color: "#e2e8f0" }}>
+                Chế độ phê duyệt thành viên mới
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
+                Thành viên mới cần được duyệt trước khi vào nhóm
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                // Lấy trạng thái hiện tại (mặc định false nếu chưa có)
+                const current =
+                  conversation.group?.settings?.requireApprovalToJoin ?? false;
+                // Gọi hàm update với trạng thái ngược lại
+                await onUpdateSettings?.({ requireApprovalToJoin: !current });
+              }}
+              style={{
+                width: 40,
+                height: 22,
+                borderRadius: 999,
+                border: "none",
+                background: conversation.group?.settings?.requireApprovalToJoin
+                  ? "#2563eb" // Màu xanh khi bật
+                  : "rgba(148,163,184,0.3)", // Màu xám khi tắt
+                cursor: onUpdateSettings ? "pointer" : "not-allowed",
+                position: "relative",
+                flexShrink: 0,
+                transition: "background 0.2s",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: conversation.group?.settings?.requireApprovalToJoin
+                    ? 21
+                    : 3,
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  background: "white",
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                }}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Leave & Delete Buttons */}
       <div
         style={{
@@ -1038,7 +1397,225 @@ export default function GroupConversationInfoPanel({
           <Trash2 size={16} />
           Xóa lịch sử trò chuyện
         </button>
+
+        {/* Chỉ hiện nút giải tán với owner */}
+        {isOwner && (
+          <button
+            onClick={onDissolveGroup}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 10,
+              border: "1px solid rgba(239,68,68,0.4)",
+              background: "rgba(239,68,68,0.1)",
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(239,68,68,0.2)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(239,68,68,0.1)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
+            }}
+          >
+            <Trash2 size={16} />
+            Giải tán nhóm
+          </button>
+        )}
       </div>
+      {/* Remove Member Confirm Modal */}
+      {removeConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 300,
+          }}
+          onClick={() => setRemoveConfirm(null)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #111827 0%, #1a1f3a 100%)",
+              borderRadius: 16,
+              padding: "28px 24px",
+              width: "100%",
+              maxWidth: 360,
+              border: "1px solid rgba(239,68,68,0.2)",
+              boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <UserMinus size={22} color="#ef4444" />
+            </div>
+            <h3
+              style={{
+                margin: "0 0 8px",
+                fontSize: 17,
+                fontWeight: 700,
+                color: "#f1f5f9",
+                textAlign: "center",
+              }}
+            >
+              Xóa thành viên
+            </h3>
+            <p
+              style={{
+                margin: "0 0 24px",
+                fontSize: 13,
+                color: "#94a3b8",
+                textAlign: "center",
+                lineHeight: 1.6,
+              }}
+            >
+              Bạn có chắc muốn xóa{" "}
+              <strong style={{ color: "#f1f5f9" }}>
+                {removeConfirm.memberName}
+              </strong>{" "}
+              khỏi nhóm không?
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(148,163,184,0.2)",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  onRemoveMember?.(removeConfirm.memberId);
+                  setRemoveConfirm(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#dc2626",
+                  color: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+            padding: "20px",
+          }}
+          onClick={() => setSelectedImage(null)}
+        >
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedImage}
+              alt="Preview"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "90vh",
+                width: "auto",
+                height: "auto",
+                borderRadius: 16,
+                border: "2px solid rgba(148,163,184,0.3)",
+                boxShadow: "0 0 60px rgba(0,0,0,0.8)",
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => setSelectedImage(null)}
+            style={{
+              position: "fixed",
+              top: 20,
+              right: 20,
+              background: "rgba(0,0,0,0.6)",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              fontSize: 20,
+              lineHeight: 1,
+              transition: "background 0.2s",
+              zIndex: 201,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,0,0,0.85)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,0,0,0.6)";
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

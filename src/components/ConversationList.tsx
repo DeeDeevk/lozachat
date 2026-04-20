@@ -17,6 +17,7 @@ export interface Conversation {
   _id: string;
   group?: {
     name: string;
+    avatar?: string;
   };
   participants: {
     _id: string;
@@ -87,7 +88,7 @@ export default function ConversationList({
   };
 
   const getAvatarUrl = (conv: Conversation) => {
-    if (conv.group) return null;
+    if (conv.group) return conv.group.avatar ?? null; // ✅ trả về avatar nhóm nếu có
     return getOtherUser(conv)?.avatarUrl ?? null;
   };
 
@@ -245,7 +246,12 @@ export default function ConversationList({
             const avatarUrl = getAvatarUrl(conv);
             const online = isOnline(conv);
             const color = getAvatarColor(conv);
-            const unread = conv.unread ?? 0;
+            // Sửa lại để đọc đúng từ unreadCounts (MongoDB Map serialize thành object)
+            const unread =
+              (conv as any).unreadCounts?.[user?.userId ?? ""] ??
+              (conv as any).unreadCounts?.get?.(user?.userId ?? "") ??
+              conv.unread ??
+              0;
             const displayParticipants = getDisplayParticipants(conv);
             const count = displayParticipants.length;
 
@@ -264,7 +270,31 @@ export default function ConversationList({
                     height: 44,
                   }}
                 >
-                  {count <= 1 ? (
+                  {/* ✅ Nếu là nhóm và có group.avatar → hiện ảnh nhóm luôn */}
+                  {conv.group?.avatar ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        boxShadow:
+                          conv._id === activeId
+                            ? "0 4px 12px rgba(59,130,246,0.5)"
+                            : "none",
+                      }}
+                    >
+                      <img
+                        src={conv.group.avatar}
+                        alt={conv.group.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  ) : count <= 1 ? (
                     <div
                       style={{
                         width: "100%",
@@ -280,7 +310,6 @@ export default function ConversationList({
                       {count === 1 ? (
                         <MiniAvatar p={displayParticipants[0]} fontSize={14} />
                       ) : (
-                        // Fallback cho nhóm chưa có thành viên nào khác
                         <MiniAvatar p={{ displayName: name }} fontSize={14} />
                       )}
                     </div>
@@ -450,10 +479,16 @@ export default function ConversationList({
                         flex: 1,
                       }}
                     >
-                      {getSafeMessagePreview(
-                        conv.lastMessage?.content,
-                        "Chưa có tin nhắn",
-                      )}
+                      {(() => {
+                        const content = conv.lastMessage?.content;
+                        if (content && content.startsWith("{{system}}")) {
+                          return content.replace("{{system}}", "");
+                        }
+                        return getSafeMessagePreview(
+                          content,
+                          "Chưa có tin nhắn",
+                        );
+                      })()}
                     </span>
                     {unread > 0 && (
                       <div className="cl-badge">

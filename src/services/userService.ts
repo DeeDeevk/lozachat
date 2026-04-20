@@ -38,5 +38,10 @@ export const userService = {
         headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
-    },
+  },
+
+  deleteMe: async (): Promise<{ message: string }> => {
+    const res = await api.delete("/users/me");
+    return res.data;
+  },
 };

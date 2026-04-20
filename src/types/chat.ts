@@ -15,6 +15,7 @@ export interface SeenUser {
 export interface Group {
   name: string;
   createdBy: string;
+  avatar?: string; // thêm dòng này
 }
 
 export interface LastMessage {
@@ -60,6 +61,7 @@ export interface Conversation {
   isStranger: boolean;
   strangerStatus: "pending" | "accepted" | "declined";
   initiatorId?: string;
+  pinnedMessages?: Message[];
 }
 
 export interface ConversationResponse {
