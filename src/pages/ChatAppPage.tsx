@@ -111,9 +111,9 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const REACTION_OPTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
-const LOZA_BOT_NAME = "ZolaBot";
-const LOZA_BOT_COMMAND_REGEX = /^@(LozaBot|ZolaBot)\s+(.+)$/i;
-const LOZA_BOT_MENTION_REGEX = /^@(LozaBot|ZolaBot)\b/i;
+const LOZA_BOT_NAME = "LozaBot";
+const LOZA_BOT_COMMAND_REGEX = /^@(LozaBot|LozaBot)\s+(.+)$/i;
+const LOZA_BOT_MENTION_REGEX = /^@(LozaBot|LozaBot)\b/i;
 const BOT_MENTION_TRIGGER_REGEX = /(^|\s)@([^\s@]*)$/;
 const LOZA_BOT_SUGGESTIONS = [
   "Tóm tắt cuộc trò chuyện từ tin nhắn cuối cùng của mình đến hiện tại",
@@ -1565,7 +1565,7 @@ export default function ChatPage() {
       await sendStructuredMessage(payload);
 
       if (isBotMention && !botMatch?.[2]) {
-        toast("Thêm yêu cầu sau @ZolaBot, ví dụ: @ZolaBot tóm tắt đoạn chat");
+        toast("Thêm yêu cầu sau @LozaBot, ví dụ: @LozaBot tóm tắt đoạn chat");
       }
 
       if (isBotMention && botMatch?.[2]) {
@@ -1694,7 +1694,7 @@ export default function ChatPage() {
     return { start };
   }, [input]);
 
-  const applyZolaBotMention = useCallback(() => {
+  const applyLozaBotMention = useCallback(() => {
     if (!mentionDraft) return;
     const before = input.slice(0, mentionDraft.start);
     setInput(`${before}@${LOZA_BOT_NAME} `);
@@ -4071,7 +4071,7 @@ export default function ChatPage() {
                           }, 1200);
                         }
                       }}
-                      placeholder="Nhập tin nhắn... hoặc @ZolaBot <vấn đề>"
+                      placeholder="Nhập tin nhắn... hoặc @LozaBot <vấn đề>"
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
@@ -4199,7 +4199,7 @@ export default function ChatPage() {
                     >
                       <button
                         type="button"
-                        onClick={applyZolaBotMention}
+                        onClick={applyLozaBotMention}
                         style={{
                           border: "none",
                           background: "transparent",
