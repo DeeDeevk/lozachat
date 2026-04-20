@@ -5766,6 +5766,34 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+      {showAddMemberModal && activeConversation?.group && (
+        <AddMemberModal
+          conversationId={activeConversationId!}
+          currentParticipantIds={activeConversation.participants.map(
+            (p) => p._id,
+          )}
+          onClose={() => setShowAddMemberModal(false)}
+          onAdd={async (targetUserId) => {
+            if (!activeConversationId) return;
+            try {
+              const result = await addMemberToGroup(
+                activeConversationId,
+                targetUserId,
+              );
+              if (result.needsApproval) {
+                toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+              } else {
+                toast.success("Đã thêm thành viên vào nhóm");
+              }
+              setShowAddMemberModal(false);
+            } catch {
+              toast.error("Không thể thêm thành viên");
+            }
+          }}
+        />
+      )}
     </div>
+    
   );
+  
 }
