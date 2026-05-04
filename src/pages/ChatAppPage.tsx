@@ -3153,14 +3153,10 @@ export default function ChatPage() {
 
                   return (
                     <div
-<<<<<<< HEAD
                       key={message._id || `${message.createdAt}-${index}`}
                       id={`msg-${message._id}`}
                       // key={messageKey}
-=======
-                      key={messageKey}
-                      id={`msg-${message._id}`}
->>>>>>> be4278859092ce1ae9c69575da07ae326ddf2f20
+                      // id={`msg-${message._id}`}
                       style={{
                         display: "flex",
                         flexDirection: "column",
