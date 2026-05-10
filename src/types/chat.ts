@@ -124,14 +124,17 @@ export interface ReplyMeta {
 
 export interface CallMeta {
   callType: "voice" | "video";
-  status: "ended";
+  status: "started" | "ended";
   startedAt: string;
-  endedAt: string;
-  durationSeconds: number;
+  endedAt?: string;
+  durationSeconds?: number;
   initiatedBy: string;
   endedBy?: string;
   upgradedFrom?: "voice" | "video";
   upgradedTo?: "voice" | "video";
+  roomName?: string;
+  isGroup?: boolean;
+  activeParticipants?: number;
 }
 
 export interface ChatStructuredPayload {

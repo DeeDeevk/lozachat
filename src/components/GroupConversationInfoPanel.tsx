@@ -16,6 +16,7 @@ import {
 import type { Conversation, Message } from "@/types/chat";
 import { decodeChatPayload } from "@/utils/chatMessageCodec";
 import type { GroupJoinRequest } from "@/types/store";
+import { useFriendStore } from "@/stores/useFriendStore";
 
 interface GroupConversationInfoPanelProps {
   visible: boolean;
@@ -161,10 +162,18 @@ export default function GroupConversationInfoPanel({
     members: false, // Mặc định đóng
     links: true,
   });
+  const { checkFriendship, addFriend, cancelRequest, getFriendStatus } =
+    useFriendStore();
+  const targetStatuses = useFriendStore((s) => s.targetStatuses);
+  const [friendMap, setFriendMap] = useState<Record<string, boolean>>();
   const [searchMember, setSearchMember] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [pendingMap, setPendingMap] = useState<Record<string, string>>({});
+  const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<
+    any | null
+  >(null);
 
   // Thêm state trong component
   const [removeConfirm, setRemoveConfirm] = useState<{
@@ -178,6 +187,31 @@ export default function GroupConversationInfoPanel({
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const memberIds = conversation.participants
+      .filter((p) => p._id !== currentUserId)
+      .map((p) => p._id.toString());
+
+    if (memberIds.length === 0) return;
+
+    const fetchStatuses = async () => {
+      const friendshipResults = await Promise.all(
+        memberIds.map(async (id) => {
+          const isFriend = await checkFriendship(id);
+          return [id, isFriend] as [string, boolean];
+        }),
+      );
+      setFriendMap(Object.fromEntries(friendshipResults));
+      for (const id of memberIds) {
+        const status = await getFriendStatus(id);
+        if (status === "sent") {
+          setPendingMap((prev) => ({ ...prev, [id]: "pending_request_id" }));
+        }
+      }
+    };
+    fetchStatuses();
+  }, [conversation.participants, currentUserId]);
 
   const currentParticipant = conversation.participants.find(
     (p) => p._id === currentUserId,
@@ -830,256 +864,348 @@ export default function GroupConversationInfoPanel({
               </div>
             )}
           {/* Members list */}
-          {filteredMembers.map((member) => (
-            <div
-              key={member._id}
-              style={{ position: "relative" }}
-              onMouseEnter={() => setHoveredMemberId(member._id)}
-              onMouseLeave={() => {
-                if (menuOpenId !== member._id) {
-                  setHoveredMemberId(null);
-                }
-              }}
-            >
+          {filteredMembers.map((member) => {
+            const isMe = member._id === currentUserId;
+            const targetStatus = targetStatuses[member._id];
+            const isFriend =
+              targetStatus === "friend" || friendMap?.[member._id.toString()];
+            const requestId = targetStatus == "sent" || pendingMap[member._id];
+            return (
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px",
-                  borderRadius: 8,
-                  background: "rgba(148,163,184,0.08)",
-                  transition: "background 0.2s",
+                key={member._id}
+                style={{ position: "relative" }}
+                onMouseEnter={() => setHoveredMemberId(member._id)}
+                onMouseLeave={() => {
+                  if (menuOpenId !== member._id) {
+                    setHoveredMemberId(null);
+                  }
                 }}
               >
-                {/* Avatar */}
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    background: member.avatarUrl
-                      ? `url(${member.avatarUrl}) center/cover`
-                      : "#3b82f6",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    color: "white",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    flexShrink: 0,
+                    gap: 10,
+                    padding: "10px",
+                    borderRadius: 8,
+                    background: "rgba(148,163,184,0.08)",
+                    transition: "background 0.2s",
                   }}
                 >
-                  {!member.avatarUrl && member.displayName?.[0]?.toUpperCase()}
-                </div>
-
-                {/* Name + badge */}
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                  <p
+                  {/* Avatar */}
+                  <div
                     style={{
-                      margin: 0,
-                      fontSize: 13,
-                      color: "#f1f5f9",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {member.displayName}
-                    {member._id === currentUserId && (
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                        {" "}
-                        (Bạn)
-                      </span>
-                    )}
-                  </p>
-                  {member.role && member.role !== "member" && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: member.role === "owner" ? "#eab308" : "#94a3b8",
-                        background:
-                          member.role === "owner"
-                            ? "rgba(234,179,8,0.1)"
-                            : "rgba(148,163,184,0.1)",
-                        border: `1px solid ${member.role === "owner" ? "rgba(234,179,8,0.25)" : "rgba(148,163,184,0.2)"}`,
-                        padding: "1px 6px",
-                        borderRadius: 5,
-                      }}
-                    >
-                      {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
-                    </span>
-                  )}
-                </div>
-
-                {/* Nút "..." — owner hoặc admin thấy */}
-                {(isOwner || isAdmin) &&
-                  member._id !== currentUserId &&
-                  member.role !== "owner" &&
-                  // Admin không thấy nút với admin khác
-                  !(isAdmin && member.role === "admin") &&
-                  hoveredMemberId === member._id && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpenId(
-                          menuOpenId === member._id ? null : member._id,
-                        );
-                      }}
-                      style={{
-                        background: "rgba(148,163,184,0.15)",
-                        border: "none",
-                        color: "#94a3b8",
-                        cursor: "pointer",
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        fontSize: 16,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ···
-                    </button>
-                  )}
-              </div>
-
-              {/* Dropdown menu */}
-              {menuOpenId === member._id && (
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "100%",
-                    background: "#1e293b",
-                    border: "1px solid rgba(148,163,184,0.2)",
-                    borderRadius: 10,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                    zIndex: 10,
-                    minWidth: 180,
-                    overflow: "hidden",
-                  }}
-                  onMouseEnter={() => setHoveredMemberId(member._id)}
-                >
-                  {/* Chỉ owner mới thấy thêm/xóa phó nhóm */}
-                  {isOwner &&
-                    (member.role === "member" ? (
-                      <button
-                        onClick={() => {
-                          onUpdateMemberRole?.(member._id, "admin");
-                          setMenuOpenId(null);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "11px 16px",
-                          background: "transparent",
-                          border: "none",
-                          color: "#f1f5f9",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          textAlign: "left",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                        onMouseEnter={(e) => {
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.background = "rgba(59,130,246,0.1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.background = "transparent";
-                        }}
-                      >
-                        Thêm phó nhóm
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          onUpdateMemberRole?.(member._id, "member");
-                          setMenuOpenId(null);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "11px 16px",
-                          background: "transparent",
-                          border: "none",
-                          color: "#f87171",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          textAlign: "left",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                        onMouseEnter={(e) => {
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.background = "rgba(248,113,113,0.1)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (
-                            e.currentTarget as HTMLButtonElement
-                          ).style.background = "transparent";
-                        }}
-                      >
-                        ✕ Xóa phó nhóm
-                      </button>
-                    ))}
-
-                  {/* Divider nếu là owner và có cả 2 option */}
-                  {isOwner && (
-                    <div
-                      style={{
-                        height: 1,
-                        background: "rgba(148,163,184,0.1)",
-                        margin: "2px 0",
-                      }}
-                    />
-                  )}
-
-                  {/* Xóa thành viên — owner và admin đều thấy */}
-                  <button
-                    onClick={() => {
-                      setRemoveConfirm({
-                        memberId: member._id,
-                        memberName: member.displayName,
-                      });
-                      setMenuOpenId(null);
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "11px 16px",
-                      background: "transparent",
-                      border: "none",
-                      color: "#ef4444",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      textAlign: "left",
-                      cursor: "pointer",
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: member.avatarUrl
+                        ? `url(${member.avatarUrl}) center/cover`
+                        : "#3b82f6",
                       display: "flex",
                       alignItems: "center",
-                      gap: 8,
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(239,68,68,0.1)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "transparent";
+                      justifyContent: "center",
+                      color: "white",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      flexShrink: 0,
                     }}
                   >
-                    🚫 Xóa khỏi nhóm
-                  </button>
+                    {!member.avatarUrl &&
+                      member.displayName?.[0]?.toUpperCase()}
+                  </div>
+
+                  {/* Name + badge */}
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 13,
+                        color: "#f1f5f9",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {member.displayName}
+                      {member._id === currentUserId && (
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                          {" "}
+                          (Bạn)
+                        </span>
+                      )}
+                    </p>
+                    {member.role && member.role !== "member" && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color:
+                            member.role === "owner" ? "#eab308" : "#94a3b8",
+                          background:
+                            member.role === "owner"
+                              ? "rgba(234,179,8,0.1)"
+                              : "rgba(148,163,184,0.1)",
+                          border: `1px solid ${member.role === "owner" ? "rgba(234,179,8,0.25)" : "rgba(148,163,184,0.2)"}`,
+                          padding: "1px 6px",
+                          borderRadius: 5,
+                        }}
+                      >
+                        {member.role === "owner" ? "Trưởng nhóm" : "Phó nhóm"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Badge bạn bè — ẩn với chính mình */}
+                  {!isMe && (
+                    <div style={{ marginLeft: "auto" }}>
+                      {isFriend ? (
+                        // 1. Đã là bạn bè
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#10b981",
+                            background: "rgba(16,185,129,0.1)",
+                            padding: "2px 6px",
+                            borderRadius: 5,
+                          }}
+                        >
+                          Bạn bè
+                        </span>
+                      ) : requestId ? (
+                        // 2. Đang trong trạng thái chờ (vừa nhấn kết bạn hoặc F5 lại thấy đang sent)
+                        <button
+                          onClick={async () => {
+                            // requestId có thể là ID thật hoặc string tạm "pending_request_id"
+                            // Nếu Store của bạn cần ID thật, hãy đảm bảo getFriendStatus trả về ID đó
+                            await cancelRequest(requestId);
+                            setPendingMap((prev) => {
+                              const next = { ...prev };
+                              delete next[member._id];
+                              return next;
+                            });
+                          }}
+                          title="Hủy yêu cầu"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "2px 7px",
+                            borderRadius: 5,
+                            border: "1px solid rgba(148,163,184,0.3)",
+                            background: "rgba(148,163,184,0.08)",
+                            color: "#94a3b8",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Hủy yêu cầu
+                        </button>
+                      ) : (
+                        // 3. Chưa có quan hệ gì
+                        <button
+                          onClick={async () => {
+                            // Gọi API kết bạn
+                            const newRequestId = await addFriend(member._id);
+                            if (newRequestId) {
+                              // Cập nhật local state ngay lập tức để chuyển sang nút "Hủy"
+                              setPendingMap((prev) => ({
+                                ...prev,
+                                [member._id]: newRequestId,
+                              }));
+                            }
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "2px 7px",
+                            borderRadius: 5,
+                            border: "1px solid rgba(59,130,246,0.3)",
+                            background: "rgba(59,130,246,0.08)",
+                            color: "#60a5fa",
+                            fontSize: 10,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <UserPlus size={11} />
+                          Kết bạn
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Nút "..." — owner hoặc admin thấy */}
+                  {(isOwner || isAdmin) &&
+                    member._id !== currentUserId &&
+                    member.role !== "owner" &&
+                    // Admin không thấy nút với admin khác
+                    !(isAdmin && member.role === "admin") &&
+                    hoveredMemberId === member._id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(
+                            menuOpenId === member._id ? null : member._id,
+                          );
+                        }}
+                        style={{
+                          background: "rgba(148,163,184,0.15)",
+                          border: "none",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          fontSize: 16,
+                          lineHeight: 1,
+                          flexShrink: 0,
+                        }}
+                      >
+                        ···
+                      </button>
+                    )}
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Dropdown menu */}
+                {menuOpenId === member._id && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "100%",
+                      background: "#1e293b",
+                      border: "1px solid rgba(148,163,184,0.2)",
+                      borderRadius: 10,
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                      zIndex: 10,
+                      minWidth: 180,
+                      overflow: "hidden",
+                    }}
+                    onMouseEnter={() => setHoveredMemberId(member._id)}
+                  >
+                    {/* Chỉ owner mới thấy thêm/xóa phó nhóm */}
+                    {isOwner &&
+                      (member.role === "member" ? (
+                        <button
+                          onClick={() => {
+                            onUpdateMemberRole?.(member._id, "admin");
+                            setMenuOpenId(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px",
+                            background: "transparent",
+                            border: "none",
+                            color: "#f1f5f9",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            textAlign: "left",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                          onMouseEnter={(e) => {
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.background = "rgba(59,130,246,0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.background = "transparent";
+                          }}
+                        >
+                          Thêm phó nhóm
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            onUpdateMemberRole?.(member._id, "member");
+                            setMenuOpenId(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "11px 16px",
+                            background: "transparent",
+                            border: "none",
+                            color: "#f87171",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            textAlign: "left",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                          onMouseEnter={(e) => {
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.background = "rgba(248,113,113,0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (
+                              e.currentTarget as HTMLButtonElement
+                            ).style.background = "transparent";
+                          }}
+                        >
+                          ✕ Xóa phó nhóm
+                        </button>
+                      ))}
+
+                    {/* Divider nếu là owner và có cả 2 option */}
+                    {isOwner && (
+                      <div
+                        style={{
+                          height: 1,
+                          background: "rgba(148,163,184,0.1)",
+                          margin: "2px 0",
+                        }}
+                      />
+                    )}
+
+                    {/* Xóa thành viên — owner và admin đều thấy */}
+                    <button
+                      onClick={() => {
+                        setRemoveConfirm({
+                          memberId: member._id,
+                          memberName: member.displayName,
+                        });
+                        setMenuOpenId(null);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "11px 16px",
+                        background: "transparent",
+                        border: "none",
+                        color: "#ef4444",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                      onMouseEnter={(e) => {
+                        (
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "rgba(239,68,68,0.1)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "transparent";
+                      }}
+                    >
+                      🚫 Xóa khỏi nhóm
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </ExpandableSection>
 
