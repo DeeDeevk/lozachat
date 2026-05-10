@@ -2,7 +2,6 @@ import type { User, FriendRequest, Friend, RequestStatus } from "../types/user";
 import { friendService } from "@/services/friendService";
 import { useAuthStore } from "./useAuthStore";
 import { create } from "zustand";
-import axios from "axios";
 
 interface FriendState {
   handleRealTimeUpdate: (update: {

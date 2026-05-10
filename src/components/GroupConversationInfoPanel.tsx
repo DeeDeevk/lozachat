@@ -19,14 +19,17 @@ import type { GroupJoinRequest } from "@/types/store";
 import { useFriendStore } from "@/stores/useFriendStore";
 
 interface GroupConversationInfoPanelProps {
-  visible: boolean;
-  onClose: () => void;
+  visible?: boolean;
+  onClose?: () => void;
   conversation: Conversation;
   messages: Message[];
   currentUserId?: string;
+  isAdminOrOwner?: boolean; // ✅ thêm vào interface
   onUpdateMemberRole?: (targetUserId: string, role: "admin" | "member") => void;
   onRemoveMember?: (targetUserId: string) => void;
-  // Bổ sung các props từ web
+  onDeleteConversation?: () => void; // ✅ thêm
+  onManageGroup?: () => void; // ✅ thêm
+  onAddMember?: (targetUserId: string) => void; // ✅ thêm
   onLeaveGroup?: () => void;
   onDissolveGroup?: () => void;
   onDeleteHistory?: () => void;
@@ -148,7 +151,7 @@ export default function GroupConversationInfoPanel({
   onUpdateMemberRole,
   onDissolveGroup,
   onRemoveMember,
-  onAddMember,
+  onAddMember: _onAddMember, // ✅ prefix _ để tránh unused warning nếu chưa dùng
   pendingRequests,
   onReviewRequest,
   isAdminOrOwner,
@@ -159,7 +162,7 @@ export default function GroupConversationInfoPanel({
   >({
     media: true,
     files: true,
-    members: false, // Mặc định đóng
+    members: false,
     links: true,
   });
   const { checkFriendship, addFriend, cancelRequest, getFriendStatus } =
@@ -171,17 +174,14 @@ export default function GroupConversationInfoPanel({
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [pendingMap, setPendingMap] = useState<Record<string, string>>({});
-  const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<
-    any | null
-  >(null);
 
-  // Thêm state trong component
+  // ✅ Xóa selectedMemberForProfile và showAddMemberModal vì không dùng
+
   const [removeConfirm, setRemoveConfirm] = useState<{
     memberId: string;
     memberName: string;
   } | null>(null);
 
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   useEffect(() => {
     const handleClickOutside = () => setMenuOpenId(null);
     document.addEventListener("click", handleClickOutside);
@@ -216,15 +216,11 @@ export default function GroupConversationInfoPanel({
   const currentParticipant = conversation.participants.find(
     (p) => p._id === currentUserId,
   );
-  console.log("participants:", conversation.participants);
-  console.log("currentUserId:", currentUserId);
-  console.log("currentParticipant:", currentParticipant);
   const isOwner =
     currentParticipant?.role === "owner" ||
     currentParticipant?.role === "admin";
-  const isAdmin = currentParticipant?.role === "admin"; // ✅ đặt ở đây
+  const isAdmin = currentParticipant?.role === "admin";
 
-  console.log("isOwner:", isOwner);
   // Helper: Get display participants (first 3)
   const getDisplayParticipants = useMemo(() => {
     return (conversation.participants || []).slice(0, 3);
@@ -289,7 +285,6 @@ export default function GroupConversationInfoPanel({
         }
       }
 
-      // ✅ Multiple attachments
       if (payload.kind === "image" && payload.attachments?.length) {
         payload.attachments.forEach((att) => {
           media.push({
@@ -346,7 +341,6 @@ export default function GroupConversationInfoPanel({
         }
       }
 
-      // ✅ Multiple attachments
       if (payload.kind === "file" && payload.attachments?.length) {
         const sender = conversation.participants.find(
           (p) => p._id === msg.senderId,
@@ -429,7 +423,6 @@ export default function GroupConversationInfoPanel({
     if (!pendingRequests) return [];
     const map = new Map();
     pendingRequests.forEach((req) => {
-      // Dùng ID của người được mời làm key (để 1 người chỉ có 1 thẻ duy nhất)
       const uId = req.invitedUserId?._id || req.invitedUserId;
       map.set(uId, req);
     });
@@ -459,10 +452,9 @@ export default function GroupConversationInfoPanel({
           gap: 12,
         }}
       >
-        {/* Avatar - Group with 2-3 members */}
+        {/* Avatar */}
         <div style={{ position: "relative", width: 80, height: 80 }}>
           {conversation.group?.avatar ? (
-            // ✅ Có ảnh nhóm → hiện ảnh nhóm
             <div
               style={{
                 width: 80,
@@ -480,7 +472,6 @@ export default function GroupConversationInfoPanel({
               />
             </div>
           ) : (
-            // ❌ Không có ảnh nhóm → hiện cluster participants như cũ
             getDisplayParticipants.slice(0, 3).map((p, idx) => {
               const positions = [
                 { top: 0, left: 0, zIndex: 3 },
@@ -569,16 +560,6 @@ export default function GroupConversationInfoPanel({
               cursor: "pointer",
               transition: "all 0.2s",
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#f1f5f9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.05)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
-            }}
           >
             <Edit size={14} />
           </button>
@@ -605,16 +586,6 @@ export default function GroupConversationInfoPanel({
               fontSize: 10,
               transition: "all 0.2s",
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#f1f5f9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.05)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
-            }}
           >
             <Pin size={16} />
             <span>Ghim hội thoại</span>
@@ -637,16 +608,6 @@ export default function GroupConversationInfoPanel({
               cursor: "pointer",
               fontSize: 10,
               transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#f1f5f9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.05)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
             }}
           >
             <Bell size={16} />
@@ -671,16 +632,6 @@ export default function GroupConversationInfoPanel({
               fontSize: 10,
               transition: "all 0.2s",
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#f1f5f9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.05)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
-            }}
           >
             <Settings size={16} />
             <span>Quản lý nhóm</span>
@@ -699,12 +650,7 @@ export default function GroupConversationInfoPanel({
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {/* Search */}
-          <div
-            style={{
-              position: "relative",
-              marginBottom: 8,
-            }}
-          >
+          <div style={{ position: "relative", marginBottom: 8 }}>
             <Search
               size={14}
               style={{
@@ -731,29 +677,6 @@ export default function GroupConversationInfoPanel({
               }}
             />
           </div>
-
-          {/* {onAddMember && (
-            <button
-              onClick={() => setShowAddMemberModal(true)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                borderRadius: 8,
-                border: "1px dashed rgba(59,130,246,0.4)",
-                background: "rgba(59,130,246,0.05)",
-                color: "#60a5fa",
-                fontSize: 12,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
-              <UserPlus size={14} />
-              Thêm thành viên
-            </button>
-          )} */}
 
           {/* Danh sách chờ duyệt — chỉ owner/admin thấy */}
           {isAdminOrOwner &&
@@ -786,7 +709,6 @@ export default function GroupConversationInfoPanel({
                       marginBottom: 6,
                     }}
                   >
-                    {/* Avatar */}
                     <div
                       style={{
                         width: 30,
@@ -805,8 +727,6 @@ export default function GroupConversationInfoPanel({
                     >
                       {req.invitedUserId.displayName?.[0]?.toUpperCase()}
                     </div>
-
-                    {/* Text */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p
                         style={{
@@ -825,8 +745,6 @@ export default function GroupConversationInfoPanel({
                         mời bởi {req.invitedBy.displayName}
                       </p>
                     </div>
-
-                    {/* Buttons */}
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                       <button
                         onClick={() => onReviewRequest?.(req._id, "approved")}
@@ -863,13 +781,14 @@ export default function GroupConversationInfoPanel({
                 ))}
               </div>
             )}
+
           {/* Members list */}
           {filteredMembers.map((member) => {
             const isMe = member._id === currentUserId;
             const targetStatus = targetStatuses[member._id];
             const isFriend =
               targetStatus === "friend" || friendMap?.[member._id.toString()];
-            const requestId = targetStatus == "sent" || pendingMap[member._id];
+            const requestId = targetStatus === "sent" || pendingMap[member._id];
             return (
               <div
                 key={member._id}
@@ -955,11 +874,10 @@ export default function GroupConversationInfoPanel({
                     )}
                   </div>
 
-                  {/* Badge bạn bè — ẩn với chính mình */}
+                  {/* Badge bạn bè */}
                   {!isMe && (
                     <div style={{ marginLeft: "auto" }}>
                       {isFriend ? (
-                        // 1. Đã là bạn bè
                         <span
                           style={{
                             fontSize: 10,
@@ -973,12 +891,11 @@ export default function GroupConversationInfoPanel({
                           Bạn bè
                         </span>
                       ) : requestId ? (
-                        // 2. Đang trong trạng thái chờ (vừa nhấn kết bạn hoặc F5 lại thấy đang sent)
                         <button
                           onClick={async () => {
-                            // requestId có thể là ID thật hoặc string tạm "pending_request_id"
-                            // Nếu Store của bạn cần ID thật, hãy đảm bảo getFriendStatus trả về ID đó
-                            await cancelRequest(requestId);
+                            if (typeof requestId === "string") {
+                              await cancelRequest(requestId);
+                            }
                             setPendingMap((prev) => {
                               const next = { ...prev };
                               delete next[member._id];
@@ -1003,13 +920,10 @@ export default function GroupConversationInfoPanel({
                           Hủy yêu cầu
                         </button>
                       ) : (
-                        // 3. Chưa có quan hệ gì
                         <button
                           onClick={async () => {
-                            // Gọi API kết bạn
                             const newRequestId = await addFriend(member._id);
                             if (newRequestId) {
-                              // Cập nhật local state ngay lập tức để chuyển sang nút "Hủy"
                               setPendingMap((prev) => ({
                                 ...prev,
                                 [member._id]: newRequestId,
@@ -1036,11 +950,10 @@ export default function GroupConversationInfoPanel({
                     </div>
                   )}
 
-                  {/* Nút "..." — owner hoặc admin thấy */}
+                  {/* Nút "..." */}
                   {(isOwner || isAdmin) &&
                     member._id !== currentUserId &&
                     member.role !== "owner" &&
-                    // Admin không thấy nút với admin khác
                     !(isAdmin && member.role === "admin") &&
                     hoveredMemberId === member._id && (
                       <button
@@ -1084,9 +997,8 @@ export default function GroupConversationInfoPanel({
                     }}
                     onMouseEnter={() => setHoveredMemberId(member._id)}
                   >
-                    {/* Chỉ owner mới thấy thêm/xóa phó nhóm */}
                     {isOwner &&
-                      (member.role === "member" ? (
+                      (member.role === "member" || !member.role ? (
                         <button
                           onClick={() => {
                             onUpdateMemberRole?.(member._id, "admin");
@@ -1105,16 +1017,6 @@ export default function GroupConversationInfoPanel({
                             display: "flex",
                             alignItems: "center",
                             gap: 8,
-                          }}
-                          onMouseEnter={(e) => {
-                            (
-                              e.currentTarget as HTMLButtonElement
-                            ).style.background = "rgba(59,130,246,0.1)";
-                          }}
-                          onMouseLeave={(e) => {
-                            (
-                              e.currentTarget as HTMLButtonElement
-                            ).style.background = "transparent";
                           }}
                         >
                           Thêm phó nhóm
@@ -1139,22 +1041,11 @@ export default function GroupConversationInfoPanel({
                             alignItems: "center",
                             gap: 8,
                           }}
-                          onMouseEnter={(e) => {
-                            (
-                              e.currentTarget as HTMLButtonElement
-                            ).style.background = "rgba(248,113,113,0.1)";
-                          }}
-                          onMouseLeave={(e) => {
-                            (
-                              e.currentTarget as HTMLButtonElement
-                            ).style.background = "transparent";
-                          }}
                         >
                           ✕ Xóa phó nhóm
                         </button>
                       ))}
 
-                    {/* Divider nếu là owner và có cả 2 option */}
                     {isOwner && (
                       <div
                         style={{
@@ -1165,7 +1056,6 @@ export default function GroupConversationInfoPanel({
                       />
                     )}
 
-                    {/* Xóa thành viên — owner và admin đều thấy */}
                     <button
                       onClick={() => {
                         setRemoveConfirm({
@@ -1187,16 +1077,6 @@ export default function GroupConversationInfoPanel({
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                      }}
-                      onMouseEnter={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "rgba(239,68,68,0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = "transparent";
                       }}
                     >
                       🚫 Xóa khỏi nhóm
@@ -1239,15 +1119,6 @@ export default function GroupConversationInfoPanel({
                 overflow: "hidden",
                 background: media.type === "image" ? "#3b82f6" : "#f59e0b",
                 cursor: "pointer",
-                transition: "transform 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.transform =
-                  "scale(1.05)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.transform =
-                  "scale(1)";
               }}
               title={media.senderName ? `Từ ${media.senderName}` : ""}
             >
@@ -1293,15 +1164,6 @@ export default function GroupConversationInfoPanel({
                 color: "#2563eb",
                 textDecoration: "none",
                 fontSize: 12,
-                transition: "background 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background =
-                  "rgba(148,163,184,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background =
-                  "rgba(148,163,184,0.08)";
               }}
               title={file.senderName ? `Từ ${file.senderName}` : ""}
             >
@@ -1347,15 +1209,6 @@ export default function GroupConversationInfoPanel({
                 color: "#2563eb",
                 textDecoration: "none",
                 fontSize: 12,
-                transition: "background 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background =
-                  "rgba(148,163,184,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background =
-                  "rgba(148,163,184,0.08)";
               }}
               title={link.senderName ? `Từ ${link.senderName}` : ""}
             >
@@ -1391,8 +1244,6 @@ export default function GroupConversationInfoPanel({
           >
             Cài đặt nhóm
           </p>
-
-          {/* Toggle: Phê duyệt thành viên mới */}
           <div
             style={{
               display: "flex",
@@ -1411,10 +1262,8 @@ export default function GroupConversationInfoPanel({
             </div>
             <button
               onClick={async () => {
-                // Lấy trạng thái hiện tại (mặc định false nếu chưa có)
                 const current =
                   conversation.group?.settings?.requireApprovalToJoin ?? false;
-                // Gọi hàm update với trạng thái ngược lại
                 await onUpdateSettings?.({ requireApprovalToJoin: !current });
               }}
               style={{
@@ -1423,8 +1272,8 @@ export default function GroupConversationInfoPanel({
                 borderRadius: 999,
                 border: "none",
                 background: conversation.group?.settings?.requireApprovalToJoin
-                  ? "#2563eb" // Màu xanh khi bật
-                  : "rgba(148,163,184,0.3)", // Màu xám khi tắt
+                  ? "#2563eb"
+                  : "rgba(148,163,184,0.3)",
                 cursor: onUpdateSettings ? "pointer" : "not-allowed",
                 position: "relative",
                 flexShrink: 0,
@@ -1477,17 +1326,6 @@ export default function GroupConversationInfoPanel({
             cursor: "pointer",
             fontSize: 13,
             fontWeight: 600,
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(248,113,113,0.15)";
-            (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(248,113,113,0.08)";
-            (e.currentTarget as HTMLButtonElement).style.color = "#f87171";
           }}
         >
           <LogOut size={16} />
@@ -1509,24 +1347,12 @@ export default function GroupConversationInfoPanel({
             cursor: "pointer",
             fontSize: 13,
             fontWeight: 600,
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(248,113,113,0.15)";
-            (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(248,113,113,0.08)";
-            (e.currentTarget as HTMLButtonElement).style.color = "#f87171";
           }}
         >
           <Trash2 size={16} />
           Xóa lịch sử trò chuyện
         </button>
 
-        {/* Chỉ hiện nút giải tán với owner */}
         {isOwner && (
           <button
             onClick={onDissolveGroup}
@@ -1544,17 +1370,6 @@ export default function GroupConversationInfoPanel({
               cursor: "pointer",
               fontSize: 13,
               fontWeight: 600,
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(239,68,68,0.2)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(239,68,68,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
             }}
           >
             <Trash2 size={16} />
@@ -1562,6 +1377,7 @@ export default function GroupConversationInfoPanel({
           </button>
         )}
       </div>
+
       {/* Remove Member Confirm Modal */}
       {removeConfirm && (
         <div
@@ -1662,7 +1478,6 @@ export default function GroupConversationInfoPanel({
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: "pointer",
-                  boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
                 }}
               >
                 Xóa
@@ -1671,6 +1486,7 @@ export default function GroupConversationInfoPanel({
           </div>
         </div>
       )}
+
       {/* Image Preview Modal */}
       {selectedImage && (
         <div
@@ -1686,30 +1502,17 @@ export default function GroupConversationInfoPanel({
           }}
           onClick={() => setSelectedImage(null)}
         >
-          <div
+          <img
+            src={selectedImage}
+            alt="Preview"
             style={{
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              borderRadius: 16,
+              border: "2px solid rgba(148,163,184,0.3)",
             }}
             onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={selectedImage}
-              alt="Preview"
-              style={{
-                maxWidth: "90vw",
-                maxHeight: "90vh",
-                width: "auto",
-                height: "auto",
-                borderRadius: 16,
-                border: "2px solid rgba(148,163,184,0.3)",
-                boxShadow: "0 0 60px rgba(0,0,0,0.8)",
-              }}
-            />
-          </div>
-
+          />
           <button
             onClick={() => setSelectedImage(null)}
             style={{
@@ -1720,24 +1523,11 @@ export default function GroupConversationInfoPanel({
               border: "none",
               color: "white",
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
               width: 40,
               height: 40,
               borderRadius: "50%",
               fontSize: 20,
-              lineHeight: 1,
-              transition: "background 0.2s",
               zIndex: 201,
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(0,0,0,0.85)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(0,0,0,0.6)";
             }}
           >
             ✕
