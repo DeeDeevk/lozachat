@@ -49,8 +49,7 @@ export const CreatePost = ({ currentUser }: Props) => {
   const [focused,    setFocused]    = useState(false);
   const fileRef    = useRef<HTMLInputElement>(null);
   const textareaRef= useRef<HTMLTextAreaElement>(null);
-  const createPost = usePostStore((s) => s.createPost);
-  const [visibility, setVisibility] = useState<Visibility>("public"); 
+const [visibility, setVisibility] = useState<Visibility>("public"); 
 
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList) return;
@@ -90,8 +89,8 @@ export const CreatePost = ({ currentUser }: Props) => {
     if (n === 3) return { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
     return          { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
   };
-  // UI phần chọn quyền (Đặt dưới textarea khi focused)
-  const VISIBILITY_OPTIONS = [
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _VISIBILITY_OPTIONS: Array<{ value: Visibility; label: string; icon: string }> = [
     { value: "public", label: "Mọi người", icon: "🌎" },
     { value: "friends", label: "Bạn bè", icon: "👥" },
     { value: "private", label: "Chỉ mình tôi", icon: "🔒" },

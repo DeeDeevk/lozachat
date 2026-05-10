@@ -2,6 +2,7 @@ export interface Participant {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
+  role?: "admin" | "member" | "owner";
   joinedAt: string;
   lastReadMessageId?: string;
 }
@@ -15,7 +16,10 @@ export interface SeenUser {
 export interface Group {
   name: string;
   createdBy: string;
-  avatar?: string; // thêm dòng này
+  avatar?: string;
+  settings?: {
+    requireApprovalToJoin?: boolean;
+  };
 }
 
 export interface LastMessage {
@@ -60,7 +64,7 @@ export interface Conversation {
   isStranger: boolean;
   strangerStatus: "pending" | "accepted" | "declined";
   initiatorId?: string;
-  pinnedMessages?: Message[];
+  pinnedMessages?: PinnedMessage[];
 }
 
 export interface ConversationResponse {

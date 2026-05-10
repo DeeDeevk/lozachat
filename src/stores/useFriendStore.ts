@@ -281,7 +281,9 @@ export const useFriendStore = create<FriendState>((set, get) => ({
               const newStatuses = { ...state.targetStatuses };
               const friendId =
                 update.senderId === myId ? update.receiverId : update.senderId;
-              newStatuses[friendId] = "friend";
+              if (friendId) {
+                newStatuses[friendId] = "friend";
+              }
               const newFriends = state.friends.filter(
                 (f) => f._id !== update.newFriend?._id,
               );

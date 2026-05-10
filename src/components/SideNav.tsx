@@ -54,7 +54,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const myColor = randomColor(myName);
 
   const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(
+  const [_avatarPreview, _setAvatarPreview] = useState<string | null>(
     userProfile?.avatarUrl ?? null,
   );
   const [open, setOpen] = useState(false);

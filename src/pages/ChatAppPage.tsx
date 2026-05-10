@@ -232,7 +232,7 @@ function createPollId() {
 
 function getSenderName(
   message: Message,
-  myId: string | undefined,
+  _myId: string | undefined,
   participants: Array<{ _id: string; displayName: string }> = [],
 ) {
   // Tìm trong participants luôn, không phân biệt mình hay người khác
@@ -480,7 +480,7 @@ export default function ChatPage() {
     dissolveGroup,
     leaveGroup,
     deleteConversationForMe,
-    updateMemberRole,
+    updateMemberRole: _updateMemberRole,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -599,12 +599,13 @@ export default function ChatPage() {
   const participantsCache = useMemo(() => {
     const cache = new Map<
       string,
-      { displayName: string; avatarUrl?: string | null; role?: string }
+      { _id: string; displayName: string; avatarUrl?: string | null; role?: "admin" | "member" | "owner" }
     >();
     conversations.forEach((c) => {
       c.participants.forEach((p) => {
         if (!cache.has(p._id)) {
           cache.set(p._id, {
+            _id: p._id,
             displayName: p.displayName,
             avatarUrl: p.avatarUrl,
             role: p.role,
@@ -3349,7 +3350,7 @@ export default function ChatPage() {
                             message.senderId,
                           );
                           return cached
-                            ? { _id: message.senderId, ...cached }
+                            ? { ...cached, _id: message.senderId }
                             : {
                                 _id: message.senderId,
                                 displayName: "Người dùng",
@@ -4518,7 +4519,7 @@ export default function ChatPage() {
                   );
                 }
               }}
-              onAddMember={async (targetUserId) => {
+              onAddMember={async (targetUserId: string) => {
                 if (!activeConversationId) return;
                 try {
                   const result = await addMemberToGroup(
@@ -4858,10 +4859,7 @@ export default function ChatPage() {
                       if (isOwner && !selectedNewOwnerId) return;
                       setShowLeaveGroupConfirm(false);
                       try {
-                        await leaveGroup(
-                          activeConversationId,
-                          isOwner ? selectedNewOwnerId : undefined,
-                        );
+                        await leaveGroup(activeConversationId);
                         setSelectedNewOwnerId("");
                         toast.success("Đã rời khỏi nhóm");
                       } catch (error: any) {

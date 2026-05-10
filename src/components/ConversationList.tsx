@@ -82,11 +82,6 @@ export default function ConversationList({
     return other?.displayName || "Unknown";
   };
 
-  const getAvatarText = (conv: Conversation) => {
-    const name = getName(conv);
-    return name.slice(0, 2).toUpperCase();
-  };
-
   const getAvatarUrl = (conv: Conversation) => {
     if (conv.group) return conv.group.avatar ?? null; // ✅ trả về avatar nhóm nếu có
     return getOtherUser(conv)?.avatarUrl ?? null;
@@ -243,9 +238,7 @@ export default function ConversationList({
         >
           {filteredConvs.map((conv) => {
             const name = getName(conv);
-            const avatarUrl = getAvatarUrl(conv);
             const online = isOnline(conv);
-            const color = getAvatarColor(conv);
             // Sửa lại để đọc đúng từ unreadCounts (MongoDB Map serialize thành object)
             const unread =
               (conv as any).unreadCounts?.[user?.userId ?? ""] ??

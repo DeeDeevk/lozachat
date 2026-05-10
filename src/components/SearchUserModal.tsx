@@ -5,7 +5,7 @@ import {
   UserRoundSearch,
   MessageCircle,
   UserPlus,
-  Info,
+  AlertCircle as _Info,
   Loader2,
   Clock,
   Bell,
