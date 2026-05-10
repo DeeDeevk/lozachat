@@ -55,7 +55,6 @@ export interface Conversation {
   lastMessage: LastMessage | null;
   unreadCounts: Record<string, number>; // key = userId, value = unread count
   chatThemeId?: string;
-  pinnedMessages?: PinnedMessage[];
   createdAt: string;
   updatedAt: string;
   isStranger: boolean;

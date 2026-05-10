@@ -1,4 +1,4 @@
-import React from "react";
+// ✅ Bỏ import React vì không dùng trực tiếp (JSX transform tự xử lý)
 
 export interface ParticipantAvatar {
   displayName?: string;
@@ -8,10 +8,9 @@ export interface ParticipantAvatar {
 
 interface MiniAvatarProps {
   p: ParticipantAvatar;
-  fontSize?: number; // Đặt optional, mặc định là 14 nếu không truyền
+  fontSize?: number;
 }
 
-// Chuyển hàm random màu vào đây để component tự lo logic của nó
 const getAvatarColor = (name: string) => {
   const colors = [
     "#3b82f6",

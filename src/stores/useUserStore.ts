@@ -11,25 +11,25 @@ interface UserProfile {
   updatedAt: string;
 }
 
-interface User {
-  userId: string;
-  username: string;
-  role: string;
-}
+// interface User {
+//   userId: string;
+//   username: string;
+//   role: string;
+// }
 
-interface UpdateProfilePayload {
-  displayName?: string;
-  phone?: string;
-  bio?: string;
-}
+// interface UpdateProfilePayload {
+//   displayName?: string;
+//   phone?: string;
+//   bio?: string;
+// }
 
-interface UpdateProfileResponse {
-  message: string;
-  user: UserProfile;
-}
+// interface UpdateProfileResponse {
+//   message: string;
+//   user: UserProfile;
+// }
 
-interface UpdateProfilePayload {
-  displayName?: string;
-  bio?: string;
-  phone?: string;
-}
+// interface UpdateProfilePayload {
+//   displayName?: string;
+//   bio?: string;
+//   phone?: string;
+// }
