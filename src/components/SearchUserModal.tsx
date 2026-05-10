@@ -59,7 +59,7 @@ export default function SearchUserModal({
   onClose,
   onRequestSent,
 }: SearchUserModalProps) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Intentionally unused, kept for future use
   const onStartChat = () => {};
   const currentUser = useAuthStore((s) => s.userProfile);
   const friendStore = useFriendStore();

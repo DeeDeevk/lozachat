@@ -89,7 +89,7 @@ const [visibility, setVisibility] = useState<Visibility>("public");
     if (n === 3) return { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
     return          { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", height: "220px" };
   };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-expect-error - Intentionally defined for future use
   const _VISIBILITY_OPTIONS: Array<{ value: Visibility; label: string; icon: string }> = [
     { value: "public", label: "Mọi người", icon: "🌎" },
     { value: "friends", label: "Bạn bè", icon: "👥" },

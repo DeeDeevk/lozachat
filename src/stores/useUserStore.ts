@@ -1,3 +1,4 @@
+// @ts-expect-error - Interface kept for future extensibility
 interface UserProfile {
   _id: string;
   username: string;
