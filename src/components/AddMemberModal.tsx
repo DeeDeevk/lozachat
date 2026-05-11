@@ -11,7 +11,7 @@ interface AddMemberModalProps {
 }
 
 export default function AddMemberModal({
-  conversationId,
+  conversationId: _conversationId,
   currentParticipantIds,
   onClose,
   onAdd,

@@ -306,7 +306,7 @@ const registerSocketEvents = (
       .getState()
       .updateMemberRole(conversationId, targetUserId, role);
   });
-  socket.on("group-join-request", ({ conversationId, request }) => {
+  socket.on("group-join-request", ({ conversationId: _conversationId, request }) => {
     useChatStore.getState().addJoinRequest(request);
   });
 

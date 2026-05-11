@@ -52,7 +52,7 @@ export const friendService = {
     const res = await api.get("/friends");
     return res.data.friends;
   },
-  
+
   async cancelRequest(requestId: string) {
     try {
       await api.post(`/friends/request/${requestId}/cancel`);
@@ -62,11 +62,15 @@ export const friendService = {
   },
 
   async unfriend(targetId: string) {
-  try {
-    const res = await api.delete(`/friends/${targetId}`);
-    return res.data.message;
-  } catch (error) {
-    console.error("Lỗi khi huỷ kết bạn", error);
-  }
-}
+    try {
+      const res = await api.delete(`/friends/${targetId}`);
+      return res.data.message;
+    } catch (error) {
+      console.error("Lỗi khi huỷ kết bạn", error);
+    }
+  },
+  async checkFriendship(targetId: string): Promise<boolean> {
+    const res = await api.get(`/friends/check/${targetId}`);
+    return res.data.isFriend;
+  },
 };

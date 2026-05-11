@@ -2,6 +2,7 @@ export interface Participant {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
+  role?: "admin" | "member" | "owner";
   joinedAt: string;
   lastReadMessageId?: string;
 }
@@ -15,7 +16,10 @@ export interface SeenUser {
 export interface Group {
   name: string;
   createdBy: string;
-  avatar?: string; // thêm dòng này
+  avatar?: string;
+  settings?: {
+    requireApprovalToJoin?: boolean;
+  };
 }
 
 export interface LastMessage {
@@ -55,13 +59,12 @@ export interface Conversation {
   lastMessage: LastMessage | null;
   unreadCounts: Record<string, number>; // key = userId, value = unread count
   chatThemeId?: string;
-  pinnedMessages?: PinnedMessage[];
   createdAt: string;
   updatedAt: string;
   isStranger: boolean;
   strangerStatus: "pending" | "accepted" | "declined";
   initiatorId?: string;
-  pinnedMessages?: Message[];
+  pinnedMessages?: PinnedMessage[];
 }
 
 export interface ConversationResponse {
@@ -124,14 +127,17 @@ export interface ReplyMeta {
 
 export interface CallMeta {
   callType: "voice" | "video";
-  status: "ended";
+  status: "started" | "ended";
   startedAt: string;
-  endedAt: string;
-  durationSeconds: number;
+  endedAt?: string;
+  durationSeconds?: number;
   initiatedBy: string;
   endedBy?: string;
   upgradedFrom?: "voice" | "video";
   upgradedTo?: "voice" | "video";
+  roomName?: string;
+  isGroup?: boolean;
+  activeParticipants?: number;
 }
 
 export interface ChatStructuredPayload {

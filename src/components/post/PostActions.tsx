@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
-import type { ReactionType } from "../../types/post";
+import type { ReactionType, Reaction } from "../../types/post";
 
 const REACTION_TYPES: ReactionType[] = [
   "like",
@@ -13,7 +13,7 @@ const REACTION_TYPES: ReactionType[] = [
 
 interface Props {
   postId: string;
-  reactions: any[];
+  reactions: Reaction[];
   commentsCount: number;
   currentUserId: string;
   onReact: (postId: string, type: ReactionType) => void;
