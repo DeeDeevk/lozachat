@@ -45,6 +45,7 @@ export interface Comment {
   parentId: string | { _id: string; author: Author; content: string } | null;
   imageId: string | null;
   images: string[];
+  audioUrl?: string | null;
   reactions: Reaction[];
   reactionsCount: number;
   repliesCount: number;

@@ -11,7 +11,7 @@ const ProtectedRoute = () => {
     refresh,
     fetchCurrentUser,
     fetchMe,
-    signOut,
+    signOut: _signOut,
   } = useAuthStore();
   const [starting, setStarting] = useState(true);
 

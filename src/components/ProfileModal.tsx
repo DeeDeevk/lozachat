@@ -39,7 +39,7 @@ export default function ProfileModal({
   userProfile,
   setUserProfile,
   myColor,
-  myName,
+  myName: _myName,
 }: ProfileModalProps) {
   const {
     changePassword,

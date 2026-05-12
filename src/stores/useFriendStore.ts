@@ -32,6 +32,7 @@ interface FriendState {
   unfriend: (targetId: string) => Promise<void>;
   addNewFriendId: (friendId: string) => void;
   clearNewFriends: () => void;
+  checkFriendship: (targetId: string) => Promise<boolean>;
 }
 
 export const useFriendStore = create<FriendState>((set, get) => ({
@@ -251,22 +252,44 @@ export const useFriendStore = create<FriendState>((set, get) => ({
           case "request_cancelled":
           case "request_declined":
             if (update.requestId) {
-              const newSent = state.sentList.filter(
-                (r) => r._id !== update.requestId,
-              );
-              const newReceived = state.receivedList.filter(
-                (r) => r._id !== update.requestId,
-              );
-              return { sentList: newSent, receivedList: newReceived };
+              const requestInfo =
+                state.sentList.find((r) => r._id === update.requestId) ||
+                state.receivedList.find((r) => r._id === update.requestId);
+              const peerId =
+                update.targetUserId ||
+                requestInfo?.to?._id ||
+                requestInfo?.from?._id;
+
+              if (peerId) {
+                const resetStatuses = { ...state.targetStatuses };
+                resetStatuses[peerId] = "none";
+
+                return {
+                  targetStatuses: resetStatuses,
+                  sentList: state.sentList.filter(
+                    (r) => r._id !== update.requestId,
+                  ),
+                  receivedList: state.receivedList.filter(
+                    (r) => r._id !== update.requestId,
+                  ),
+                };
+              }
             }
             break;
           case "request_accepted":
             if (update.newFriend) {
+              const newStatuses = { ...state.targetStatuses };
+              const friendId =
+                update.senderId === myId ? update.receiverId : update.senderId;
+              if (friendId) {
+                newStatuses[friendId] = "friend";
+              }
               const newFriends = state.friends.filter(
                 (f) => f._id !== update.newFriend?._id,
               );
               newFriends.unshift(update.newFriend as Friend);
               return {
+                targetStatuses: newStatuses,
                 friends: newFriends,
                 newFriendIds: [...state.newFriendIds, update.newFriend._id],
                 receivedList: state.receivedList.filter(
@@ -316,5 +339,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
   clearNewFriends: () => {
     set({ newFriendIds: [] });
+  },
+  checkFriendship: async (targetId: string) => {
+    return await friendService.checkFriendship(targetId);
   },
 }));

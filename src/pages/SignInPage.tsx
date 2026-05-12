@@ -22,7 +22,7 @@ export default function LoginPage() {
   const {
     sendOTP, verifyOTP, resetPassword,
     loading: otpLoading,
-    isOtpVerified,
+    isOtpVerified: _isOtpVerified,
   } = useOtpStore();
 
   // ── Login state ──
@@ -42,7 +42,7 @@ export default function LoginPage() {
   const [emailFocused, setEmailFocused] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [_otpSent, setOtpSent] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
   // ── New password state ──
