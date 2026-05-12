@@ -1079,6 +1079,17 @@ export default function ChatPage() {
             toast.error(
               "Không mở được camera. Nếu đang test 2 trình duyệt trên cùng máy, webcam có thể đang bị trình duyệt kia chiếm dụng.",
             );
+          } else {
+            // Ensure microphone is still enabled after camera setup (fix audio drop in video calls)
+            const hasMic = Array.from(
+              room.localParticipant.trackPublications.values(),
+            ).some(
+              (pub) => pub.source === Track.Source.Microphone && Boolean(pub.track),
+            );
+            if (!hasMic) {
+              console.warn("Microphone track lost after camera enable, re-enabling...");
+              await room.localParticipant.setMicrophoneEnabled(true);
+            }
           }
         } catch (error) {
           resolvedKind = "voice";
