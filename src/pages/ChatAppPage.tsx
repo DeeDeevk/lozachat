@@ -35,7 +35,6 @@ import {
   Ellipsis,
   FileUp,
   ImagePlus,
-  Mic,
   Pin,
   PinOff,
   Pencil,
@@ -57,10 +56,14 @@ import {
   X,
   Key,
   LogOut,
+  Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, PhoneIncoming,
+  Maximize2, Minimize2, PictureInPicture2, MoreVertical, ArrowUpRight,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
+
+
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -262,6 +265,73 @@ function formatCallDuration(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+type IconBtnVariant = "ghost" | "danger" | "success" | "primary" | "active";
+
+function IconBtn({
+  icon: Icon, onClick, variant = "ghost", size = 44, label, disabled, badge,
+}: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  onClick?: () => void;
+  variant?: IconBtnVariant;
+  size?: number;
+  label?: string;
+  disabled?: boolean;
+  badge?: React.ReactNode;
+}) {
+  const palette: Record<IconBtnVariant, { bg: string; color: string; border: string; shadow: string }> = {
+    ghost:   { bg: "rgba(255,255,255,.08)",                       color: "#f1f5f9", border: "1px solid rgba(255,255,255,.12)", shadow: "none" },
+    active:  { bg: "rgba(255,255,255,.95)",                       color: "#0f172a", border: "1px solid rgba(255,255,255,.95)", shadow: "0 8px 22px rgba(255,255,255,.2)" },
+    primary: { bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",     color: "#fff",    border: "1px solid rgba(59,130,246,.55)",  shadow: "0 10px 24px rgba(59,130,246,.45)" },
+    success: { bg: "linear-gradient(135deg,#22c55e,#16a34a)",     color: "#fff",    border: "1px solid rgba(34,197,94,.55)",   shadow: "0 10px 24px rgba(34,197,94,.45)" },
+    danger:  { bg: "linear-gradient(135deg,#ef4444,#dc2626)",     color: "#fff",    border: "1px solid rgba(239,68,68,.55)",   shadow: "0 10px 24px rgba(239,68,68,.45)" },
+  };
+  const p = palette[variant];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      style={{
+        position: "relative",
+        width: size, height: size, borderRadius: "50%",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: disabled ? "rgba(51,65,85,.4)" : p.bg,
+        color: disabled ? "#94a3b8" : p.color,
+        border: p.border, boxShadow: disabled ? "none" : p.shadow,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "transform .15s ease, box-shadow .15s ease, background .2s",
+      }}
+      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(.92)")}
+      onMouseUp={(e)   => (e.currentTarget.style.transform = "scale(1)")}
+      onMouseLeave={(e)=> (e.currentTarget.style.transform = "scale(1)")}
+    >
+      <Icon size={Math.round(size * 0.42)} strokeWidth={2} />
+      {badge}
+    </button>
+  );
+}
+
+function CallAvatar({ url, name, size = 96, ring = true }: { url?: string | null; name?: string; size?: number; ring?: boolean }) {
+  const initial = (name || "?").trim().charAt(0).toUpperCase();
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: "50%",
+        display: "grid", placeItems: "center", overflow: "hidden",
+        background: "linear-gradient(135deg,#6366f1,#ec4899)",
+        color: "white", fontWeight: 800, fontSize: size * 0.38,
+        border: ring ? "3px solid rgba(255,255,255,.18)" : "none",
+        boxShadow: "0 18px 40px rgba(0,0,0,.5)",
+        flexShrink: 0,
+      }}
+    >
+      {url ? <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
+    </div>
+  );
+}
+
+
 // --- GROUP SEEN AVATARS ---
 interface GroupSeenAvatarsProps {
   seenParticipants: Array<{
@@ -450,6 +520,48 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
   );
 }
 
+function RoundBtn({
+  onClick, label, variant = "ghost", small = false, wide = false, disabled = false,
+}: {
+  onClick: () => void;
+  label: string;
+  variant?: "ghost" | "danger" | "success" | "warning" | "info";
+  small?: boolean; wide?: boolean; disabled?: boolean;
+}) {
+  const palette: Record<string, { bg: string; color: string; border: string }> = {
+    ghost:   { bg: "rgba(148,163,184,.14)",                                color: "#e2e8f0", border: "1px solid rgba(148,163,184,.28)" },
+    danger:  { bg: "linear-gradient(135deg,#ef4444,#dc2626)",              color: "#fff",    border: "1px solid rgba(239,68,68,.5)"   },
+    success: { bg: "linear-gradient(135deg,#22c55e,#16a34a)",              color: "#fff",    border: "1px solid rgba(34,197,94,.5)"   },
+    warning: { bg: "linear-gradient(135deg,#f59e0b,#d97706)",              color: "#fff",    border: "1px solid rgba(245,158,11,.5)"  },
+    info:    { bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",              color: "#fff",    border: "1px solid rgba(59,130,246,.5)"  },
+  };
+  const p = palette[variant];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: disabled ? "rgba(51,65,85,.4)" : p.bg,
+        color: disabled ? "#94a3b8" : p.color,
+        border: p.border,
+        borderRadius: 999,
+        padding: small ? "8px 14px" : wide ? "12px 28px" : "11px 20px",
+        fontSize: small ? 12 : 13,
+        fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        boxShadow: disabled ? "none" : "0 8px 20px rgba(0,0,0,.35)",
+        transition: "transform .15s ease, box-shadow .15s ease",
+      }}
+      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(.96)")}
+      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+    >
+      {label}
+    </button>
+  );
+}
+
+
 export default function ChatPage() {
   const {
     conversations,
@@ -525,6 +637,9 @@ export default function ChatPage() {
   const [showLeaveGroupConfirm, setShowLeaveGroupConfirm] = useState(false);
   const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string>("");
   const [showDeleteConvConfirm, setShowDeleteConvConfirm] = useState(false);
+  const [isCallMinimized, setIsCallMinimized] = useState(false);
+
+
 
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -720,6 +835,11 @@ export default function ChatPage() {
     });
   }, [activeConversationId, messages, socket, user?.userId]);
 
+  // auto-thu nhỏ khi cuộc gọi voice đang in-call (tuỳ chọn)
+useEffect(() => {
+  if (callStatus === "idle") setIsCallMinimized(false);
+}, [callStatus]);
+
   // ─── Memos ───────────────────────────────────────────────────────────────────
   const activeConversation = useMemo(
     () => conversations.find((c) => c._id === activeConversationId),
@@ -795,6 +915,12 @@ export default function ChatPage() {
     callConversation?.type === "group" || incomingIsGroupCall;
 
   const callPeerName = otherUser?.displayName || "Người dùng";
+  const callAvatarUrl = isCurrentCallGroup
+    ? userProfile?.avatarUrl || null
+    : otherUser?.avatarUrl || null;
+  const callAvatarName = isCurrentCallGroup
+    ? userProfile?.displayName || user?.username || "Bạn"
+    : otherUser?.displayName || incomingCallerName || "Người dùng";
 
   const callHeadline =
     callStatus === "incoming"
@@ -5022,714 +5148,374 @@ export default function ChatPage() {
           </div>
         </div>
       )}
-
-      {/* ─── Call UI (LiveKit) ────────────────────────────────────────────────── */}
-      {callStatus !== "idle" && (
-        <>
-          {callKind === "video" ? (
-            <div
-              style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 72,
-                background:
-                  "radial-gradient(circle at 18% 12%, rgba(14,165,233,.3), transparent 42%), radial-gradient(circle at 82% 82%, rgba(34,197,94,.22), transparent 45%), linear-gradient(160deg, #020617 0%, #0b1220 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "24px",
-              }}
-            >
-              <div
-                style={{
-                  width: "min(1200px, 95vw)",
-                  height: "min(760px, 92vh)",
-                  borderRadius: 24,
-                  overflow: "hidden",
-                  border: "1px solid rgba(148,163,184,.24)",
-                  background: "#020617",
-                  boxShadow: "0 45px 95px rgba(2,6,23,.8)",
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                {!isCurrentCallGroup && (
-                  <>
-                    <video
-                      ref={remoteVideoRef}
-                      autoPlay
-                      playsInline
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        position: "absolute",
-                        inset: 0,
-                      }}
+{callStatus !== "idle" && (
+  <>
+    {/* ─── MINIMIZED PILL (luôn hiển thị khi thu nhỏ, mọi loại call) ─── */}
+    {isCallMinimized ? (
+      <div
+        style={{
+          position: "fixed", right: 18, bottom: 18, zIndex: 73,
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 14px 10px 10px",
+          borderRadius: 999,
+          background: "linear-gradient(135deg, rgba(15,23,42,.92), rgba(30,41,59,.92))",
+          border: "1px solid rgba(148,163,184,.25)",
+          boxShadow: "0 20px 44px rgba(0,0,0,.55)",
+          backdropFilter: "blur(16px)",
+          color: "#f1f5f9",
+          minWidth: 260,
+          cursor: "pointer",
+          animation: "scale-in .2s ease-out",
+        }}
+        onClick={() => setIsCallMinimized(false)}
+      >
+        <div style={{ position: "relative" }}>
+          <CallAvatar
+            url={callAvatarUrl}
+            name={callAvatarName}
+            size={42}
+            ring={false}
+          />
+          <span
+            style={{
+              position: "absolute", right: -2, bottom: -2, width: 12, height: 12,
+              borderRadius: "50%", background: "#22c55e",
+              border: "2px solid #0f172a",
+              boxShadow: "0 0 0 4px rgba(34,197,94,.25)",
+            }}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {callHeadline}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5 }}>
+            {callKind === "video" ? <VideoIcon size={11} /> : <Mic size={11} />}
+            {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callStatus === "incoming" ? "Đang gọi đến…" : "Đang kết nối…"}
+          </div>
+        </div>
+        <IconBtn
+          icon={Maximize2}
+          variant="ghost"
+          size={34}
+          label="Phóng to"
+          onClick={() => { event?.stopPropagation?.(); setIsCallMinimized(false); }}
+        />
+        <IconBtn
+          icon={PhoneOff}
+          variant="danger"
+          size={34}
+          label="Kết thúc"
+          onClick={(e) => { (e as any)?.stopPropagation?.(); endCall(); }}
+        />
+      </div>
+    ) : callKind === "video" ? (
+      // ─── EXPANDED VIDEO ────────────────────────────────────────────
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 72,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          background:
+            "radial-gradient(1200px 600px at 15% 10%, rgba(56,189,248,.18), transparent 60%)," +
+            "radial-gradient(900px 500px at 85% 90%, rgba(168,85,247,.18), transparent 60%)," +
+            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+          backdropFilter: "blur(8px)",
+          animation: "fade-in .25s ease-out",
+        }}
+      >
+        <div
+          style={{
+            width: "min(1240px, 96vw)", height: "min(780px, 94vh)",
+            borderRadius: 28, overflow: "hidden", position: "relative",
+            display: "flex", flexDirection: "column",
+            background: "linear-gradient(180deg, rgba(15,23,42,.85) 0%, rgba(2,6,23,.95) 100%)",
+            border: "1px solid rgba(148,163,184,.18)",
+            boxShadow: "0 60px 120px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06)",
+          }}
+        >
+          {/* Stage video / avatar */}
+          {!isCurrentCallGroup && (
+            <>
+              <video
+                ref={remoteVideoRef} autoPlay playsInline
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+              />
+              {/* Fallback avatar when remote camera is off */}
+              {callStatus !== "in-call" && (
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                  <div style={{ display: "grid", placeItems: "center", gap: 18 }}>
+                    <CallAvatar
+                      url={callAvatarUrl}
+                      name={callAvatarName}
+                      size={140}
                     />
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        background:
-                          "linear-gradient(180deg, rgba(2,6,23,.78) 0%, rgba(2,6,23,.08) 26%, rgba(2,6,23,.64) 100%)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                  </>
-                )}
-
-                <div
-                  style={{
-                    position: "relative",
-                    zIndex: 1,
-                    padding: "18px 20px 12px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    color: "#e2e8f0",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 800,
-                        fontSize: 18,
-                        letterSpacing: 0.2,
-                      }}
-                    >
-                      {callHeadline}
-                    </div>
-                    <div
-                      style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2 }}
-                    >
-                      {callSubHeadline}
+                    <div style={{ color: "#f1f5f9", fontSize: 22, fontWeight: 700 }}>{callHeadline}</div>
+                    <div style={{ color: "#94a3b8", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", animation: "pulse 1.4s ease-in-out infinite" }} />
+                      {callStatus === "incoming" ? "Cuộc gọi video đến…" : "Đang gọi…"}
                     </div>
                   </div>
-                  {!isCurrentCallGroup && (
-                    <button
-                      onClick={() => void toggleVideoPiP()}
-                      style={{
-                        border: "1px solid rgba(148,163,184,.35)",
-                        background: isVideoPiPActive
-                          ? "rgba(56,189,248,.24)"
-                          : "rgba(15,23,42,.55)",
-                        color: "#e2e8f0",
-                        borderRadius: 999,
-                        padding: "8px 14px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"}
-                    </button>
-                  )}
                 </div>
+              )}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+                background: "linear-gradient(180deg, rgba(2,6,23,.7) 0%, transparent 22%, transparent 70%, rgba(2,6,23,.85) 100%)" }} />
+            </>
+          )}
 
-                {isCurrentCallGroup ? (
-                  <div
-                    style={{
-                      flex: 1,
-                      position: "relative",
-                      zIndex: 1,
-                      padding: "8px 20px 0",
-                      display: "grid",
-                      gridTemplateColumns:
-                        groupCallParticipantTiles.length <= 2
-                          ? "repeat(2, minmax(0, 1fr))"
-                          : "repeat(auto-fit, minmax(220px, 1fr))",
-                      gap: 12,
-                      alignContent: "start",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {groupCallParticipantTiles.map((participant) => (
-                      <div
-                        key={participant.id}
-                        style={{
-                          position: "relative",
-                          borderRadius: 16,
-                          border: "1px solid rgba(148,163,184,.3)",
-                          background: "#0f172a",
-                          overflow: "hidden",
-                          aspectRatio: "1 / 1",
-                          minHeight: 190,
-                        }}
-                      >
-                        <video
-                          ref={(el) => {
-                            participantVideoRefs.current[participant.id] = el;
-                          }}
-                          autoPlay
-                          playsInline
-                          muted={participant.isSelf}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: participant.hasVideo ? "block" : "none",
-                          }}
-                        />
-                        {!participant.hasVideo && (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "grid",
-                              placeItems: "center",
-                              background:
-                                "radial-gradient(circle at 30% 20%, rgba(59,130,246,.3), transparent 45%), linear-gradient(160deg, #0b1220 0%, #1e293b 100%)",
-                            }}
-                          >
-                            {participant.avatarUrl ? (
-                              <img
-                                src={participant.avatarUrl}
-                                alt={participant.displayName}
-                                style={{
-                                  width: 72,
-                                  height: 72,
-                                  borderRadius: "50%",
-                                  objectFit: "cover",
-                                  border: "2px solid rgba(191,219,254,.5)",
-                                }}
-                              />
-                            ) : (
-                              <div
-                                style={{
-                                  width: 72,
-                                  height: 72,
-                                  borderRadius: "50%",
-                                  display: "grid",
-                                  placeItems: "center",
-                                  background: "rgba(59,130,246,.28)",
-                                  color: "#dbeafe",
-                                  fontSize: 28,
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {(participant.displayName || "?")
-                                  .trim()
-                                  .charAt(0)
-                                  .toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: 8,
-                            right: 8,
-                            bottom: 8,
-                            borderRadius: 10,
-                            border: "1px solid rgba(148,163,184,.28)",
-                            background: "rgba(2,6,23,.68)",
-                            backdropFilter: "blur(8px)",
-                            padding: "6px 8px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 12,
-                              color: "#f8fafc",
-                              fontWeight: 700,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                            title={participant.displayName}
-                          >
-                            {participant.displayName}
-                            {participant.isSelf ? " (Bạn)" : ""}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              color: participant.hasVideo
-                                ? "#86efac"
-                                : "#cbd5e1",
-                              fontWeight: 700,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {participant.hasVideo ? "Video" : "Voice"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{
-                      position: "absolute",
-                      width: 220,
-                      height: 140,
-                      right: 20,
-                      bottom: 88,
-                      borderRadius: 16,
-                      objectFit: "cover",
-                      border: "1px solid rgba(148,163,184,.38)",
-                      boxShadow: "0 12px 30px rgba(2,6,23,.5)",
-                      background: "#0f172a",
-                      zIndex: 2,
-                    }}
-                  />
-                )}
-
-                <div
-                  style={{
-                    marginTop: "auto",
-                    padding: "12px 18px 18px",
-                    position: "relative",
-                    zIndex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {callStatus === "incoming" ? (
-                    <>
-                      <button
-                        onClick={rejectIncomingCall}
-                        style={{
-                          border: "1px solid rgba(248,113,113,.4)",
-                          background: "rgba(248,113,113,.16)",
-                          color: "#fecaca",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Từ chối
-                      </button>
-                      {callKind === "video" && (
-                        <button
-                          onClick={() => void acceptIncomingCall("voice")}
-                          style={{
-                            border: "1px solid rgba(148,163,184,.35)",
-                            background: "rgba(15,23,42,.55)",
-                            color: "#e2e8f0",
-                            borderRadius: 12,
-                            padding: "10px 16px",
-                            cursor: "pointer",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Nhận thoại
-                        </button>
-                      )}
-                      <button
-                        onClick={() =>
-                          void acceptIncomingCall(
-                            callKind === "video" ? "video" : undefined,
-                          )
-                        }
-                        style={{
-                          border: "none",
-                          background: "#2563eb",
-                          color: "white",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {callKind === "video" ? "Nhận video" : "Nhận cuộc gọi"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {callStatus === "in-call" && (
-                        <>
-                          <button
-                            onClick={toggleMic}
-                            style={{
-                              border: "1px solid rgba(148,163,184,.35)",
-                              background: "rgba(148,163,184,.16)",
-                              color: "#e2e8f0",
-                              borderRadius: 12,
-                              padding: "10px 14px",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {isMicMuted ? "Bật mic" : "Tắt mic"}
-                          </button>
-                          <button
-                            onClick={toggleCamera}
-                            style={{
-                              border: "1px solid rgba(148,163,184,.35)",
-                              background: "rgba(148,163,184,.16)",
-                              color: "#e2e8f0",
-                              borderRadius: 12,
-                              padding: "10px 14px",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {isCameraOff ? "Bật cam" : "Tắt cam"}
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={endCall}
-                        style={{
-                          border: "none",
-                          background: "#dc2626",
-                          color: "white",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Kết thúc
-                      </button>
-                    </>
-                  )}
+          {/* Top bar */}
+          <div style={{ position: "relative", zIndex: 2, padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <CallAvatar
+                  url={callAvatarUrl}
+                  name={callAvatarName}
+                  size={44}
+                  ring={false}
+                />
+              <div>
+                <div style={{ color: "#f8fafc", fontSize: 16, fontWeight: 800 }}>{callHeadline}</div>
+                <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: callStatus === "in-call" ? "#22c55e" : "#38bdf8" }} />
+                  {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
                 </div>
               </div>
             </div>
-          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              {!isCurrentCallGroup && (
+                <IconBtn icon={PictureInPicture2} variant={isVideoPiPActive ? "active" : "ghost"} size={38}
+                  label={isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"} onClick={() => void toggleVideoPiP()} />
+              )}
+              <IconBtn icon={Minimize2} variant="ghost" size={38} label="Thu nhỏ" onClick={() => setIsCallMinimized(true)} />
+            </div>
+          </div>
+
+          {/* Group grid hoặc local PiP */}
+          {isCurrentCallGroup ? (
             <div
               style={{
-                position: "fixed",
-                right: 18,
-                bottom: 18,
-                width: 360,
-                borderRadius: 22,
-                border: "1px solid rgba(148,163,184,.28)",
-                background:
-                  "radial-gradient(circle at 20% 0%, rgba(56,189,248,.16), transparent 40%), linear-gradient(165deg, #0b1220 0%, #13233c 100%)",
-                boxShadow: "0 26px 58px rgba(0,0,0,.58)",
-                padding: 16,
-                zIndex: 71,
-                color: "#e2e8f0",
-                backdropFilter: "blur(8px)",
+                flex: 1, position: "relative", zIndex: 1, padding: "4px 22px 0",
+                display: "grid",
+                gridTemplateColumns: groupCallParticipantTiles.length <= 2
+                  ? "repeat(2, minmax(0, 1fr))"
+                  : "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 14, alignContent: "start", overflowY: "auto",
               }}
             >
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  border: "1px solid rgba(148,163,184,.28)",
-                  background: "rgba(15,23,42,.45)",
-                  borderRadius: 999,
-                  padding: "4px 10px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#bfdbfe",
-                  marginBottom: 10,
-                }}
-              >
-                {isCurrentCallGroup ? "Cuộc gọi nhóm" : "Cuộc gọi"}
-              </div>
-              <div style={{ fontWeight: 800, marginBottom: 4, fontSize: 16 }}>
-                {callHeadline}
-              </div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
-                Cuộc gọi thoại • {callSubHeadline}
-              </div>
-              {callStatus === "in-call" && (
-                <div
-                  style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}
-                >
-                  Thời lượng: {formatCallDuration(callElapsedSeconds)}
-                </div>
-              )}
-
-              {isCurrentCallGroup && callParticipantsInRoom.length > 0 && (
-                <div
+              {groupCallParticipantTiles.map((p) => (
+                <div key={p.id}
                   style={{
-                    marginBottom: 10,
-                    borderRadius: 12,
-                    border: "1px solid rgba(148,163,184,.28)",
-                    background: "rgba(15,23,42,.42)",
-                    padding: 10,
+                    position: "relative", borderRadius: 20, overflow: "hidden",
+                    aspectRatio: "1 / 1", minHeight: 200,
+                    background: "linear-gradient(160deg, #0b1220 0%, #1e293b 100%)",
+                    border: "1px solid rgba(148,163,184,.18)",
+                    boxShadow: "0 12px 30px rgba(0,0,0,.4)",
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#bfdbfe",
-                      marginBottom: 8,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Thành viên đang tham gia
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {callParticipantsInRoom.map((participant) => (
-                      <div
-                        key={participant.id}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          borderRadius: 999,
-                          border: "1px solid rgba(148,163,184,.26)",
-                          background: "rgba(2,6,23,.5)",
-                          padding: "5px 9px",
-                          maxWidth: "100%",
-                        }}
-                      >
-                        {participant.avatarUrl ? (
-                          <img
-                            src={participant.avatarUrl}
-                            alt={participant.displayName}
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: "50%",
-                              display: "grid",
-                              placeItems: "center",
-                              background: "rgba(59,130,246,.24)",
-                              color: "#dbeafe",
-                              fontWeight: 700,
-                              fontSize: 10,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {(participant.displayName || "?")
-                              .trim()
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
-                        )}
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#e2e8f0",
-                            maxWidth: 180,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                          title={participant.displayName}
-                        >
-                          {participant.displayName}
-                          {participant.isSelf ? " (Bạn)" : ""}
-                        </span>
-                      </div>
-                    ))}
+                  <video
+                    ref={(el) => { participantVideoRefs.current[p.id] = el; }}
+                    autoPlay playsInline muted={p.isSelf}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: p.hasVideo ? "block" : "none" }}
+                  />
+                  {!p.hasVideo && (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center",
+                      background: "radial-gradient(circle at 30% 20%, rgba(99,102,241,.3), transparent 50%), radial-gradient(circle at 70% 80%, rgba(236,72,153,.22), transparent 55%)" }}>
+                      <CallAvatar url={p.avatarUrl} name={p.displayName} size={84} />
+                    </div>
+                  )}
+                  <div style={{
+                    position: "absolute", left: 10, right: 10, bottom: 10, borderRadius: 12, padding: "7px 10px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    background: "rgba(2,6,23,.55)", border: "1px solid rgba(255,255,255,.08)", backdropFilter: "blur(10px)",
+                  }}>
+                    <span style={{ fontSize: 12, color: "#f8fafc", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.displayName}{p.isSelf ? " (Bạn)" : ""}
+                    </span>
+                    {p.hasVideo
+                      ? <VideoIcon size={12} color="#86efac" />
+                      : <Mic size={12} color="#cbd5e1" />}
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
+          ) : (
+            <video ref={localVideoRef} autoPlay playsInline muted
+              style={{
+                position: "absolute", width: 220, height: 140, right: 22, bottom: 110,
+                borderRadius: 18, objectFit: "cover", background: "#0f172a",
+                border: "1.5px solid rgba(255,255,255,.18)",
+                boxShadow: "0 18px 40px rgba(0,0,0,.55)", zIndex: 2,
+              }}
+            />
+          )}
 
-              {callStatus === "in-call" &&
-                callKind === "voice" &&
-                !isCurrentCallGroup &&
-                isUpgradeRequestIncoming && (
-                  <div
-                    style={{
-                      marginBottom: 10,
-                      borderRadius: 10,
-                      border: "1px solid rgba(96,165,250,.35)",
-                      background: "rgba(59,130,246,.12)",
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#dbeafe",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {upgradeRequesterName || "Đối phương"} muốn nâng cấp lên
-                      video.
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <button
-                        onClick={rejectUpgradeRequest}
-                        style={{
-                          border: "1px solid rgba(248,113,113,.35)",
-                          background: "rgba(248,113,113,.12)",
-                          color: "#fecaca",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Từ chối
-                      </button>
-                      <button
-                        onClick={acceptUpgradeRequest}
-                        style={{
-                          border: "none",
-                          background: "#2563eb",
-                          color: "white",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Chấp nhận
-                      </button>
-                    </div>
-                  </div>
+          {/* Control bar — toàn bộ là nút icon tròn */}
+          <div style={{ marginTop: "auto", position: "relative", zIndex: 2, padding: "16px 22px 24px",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+            {callStatus === "incoming" ? (
+              <>
+                <IconBtn icon={PhoneOff} variant="danger" size={56} label="Từ chối" onClick={rejectIncomingCall} />
+                {callKind === "video" && (
+                  <IconBtn icon={Mic} variant="ghost" size={56} label="Nhận thoại" onClick={() => void acceptIncomingCall("voice")} />
                 )}
-
-              {callStatus === "in-call" &&
-                callKind === "voice" &&
-                !isCurrentCallGroup &&
-                isUpgradeRequestPending && (
-                  <div
-                    style={{ fontSize: 12, color: "#93c5fd", marginBottom: 10 }}
-                  >
-                    Đang chờ đối phương chấp nhận nâng cấp video...
-                  </div>
-                )}
-
-              <audio ref={remoteAudioRef} autoPlay />
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  justifyContent: "flex-end",
-                  flexWrap: "wrap",
-                }}
-              >
-                {callStatus === "incoming" ? (
+                <IconBtn icon={callKind === "video" ? VideoIcon : PhoneIncoming} variant="success" size={56}
+                  label={callKind === "video" ? "Nhận video" : "Nhận"}
+                  onClick={() => void acceptIncomingCall(callKind === "video" ? "video" : undefined)} />
+              </>
+            ) : (
+              <>
+                {callStatus === "in-call" && (
                   <>
-                    <button
-                      onClick={rejectIncomingCall}
-                      style={{
-                        border: "1px solid rgba(248,113,113,.35)",
-                        background: "rgba(248,113,113,.12)",
-                        color: "#fca5a5",
-                        borderRadius: 12,
-                        padding: "8px 13px",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Từ chối
-                    </button>
-                    <button
-                      onClick={() => void acceptIncomingCall()}
-                      style={{
-                        border: "none",
-                        background: "linear-gradient(135deg, #2563eb, #0ea5e9)",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: "8px 13px",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Nhận
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {callStatus === "in-call" && (
-                      <>
-                        <button
-                          onClick={toggleMic}
-                          style={{
-                            border: "1px solid rgba(148,163,184,.3)",
-                            background: "rgba(148,163,184,.12)",
-                            color: "#e2e8f0",
-                            borderRadius: 12,
-                            padding: "8px 11px",
-                            cursor: "pointer",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {isMicMuted ? "Bật mic" : "Tắt mic"}
-                        </button>
-                        <button
-                          onClick={() => void upgradeVoiceToVideo()}
-                          disabled={
-                            !isCurrentCallGroup &&
-                            (isUpgradeRequestPending ||
-                              isUpgradeRequestIncoming)
-                          }
-                          style={{
-                            border: "1px solid rgba(96,165,250,.35)",
-                            background:
-                              !isCurrentCallGroup &&
-                              (isUpgradeRequestPending ||
-                                isUpgradeRequestIncoming)
-                                ? "rgba(51,65,85,.35)"
-                                : "rgba(59,130,246,.14)",
-                            color:
-                              !isCurrentCallGroup &&
-                              (isUpgradeRequestPending ||
-                                isUpgradeRequestIncoming)
-                                ? "#94a3b8"
-                                : "#bfdbfe",
-                            borderRadius: 12,
-                            padding: "8px 11px",
-                            cursor:
-                              !isCurrentCallGroup &&
-                              (isUpgradeRequestPending ||
-                                isUpgradeRequestIncoming)
-                                ? "not-allowed"
-                                : "pointer",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {!isCurrentCallGroup && isUpgradeRequestPending
-                            ? "Đang chờ chấp nhận"
-                            : isCurrentCallGroup
-                              ? "Bật camera"
-                              : "Nâng cấp video"}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={endCall}
-                      style={{
-                        border: "none",
-                        background: "#dc2626",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: "8px 13px",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Kết thúc
-                    </button>
+                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
+                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
+                    <IconBtn icon={isCameraOff ? VideoOff : VideoIcon} variant={isCameraOff ? "active" : "ghost"} size={52}
+                      label={isCameraOff ? "Bật cam" : "Tắt cam"} onClick={toggleCamera} />
                   </>
                 )}
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : (
+      // ─── EXPANDED VOICE ────────────────────────────────────────────
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 72,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          background:
+            "radial-gradient(900px 500px at 50% 0%, rgba(56,189,248,.18), transparent 60%)," +
+            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+          backdropFilter: "blur(8px)",
+          animation: "fade-in .25s ease-out",
+        }}
+      >
+        <div
+          style={{
+            width: "min(440px, 94vw)", borderRadius: 28, padding: 28,
+            background: "linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.95))",
+            border: "1px solid rgba(148,163,184,.2)",
+            boxShadow: "0 60px 120px rgba(0,0,0,.7)",
+            position: "relative",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 18,
+          }}
+        >
+          {/* top-right minimize */}
+          <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
+            <IconBtn icon={Minimize2} variant="ghost" size={34} label="Thu nhỏ" onClick={() => setIsCallMinimized(true)} />
+          </div>
+
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 999,
+            background: "rgba(56,189,248,.14)", border: "1px solid rgba(56,189,248,.32)",
+            color: "#bae6fd", fontSize: 11, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8",
+              boxShadow: "0 0 0 4px rgba(56,189,248,.25)", animation: "pulse 1.6s ease-in-out infinite" }} />
+            {isCurrentCallGroup ? "Cuộc gọi nhóm" : "Cuộc gọi thoại"}
+          </div>
+
+          {/* Avatar lớn với halo */}
+          <div style={{ position: "relative", display: "grid", placeItems: "center", padding: 14 }}>
+            <span style={{
+              position: "absolute", inset: 0, borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(56,189,248,.35), transparent 60%)",
+              animation: "pulse 2s ease-in-out infinite",
+            }} />
+            <CallAvatar
+              url={callAvatarUrl}
+              name={callAvatarName}
+              size={140}
+            />
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{ color: "#f8fafc", fontSize: 22, fontWeight: 800 }}>{callHeadline}</div>
+            <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
+              {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
+            </div>
+          </div>
+
+          {/* Group chips */}
+          {isCurrentCallGroup && callParticipantsInRoom.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: "100%" }}>
+              {callParticipantsInRoom.map((p) => (
+                <div key={p.id} title={p.displayName}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    borderRadius: 999, padding: "4px 9px 4px 4px",
+                    background: "rgba(2,6,23,.5)", border: "1px solid rgba(148,163,184,.22)",
+                  }}>
+                  <CallAvatar url={p.avatarUrl} name={p.displayName} size={22} ring={false} />
+                  <span style={{ fontSize: 11, color: "#e2e8f0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.displayName}{p.isSelf ? " (Bạn)" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upgrade request */}
+          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestIncoming && (
+            <div style={{
+              width: "100%", borderRadius: 14, padding: 12,
+              border: "1px solid rgba(96,165,250,.4)",
+              background: "linear-gradient(135deg, rgba(59,130,246,.18), rgba(14,165,233,.12))",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+            }}>
+              <span style={{ fontSize: 12, color: "#dbeafe" }}>
+                <strong>{upgradeRequesterName || "Đối phương"}</strong> muốn nâng cấp lên video
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <IconBtn icon={X} variant="danger" size={32} label="Từ chối" onClick={rejectUpgradeRequest} />
+                <IconBtn icon={VideoIcon} variant="success" size={32} label="Chấp nhận" onClick={acceptUpgradeRequest} />
               </div>
             </div>
           )}
-        </>
-      )}
+
+          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestPending && (
+            <div style={{ fontSize: 12, color: "#93c5fd", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#60a5fa", animation: "pulse 1.4s ease-in-out infinite" }} />
+              Đang chờ đối phương chấp nhận nâng cấp video…
+            </div>
+          )}
+
+          <audio ref={remoteAudioRef} autoPlay />
+
+          {/* Control bar */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+            {callStatus === "incoming" ? (
+              <>
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Từ chối" onClick={rejectIncomingCall} />
+                <IconBtn icon={PhoneIncoming} variant="success" size={58} label="Nhận" onClick={() => void acceptIncomingCall()} />
+              </>
+            ) : (
+              <>
+                {callStatus === "in-call" && (
+                  <>
+                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
+                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
+                    <IconBtn
+                      icon={VideoIcon}
+                      variant="primary"
+                      size={52}
+                      label={!isCurrentCallGroup && isUpgradeRequestPending ? "Đang chờ…" : isCurrentCallGroup ? "Bật camera" : "Nâng cấp video"}
+                      disabled={!isCurrentCallGroup && (isUpgradeRequestPending || isUpgradeRequestIncoming)}
+                      onClick={() => void upgradeVoiceToVideo()}
+                    />
+                  </>
+                )}
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </>
+)}
+
+
 
       {/* Context menu */}
       {contextMenu && (
