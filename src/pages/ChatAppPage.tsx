@@ -635,6 +635,7 @@ export default function ChatPage() {
   const [incomingRoomName, setIncomingRoomName] = useState<string | null>(null);
   const [incomingIsGroupCall, setIncomingIsGroupCall] = useState(false);
   const [incomingCallerName, setIncomingCallerName] = useState<string>("");
+  const [incomingCallerAvatar, setIncomingCallerAvatar] = useState<string>("");
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isVideoPiPActive, setIsVideoPiPActive] = useState(false);
@@ -869,16 +870,22 @@ useEffect(() => {
     [conversations, callConversationId],
   );
 
+  // Extract the call peer (other participant) from the call conversation, not the active chat
+  const callPeer = useMemo(
+    () => callConversation?.participants?.find((p) => p._id !== user?.userId),
+    [callConversation, user?.userId],
+  );
+
   const isCurrentCallGroup =
     callConversation?.type === "group" || incomingIsGroupCall;
 
-  const callPeerName = otherUser?.displayName || "Người dùng";
+  const callPeerName = callPeer?.displayName || otherUser?.displayName || "Người dùng";
   const callAvatarUrl = isCurrentCallGroup
     ? userProfile?.avatarUrl || null
-    : otherUser?.avatarUrl || null;
+    : callPeer?.avatarUrl || incomingCallerAvatar || otherUser?.avatarUrl || null;
   const callAvatarName = isCurrentCallGroup
     ? userProfile?.displayName || user?.username || "Bạn"
-    : otherUser?.displayName || incomingCallerName || "Người dùng";
+    : callPeer?.displayName || incomingCallerName || otherUser?.displayName || "Người dùng";
 
   const callHeadline =
     callStatus === "incoming"
@@ -1078,6 +1085,7 @@ useEffect(() => {
     setIncomingRoomName(null);
     setIncomingIsGroupCall(false);
     setIncomingCallerName("");
+    setIncomingCallerAvatar("");
     setIsMicMuted(false);
     setIsCameraOff(false);
     setIsVideoPiPActive(false);
@@ -1461,6 +1469,22 @@ useEffect(() => {
         toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
         return;
       }
+
+      // Ensure video element has a valid stream before requesting PiP
+      if (!videoEl.srcObject) {
+        // Wait for stream to be bound to video element (max 1 second)
+        let attempts = 0;
+        while (!videoEl.srcObject && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (!videoEl.srcObject) {
+          toast.error("Video stream chưa sẵn sàng");
+          return;
+        }
+      }
+
       if (document.pictureInPictureElement && document.pictureInPictureElement !== videoEl) {
         await document.exitPictureInPicture();
       }
@@ -1482,8 +1506,11 @@ useEffect(() => {
     await openVideoPiP();
   }, [closeVideoPiP, openVideoPiP]);
 
-  const handleMinimizeCall = useCallback(() => {
+  const handleMinimizeCall = useCallback(async () => {
+    // For video calls, activate PiP with a small delay to ensure streams are bound
     if (callKind === "video" && !isCurrentCallGroup) {
+      // Give the useEffect hooks time to bind streams to video elements
+      await new Promise(resolve => setTimeout(resolve, 100));
       void openVideoPiP();
     }
     setIsCallMinimized(true);
@@ -1697,6 +1724,19 @@ useEffect(() => {
     incomingRoomName,
     socket,
   ]);
+
+  // Extract incoming caller's avatar from conversation when receiving a call
+  useEffect(() => {
+    if (callStatus === "incoming" && callConversation && !incomingIsGroupCall) {
+      // Find the caller from conversation participants (not the current user)
+      const caller = callConversation.participants?.find(
+        (p) => p._id !== user?.userId,
+      );
+      if (caller?.avatarUrl) {
+        setIncomingCallerAvatar(caller.avatarUrl);
+      }
+    }
+  }, [callStatus, callConversation, incomingIsGroupCall, user?.userId]);
 
   useEffect(() => {
     return () => {
