@@ -1435,18 +1435,25 @@ useEffect(() => {
     setUpgradeRequesterName("");
   }, [callConversationId, socket]);
 
-  const toggleVideoPiP = useCallback(async () => {
+  const closeVideoPiP = useCallback(async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      }
+    } catch (error) {
+      console.error("closeVideoPiP error", error);
+    } finally {
+      setIsVideoPiPActive(false);
+    }
+  }, []);
+
+  const openVideoPiP = useCallback(async () => {
     const videoEl = remoteVideoRef.current;
     if (!videoEl) {
       toast.error("Chưa có video đối phương để bật cửa sổ nổi");
       return;
     }
     try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsVideoPiPActive(false);
-        return;
-      }
       if (
         !document.pictureInPictureEnabled ||
         !videoEl.requestPictureInPicture
@@ -1454,20 +1461,47 @@ useEffect(() => {
         toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
         return;
       }
-      await videoEl.requestPictureInPicture();
+      if (document.pictureInPictureElement && document.pictureInPictureElement !== videoEl) {
+        await document.exitPictureInPicture();
+      }
+      if (document.pictureInPictureElement !== videoEl) {
+        await videoEl.requestPictureInPicture();
+      }
       setIsVideoPiPActive(true);
     } catch (error) {
-      console.error("toggleVideoPiP error", error);
+      console.error("openVideoPiP error", error);
       toast.error("Không thể bật cửa sổ nổi video");
     }
   }, []);
+
+  const toggleVideoPiP = useCallback(async () => {
+    if (document.pictureInPictureElement) {
+      await closeVideoPiP();
+      return;
+    }
+    await openVideoPiP();
+  }, [closeVideoPiP, openVideoPiP]);
+
+  const handleMinimizeCall = useCallback(() => {
+    if (callKind === "video" && !isCurrentCallGroup) {
+      void openVideoPiP();
+    }
+    setIsCallMinimized(true);
+  }, [callKind, isCurrentCallGroup, openVideoPiP]);
+
+  const handleRestoreCall = useCallback(() => {
+    if (document.pictureInPictureElement) {
+      void closeVideoPiP();
+    }
+    setIsCallMinimized(false);
+  }, [closeVideoPiP]);
 
   useEffect(() => {
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = localStreamState;
       void localVideoRef.current.play().catch(() => undefined);
     }
-  }, [localStreamState, callKind]);
+  }, [localStreamState, callKind, isCallMinimized]);
 
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -1478,7 +1512,7 @@ useEffect(() => {
       remoteAudioRef.current.srcObject = remoteStream;
       void remoteAudioRef.current.play().catch(() => undefined);
     }
-  }, [remoteStream, callKind]);
+  }, [remoteStream, callKind, isCallMinimized]);
 
   useEffect(() => {
     if (!(callKind === "video" && isCurrentCallGroup)) {
@@ -1496,7 +1530,7 @@ useEffect(() => {
     Object.keys(participantVideoRefs.current).forEach((id) => {
       if (!activeIds.has(id)) delete participantVideoRefs.current[id];
     });
-  }, [callKind, groupCallParticipantTiles, isCurrentCallGroup]);
+  }, [callKind, groupCallParticipantTiles, isCurrentCallGroup, isCallMinimized]);
 
   useEffect(() => {
     if (callKind === "video") return;
@@ -5125,7 +5159,7 @@ useEffect(() => {
           cursor: "pointer",
           animation: "scale-in .2s ease-out",
         }}
-        onClick={() => setIsCallMinimized(false)}
+        onClick={() => void handleRestoreCall()}
       >
         <div style={{ position: "relative" }}>
           <CallAvatar
@@ -5157,7 +5191,7 @@ useEffect(() => {
           variant="ghost"
           size={34}
           label="Phóng to"
-          onClick={() => { event?.stopPropagation?.(); setIsCallMinimized(false); }}
+          onClick={() => void handleRestoreCall()}
         />
         <IconBtn
           icon={PhoneOff}
@@ -5242,7 +5276,7 @@ useEffect(() => {
                 <IconBtn icon={PictureInPicture2} variant={isVideoPiPActive ? "active" : "ghost"} size={38}
                   label={isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"} onClick={() => void toggleVideoPiP()} />
               )}
-              <IconBtn icon={Minimize2} variant="ghost" size={38} label="Thu nhỏ" onClick={() => setIsCallMinimized(true)} />
+              <IconBtn icon={Minimize2} variant="ghost" size={38} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
             </div>
           </div>
 
@@ -5359,7 +5393,7 @@ useEffect(() => {
         >
           {/* top-right minimize */}
           <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
-            <IconBtn icon={Minimize2} variant="ghost" size={34} label="Thu nhỏ" onClick={() => setIsCallMinimized(true)} />
+            <IconBtn icon={Minimize2} variant="ghost" size={34} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
           </div>
 
           <div style={{
