@@ -57,7 +57,7 @@ import {
   Key,
   LogOut,
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, PhoneIncoming,
-  Maximize2, Minimize2, PictureInPicture2, MoreVertical, ArrowUpRight,
+  Maximize2, Minimize2, PictureInPicture2,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
@@ -519,48 +519,6 @@ function SenderAvatar({ participant }: SenderAvatarProps) {
     </div>
   );
 }
-
-function RoundBtn({
-  onClick, label, variant = "ghost", small = false, wide = false, disabled = false,
-}: {
-  onClick: () => void;
-  label: string;
-  variant?: "ghost" | "danger" | "success" | "warning" | "info";
-  small?: boolean; wide?: boolean; disabled?: boolean;
-}) {
-  const palette: Record<string, { bg: string; color: string; border: string }> = {
-    ghost:   { bg: "rgba(148,163,184,.14)",                                color: "#e2e8f0", border: "1px solid rgba(148,163,184,.28)" },
-    danger:  { bg: "linear-gradient(135deg,#ef4444,#dc2626)",              color: "#fff",    border: "1px solid rgba(239,68,68,.5)"   },
-    success: { bg: "linear-gradient(135deg,#22c55e,#16a34a)",              color: "#fff",    border: "1px solid rgba(34,197,94,.5)"   },
-    warning: { bg: "linear-gradient(135deg,#f59e0b,#d97706)",              color: "#fff",    border: "1px solid rgba(245,158,11,.5)"  },
-    info:    { bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",              color: "#fff",    border: "1px solid rgba(59,130,246,.5)"  },
-  };
-  const p = palette[variant];
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        background: disabled ? "rgba(51,65,85,.4)" : p.bg,
-        color: disabled ? "#94a3b8" : p.color,
-        border: p.border,
-        borderRadius: 999,
-        padding: small ? "8px 14px" : wide ? "12px 28px" : "11px 20px",
-        fontSize: small ? 12 : 13,
-        fontWeight: 700,
-        cursor: disabled ? "not-allowed" : "pointer",
-        boxShadow: disabled ? "none" : "0 8px 20px rgba(0,0,0,.35)",
-        transition: "transform .15s ease, box-shadow .15s ease",
-      }}
-      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(.96)")}
-      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-    >
-      {label}
-    </button>
-  );
-}
-
 
 export default function ChatPage() {
   const {
@@ -5206,7 +5164,7 @@ useEffect(() => {
           variant="danger"
           size={34}
           label="Kết thúc"
-          onClick={(e) => { (e as any)?.stopPropagation?.(); endCall(); }}
+          onClick={() => endCall()}
         />
       </div>
     ) : callKind === "video" ? (
