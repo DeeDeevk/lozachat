@@ -636,6 +636,71 @@ export default function ChatPage() {
   const [incomingIsGroupCall, setIncomingIsGroupCall] = useState(false);
   const [incomingCallerName, setIncomingCallerName] = useState<string>("");
   const [incomingCallerAvatar, setIncomingCallerAvatar] = useState<string>("");
+  // Ringtone audio refs
+  const ringtoneCtxRef = useRef<AudioContext | null>(null);
+  const ringtoneOscRef = useRef<OscillatorNode | null>(null);
+  const ringtoneGainRef = useRef<GainNode | null>(null);
+  const ringtoneIntervalRef = useRef<number | null>(null);
+
+  const startRingtone = useCallback(() => {
+    try {
+      if (ringtoneCtxRef.current) return;
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 720;
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      ringtoneCtxRef.current = ctx;
+      ringtoneOscRef.current = osc;
+      ringtoneGainRef.current = gain;
+
+      // simple beep pattern: on 300ms, off 500ms
+      const tick = () => {
+        const g = ringtoneGainRef.current;
+        const c = ringtoneCtxRef.current;
+        if (!g || !c) return;
+        g.gain.cancelScheduledValues(c.currentTime);
+        g.gain.setValueAtTime(0.0001, c.currentTime);
+        g.gain.linearRampToValueAtTime(0.18, c.currentTime + 0.01);
+        g.gain.linearRampToValueAtTime(0.0001, c.currentTime + 0.32);
+      };
+
+      tick();
+      // call every 800ms
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      ringtoneIntervalRef.current = window.setInterval(tick, 800);
+    } catch (e) {
+      console.error("startRingtone error", e);
+    }
+  }, []);
+
+  const stopRingtone = useCallback(() => {
+    try {
+      if (ringtoneIntervalRef.current) {
+        clearInterval(ringtoneIntervalRef.current);
+        ringtoneIntervalRef.current = null;
+      }
+      const osc = ringtoneOscRef.current;
+      const ctx = ringtoneCtxRef.current;
+      if (osc) {
+        try { osc.stop(); } catch {}
+        ringtoneOscRef.current = null;
+      }
+      if (ctx) {
+        try { ctx.close(); } catch {}
+        ringtoneCtxRef.current = null;
+      }
+      ringtoneGainRef.current = null;
+    } catch (e) {
+      console.error("stopRingtone error", e);
+    }
+  }, []);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isVideoPiPActive, setIsVideoPiPActive] = useState(false);
@@ -882,10 +947,14 @@ useEffect(() => {
   const callPeerName = callPeer?.displayName || otherUser?.displayName || "Người dùng";
   const callAvatarUrl = isCurrentCallGroup
     ? userProfile?.avatarUrl || null
-    : callPeer?.avatarUrl || incomingCallerAvatar || otherUser?.avatarUrl || null;
+    : callConversation
+      ? (callPeer?.avatarUrl || incomingCallerAvatar || null)
+      : (otherUser?.avatarUrl || null);
   const callAvatarName = isCurrentCallGroup
     ? userProfile?.displayName || user?.username || "Bạn"
-    : callPeer?.displayName || incomingCallerName || otherUser?.displayName || "Người dùng";
+    : callConversation
+      ? (callPeer?.displayName || incomingCallerName || "Người dùng")
+      : (otherUser?.displayName || "Người dùng");
 
   const callHeadline =
     callStatus === "incoming"
@@ -1077,6 +1146,7 @@ useEffect(() => {
       roomRef.current.disconnect();
       roomRef.current = null;
     }
+    try { stopRingtone(); } catch (e) { /* ignore */ }
     setRemoteStream(null);
     setLocalStreamState(null);
     setCallStatus("idle");
@@ -1097,6 +1167,16 @@ useEffect(() => {
     setCallParticipantIds([]);
     setCallParticipantCameraTracks({});
   }, []);
+
+  // Play ringtone when incoming, stop otherwise
+  useEffect(() => {
+    if (callStatus === "incoming") {
+      startRingtone();
+    } else {
+      stopRingtone();
+    }
+    return () => void stopRingtone();
+  }, [callStatus, startRingtone, stopRingtone]);
 
   const guardActiveCallBeforeJoin = useCallback(
     (targetConversationId: string) => {
@@ -1264,6 +1344,7 @@ useEffect(() => {
 
       const joinKind = preferredKind || callKind;
       try {
+        try { stopRingtone(); } catch {}
         setCallKind(joinKind);
         setCallStatus("connecting");
         await connectLiveKitRoom(
@@ -1297,12 +1378,14 @@ useEffect(() => {
   const rejectIncomingCall = useCallback(() => {
     if (callConversationId && socket)
       socket.emit("call:reject", { conversationId: callConversationId });
+    try { stopRingtone(); } catch {}
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
   const endCall = useCallback(() => {
     if (callConversationId && socket)
       socket.emit("call:end", { conversationId: callConversationId });
+    try { stopRingtone(); } catch {}
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
