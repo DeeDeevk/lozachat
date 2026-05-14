@@ -27,10 +27,17 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // những api không cần check
+    const ignoredRefreshRoutes = [
+      "/auth/signin",
+      "/auth/signup",
+      "/auth/refresh",
+      "/users/unlock-requests",
+    ];
+
     if (
-      originalRequest.url.includes("/auth/signin") ||
-      originalRequest.url.includes("/auth/signup") ||
-      originalRequest.url.includes("/auth/refresh")
+      ignoredRefreshRoutes.some((route) =>
+        originalRequest.url.includes(route)
+      )
     ) {
       return Promise.reject(error);
     }

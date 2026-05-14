@@ -15,6 +15,9 @@ interface UserProfile {
   bio?: string;
   phone?: string;
   role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +34,7 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  errorCode: string | null;
   signIn: (data: SignInData) => Promise<boolean>;
   fetchMe: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<boolean>;
@@ -51,6 +55,7 @@ export const useAuthStore = create<AuthState>()(
       userProfile: null,
       loading: false,
       error: null,
+      errorCode: null,
 
       setAccessToken: (accessToken) => {
         set({ accessToken });
@@ -91,11 +96,28 @@ export const useAuthStore = create<AuthState>()(
           toast.success(response.message);
           return true;
         } catch (error) {
-          const axiosError = error as AxiosError<{ message: string }>;
+          const axiosError = error as AxiosError<{
+            message: string;
+            code: string;
+          }>;
+
+          console.log(axiosError.response?.data);
+
           const errorMessage =
-            axiosError.response?.data?.message || "Đăng nhập thất bại";
-          set({ loading: false, error: errorMessage });
+            axiosError.response?.data?.message ||
+            "Đăng nhập thất bại";
+
+          const errorCode =
+            axiosError.response?.data?.code || null;
+
+          set({
+            loading: false,
+            error: errorMessage,
+            errorCode,
+          });
+
           toast.error(errorMessage);
+
           return false;
         }
       },

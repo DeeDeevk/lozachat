@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle, Eye, EyeOff, Lock, User,
@@ -7,6 +7,12 @@ import {
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useOtpStore } from "@/stores/useOtpStore";
+import { userService } from "@/services/userService";
+import {
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
+
 
 interface LoginData {
   username: string;
@@ -14,7 +20,8 @@ interface LoginData {
 }
 
 type ForgotStep = "email" | "otp" | "newpassword" | "done";
-type View = "login" | "forgot";
+type UnlockStep = "email" | "disabled" | "otp" | "reason" | "done"
+type View = "login" | "forgot" | "unlock";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -53,6 +60,16 @@ export default function LoginPage() {
   const [newPassFocused, setNewPassFocused] = useState("");
   const [newPassError, setNewPassError] = useState({ newPassword: "", confirmPassword: "" });
 
+  // ── Unlock account state ──
+  const [unlockStep, setUnlockStep] = useState<UnlockStep>("email");
+  const [unlockUsername, setUnlockUsername] = useState("");
+  const [unlockReason, setUnlockReason] = useState("");
+  const { errorCode } = useAuthStore.getState();
+
+  useEffect(() => {
+    console.log("VIEW CHANGED:", view);
+  }, [view]);
+
   // ── Login handlers ──
   const validate = () => {
     const e = { username: "", password: "" };
@@ -64,10 +81,37 @@ export default function LoginPage() {
     return !e.username && !e.password;
   };
 
+  // const handleSubmit = async () => {
+  //   if (!validate()) return;
+  //   const success = await signIn(formData);
+  //   if (success) navigate("/chat");
+  // };
+
   const handleSubmit = async () => {
     if (!validate()) return;
+
+    console.log("CURRENT VIEW =", view);
     const success = await signIn(formData);
-    if (success) navigate("/chat");
+
+    if (success) {
+      navigate("/chat");
+      return;
+    }
+
+    const { errorCode } = useAuthStore.getState();
+
+    console.log("ERROR CODE =", errorCode);
+
+    if (errorCode === "ACCOUNT_LOCKED") {
+      console.log("SETTING UNLOCK VIEW");
+      setView("unlock");
+      return;
+    }
+
+    if (errorCode === "ACCOUNT_DISABLED") {
+      setView("disabled_account");
+      return;
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,10 +119,10 @@ export default function LoginPage() {
   };
 
   const handleLoginKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === "Enter") {
-    handleSubmit();
-  }
-};
+    if (e.key === "Enter") {
+      handleSubmit();
+    }
+  };
 
   // ── Forgot password handlers ──
   const validateEmail = () => {
@@ -180,6 +224,105 @@ export default function LoginPage() {
     }
     toast.success("Đổi mật khẩu thành công!");
     setForgotStep("done");
+  };
+
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+  const [otpLoadingLocal, setOtpLoadingLocal] = useState(false);
+
+  const handleSendUnlockOtp = async () => {
+    try {
+      setOtpLoadingLocal(true);
+
+      await sendOTP(unlockUsername);
+
+      setUnlockStep("otp");
+    } catch (err: any) {
+      console.error(err);
+
+      const code = err?.response?.data?.code;
+
+      // 👇 account bị vô hiệu hóa vĩnh viễn
+      if (code === "ACCOUNT_DISABLED") {
+        setUnlockStep("disabled");
+        return;
+      }
+
+      toast.error(
+        err?.response?.data?.message ||
+        "Không gửi được OTP"
+      );
+    } finally {
+      setOtpLoadingLocal(false);
+    }
+  };
+
+  const handleVerifyUnlockOtp = async () => {
+    const code = otp.join("");
+
+    if (code.length < 6) {
+      setOtpError("Nhập đủ 6 số");
+      return;
+    }
+
+    await verifyOTP(unlockUsername, code);
+
+    const { isOtpVerified, error } = useOtpStore.getState();
+
+    if (error) {
+      setOtpError(error);
+      return;
+    }
+
+    if (isOtpVerified) {
+      setUnlockStep("reason"); // 👈 QUAN TRỌNG
+    }
+  };
+
+  const handleUnlockRequest = async () => {
+    try {
+      setUnlockError("");
+
+      if (!unlockReason.trim()) {
+        setUnlockError(
+          "Vui lòng nhập lý do mở khóa"
+        );
+        return;
+      }
+
+      setUnlockLoading(true);
+
+      const response =
+        await userService.requestAccountUnlock(
+          unlockUsername.trim(),
+          unlockReason.trim(),
+        );
+
+      toast.success(
+        response.message ||
+        "Đã gửi yêu cầu mở khóa tài khoản"
+      );
+
+      setUnlockUsername("");
+      setUnlockReason("");
+
+      setUnlockStep("done");
+    } catch (error: any) {
+      console.error(
+        "Lỗi gửi yêu cầu mở khóa:",
+        error,
+      );
+
+      const message =
+        error?.response?.data?.message ||
+        "Không thể gửi yêu cầu mở khóa";
+
+      setUnlockError(message);
+
+      toast.error(message);
+    } finally {
+      setUnlockLoading(false);
+    }
   };
 
   const switchToForgot = () => {
@@ -304,43 +447,57 @@ export default function LoginPage() {
       `}</style>
 
       {/* Blobs */}
-      <div className="l-anim-bg" style={{ position:"absolute", inset:0, pointerEvents:"none",
-        background:"radial-gradient(ellipse at 15% 50%,rgba(37,99,235,.16) 0%,transparent 55%),radial-gradient(ellipse at 85% 20%,rgba(99,102,241,.1) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(29,78,216,.12) 0%,transparent 50%)" }} />
+      <div className="l-anim-bg" style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: "radial-gradient(ellipse at 15% 50%,rgba(37,99,235,.16) 0%,transparent 55%),radial-gradient(ellipse at 85% 20%,rgba(99,102,241,.1) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(29,78,216,.12) 0%,transparent 50%)"
+      }} />
 
       {/* Floating dots */}
       {[
-        { s:5, c:"#3b82f6", t:"10%", l:"7%" }, { s:3, c:"#818cf8", t:"28%", l:"20%" },
-        { s:6, c:"#2563eb", t:"62%", l:"4%" }, { s:4, c:"#60a5fa", t:"82%", l:"16%" },
-        { s:5, c:"#6366f1", t:"14%", r:"9%" }, { s:3, c:"#3b82f6", t:"48%", r:"5%" },
-        { s:6, c:"#1d4ed8", t:"77%", r:"13%" },
+        { s: 5, c: "#3b82f6", t: "10%", l: "7%" }, { s: 3, c: "#818cf8", t: "28%", l: "20%" },
+        { s: 6, c: "#2563eb", t: "62%", l: "4%" }, { s: 4, c: "#60a5fa", t: "82%", l: "16%" },
+        { s: 5, c: "#6366f1", t: "14%", r: "9%" }, { s: 3, c: "#3b82f6", t: "48%", r: "5%" },
+        { s: 6, c: "#1d4ed8", t: "77%", r: "13%" },
       ].map((p, i) => (
-        <div key={i} className="l-dot l-anim-bg" style={{ position:"absolute", borderRadius:"50%",
-          width:p.s, height:p.s, background:p.c, top:p.t, left:(p).l, right:(p).r, animationDelay:`${i*.35}s` }} />
+        <div key={i} className="l-dot l-anim-bg" style={{
+          position: "absolute", borderRadius: "50%",
+          width: p.s, height: p.s, background: p.c, top: p.t, left: (p).l, right: (p).r, animationDelay: `${i * .35}s`
+        }} />
       ))}
 
       {/* ── CARD ── */}
-      <div className="l-card" style={{ display:"flex", width:"min(820px,100%)", borderRadius:22, overflow:"hidden",
-        boxShadow:"0 28px 80px rgba(0,0,0,.7),0 0 0 1px rgba(59,130,246,.12)",
-        background:"rgba(10,16,32,.93)", backdropFilter:"blur(24px)", position:"relative", zIndex:10 }}>
+      <div className="l-card" style={{
+        display: "flex", width: "min(820px,100%)", borderRadius: 22, overflow: "hidden",
+        boxShadow: "0 28px 80px rgba(0,0,0,.7),0 0 0 1px rgba(59,130,246,.12)",
+        background: "rgba(10,16,32,.93)", backdropFilter: "blur(24px)", position: "relative", zIndex: 10
+      }}>
 
         {/* ── FORM PANEL ── */}
-        <div className="l-anim-form l-form-panel" style={{ flex:1, padding:"48px 44px", display:"flex",
-          flexDirection:"column", alignItems:"center", justifyContent:"center",
-          borderRight:"1px solid rgba(59,130,246,.1)", position:"relative" }}>
+        <div className="l-anim-form l-form-panel" style={{
+          flex: 1, padding: "48px 44px", display: "flex",
+          flexDirection: "column", alignItems: "center", justifyContent: "center",
+          borderRight: "1px solid rgba(59,130,246,.1)", position: "relative"
+        }}>
 
-          <div style={{ position:"absolute", inset:0, pointerEvents:"none",
-            background:"radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.07) 0%,transparent 60%)" }} />
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            background: "radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.07) 0%,transparent 60%)"
+          }} />
 
           {/* Logo */}
-          <div className="l-anim-logo" style={{ display:"flex", flexDirection:"column", alignItems:"center",
-            gap:8, marginBottom:18, position:"relative" }}>
-            <div style={{ width:52, height:52, borderRadius:16, flexShrink:0, display:"flex",
-              alignItems:"center", justifyContent:"center", boxShadow:"0 4px 18px rgba(37,99,235,.45)", overflow:"hidden" }}>
-              <img src="/logo.png" alt="Loza" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          <div className="l-anim-logo" style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 8, marginBottom: 18, position: "relative"
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: 16, flexShrink: 0, display: "flex",
+              alignItems: "center", justifyContent: "center", boxShadow: "0 4px 18px rgba(37,99,235,.45)", overflow: "hidden"
+            }}>
+              <img src="/logo.png" alt="Loza" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
-            <div style={{ textAlign:"center" }}>
-              <div style={{ color:"white", fontWeight:700, fontSize:18, lineHeight:1.2 }}>Loza</div>
-              <div style={{ color:"#60a5fa", fontSize:11 }}>Connect with the future</div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ color: "white", fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>Loza</div>
+              <div style={{ color: "#60a5fa", fontSize: 11 }}>Connect with the future</div>
             </div>
           </div>
 
@@ -349,33 +506,35 @@ export default function LoginPage() {
           ════════════════════════════ */}
           {view === "login" && (
             <>
-              <div className="l-anim-heading" style={{ textAlign:"center", marginBottom:26, width:"100%" }}>
-                <h1 style={{ color:"white", fontWeight:800, fontSize:"1.75rem", margin:0, lineHeight:1.15 }}>
+              <div className="l-anim-heading" style={{ textAlign: "center", marginBottom: 26, width: "100%" }}>
+                <h1 style={{ color: "white", fontWeight: 800, fontSize: "1.75rem", margin: 0, lineHeight: 1.15 }}>
                   Chào mừng quay lại
                 </h1>
-                <p style={{ color:"#94a3b8", fontSize:13, marginTop:6, marginBottom:0 }}>
+                <p style={{ color: "#94a3b8", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
                   Đăng nhập vào tài khoản Loza của bạn
                 </p>
               </div>
 
-              <div className="l-anim-fields" style={{ display:"flex", flexDirection:"column", gap:14,
-                position:"relative", width:"100%", maxWidth:360 }}>
+              <div className="l-anim-fields" style={{
+                display: "flex", flexDirection: "column", gap: 14,
+                position: "relative", width: "100%", maxWidth: 360
+              }}>
 
                 {/* Username */}
                 <div>
-                  <label style={{ display:"block", color:"#cbd5e1", fontSize:11, fontWeight:500, marginBottom:5 }}>
+                  <label style={{ display: "block", color: "#cbd5e1", fontSize: 11, fontWeight: 500, marginBottom: 5 }}>
                     Tên đăng nhập hoặc email
                   </label>
-                  <div style={{ position:"relative" }}>
-                    <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                       <User size={14} color="#64748b" />
                     </span>
                     <input name="username" value={formData.username} onChange={handleChange}
-                      onFocus={() => setFocused("username")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}  
-                      placeholder="Nhập tên đăng nhập hoặc email" style={{ ...inputBase("username"), paddingLeft:34 }} />
+                      onFocus={() => setFocused("username")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}
+                      placeholder="Nhập tên đăng nhập hoặc email" style={{ ...inputBase("username"), paddingLeft: 34 }} />
                   </div>
                   {errors.username && (
-                    <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
+                    <p style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                       <AlertCircle size={12} />{errors.username}
                     </p>
                   )}
@@ -383,35 +542,39 @@ export default function LoginPage() {
 
                 {/* Password */}
                 <div>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-                    <label style={{ color:"#cbd5e1", fontSize:11, fontWeight:500 }}>Mật khẩu</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                    <label style={{ color: "#cbd5e1", fontSize: 11, fontWeight: 500 }}>Mật khẩu</label>
                     <button type="button" onClick={switchToForgot}
-                      style={{ background:"none", border:"none", padding:0, color:"#60a5fa",
-                        fontSize:11, cursor:"pointer", transition:"color .2s", fontFamily:"inherit" }}
+                      style={{
+                        background: "none", border: "none", padding: 0, color: "#60a5fa",
+                        fontSize: 11, cursor: "pointer", transition: "color .2s", fontFamily: "inherit"
+                      }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = "#93c5fd")}
                       onMouseLeave={(e) => (e.currentTarget.style.color = "#60a5fa")}>
                       Quên mật khẩu?
                     </button>
                   </div>
-                  <div style={{ position:"relative" }}>
-                    <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                       <Lock size={14} color="#64748b" />
                     </span>
                     <input name="password" type={showPassword ? "text" : "password"}
                       value={formData.password} onChange={handleChange}
-                      onFocus={() => setFocused("password")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}  
-                      placeholder="••••••••" style={{ ...inputBase("password"), paddingLeft:34, paddingRight:38 }} />
+                      onFocus={() => setFocused("password")} onBlur={() => setFocused("")} onKeyDown={handleLoginKeyDown}
+                      placeholder="••••••••" style={{ ...inputBase("password"), paddingLeft: 34, paddingRight: 38 }} />
                     <button type="button" onClick={() => setShowPassword(v => !v)}
                       onMouseEnter={() => setHoverEye(true)} onMouseLeave={() => setHoverEye(false)}
-                      style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
-                        border:"none", background:"transparent", cursor:"pointer", padding:2,
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        color: focused==="password" || hoverEye ? "#3b82f6" : "#94a3b8", transition:"color .2s" }}>
+                      style={{
+                        position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                        border: "none", background: "transparent", cursor: "pointer", padding: 2,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: focused === "password" || hoverEye ? "#3b82f6" : "#94a3b8", transition: "color .2s"
+                      }}>
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                   {errors.password && (
-                    <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
+                    <p style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                       <AlertCircle size={12} />{errors.password}
                     </p>
                   )}
@@ -419,7 +582,7 @@ export default function LoginPage() {
 
                 {/* Submit */}
                 <button type="button" className="fp-primary-btn" onClick={handleSubmit} disabled={loading}
-                  style={{ marginTop:4 }}>
+                  style={{ marginTop: 4 }}>
                   {loading ? "Đang xử lý..." : (
                     <>Đăng nhập
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -430,23 +593,78 @@ export default function LoginPage() {
                 </button>
 
                 {/* Divider */}
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ flex:1, height:1, background:"rgba(71,85,105,.3)" }} />
-                  <span style={{ color:"#475569", fontSize:11 }}>hoặc</span>
-                  <div style={{ flex:1, height:1, background:"rgba(71,85,105,.3)" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1, height: 1, background: "rgba(71,85,105,.3)" }} />
+                  <span style={{ color: "#475569", fontSize: 11 }}>hoặc</span>
+                  <div style={{ flex: 1, height: 1, background: "rgba(71,85,105,.3)" }} />
                 </div>
 
-                <p style={{ textAlign:"center", color:"#94a3b8", fontSize:12, margin:0 }}>
-                  Chưa có tài khoản?{" "}
-                  <button type="button" onClick={() => navigate("/signup")}
-                    style={{ background:"none", border:"none", padding:0, color:"#60a5fa",
-                      fontWeight:600, fontSize:12, cursor:"pointer", transition:"color .2s", fontFamily:"inherit" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#93c5fd")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#60a5fa")}>
+                <p
+                  style={{
+                    textAlign: "center",
+                    color: "#94a3b8",
+                    fontSize: 12,
+                    margin: 0,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>Chưa có tài khoản?</span>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/signup")}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: "#60a5fa",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      transition: "color .2s",
+                      fontFamily: "inherit",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.color = "#93c5fd")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.color = "#60a5fa")
+                    }
+                  >
                     Đăng ký
                   </button>
+
+                  <span>• Tài khoản bị khóa?</span>
+
+                  <button
+                    type="button"
+                    onClick={() => setView("unlock")}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: "#60a5fa",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      transition: "color .2s",
+                      fontFamily: "inherit",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.color = "#93c5fd")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.color = "#60a5fa")
+                    }
+                  >
+                    Mở khóa
+                  </button>
                 </p>
-               
+
               </div>
             </>
           )}
@@ -455,10 +673,10 @@ export default function LoginPage() {
               VIEW: FORGOT PASSWORD
           ════════════════════════════ */}
           {view === "forgot" && (
-            <div className="l-panel-switch" style={{ width:"100%", maxWidth:360, position:"relative" }}>
+            <div className="l-panel-switch" style={{ width: "100%", maxWidth: 360, position: "relative" }}>
 
               {/* Back button */}
-              <button className="fp-back-btn" onClick={switchToLogin} style={{ marginBottom:20 }}>
+              <button className="fp-back-btn" onClick={switchToLogin} style={{ marginBottom: 20 }}>
                 <ArrowLeft size={14} />
                 Quay lại đăng nhập
               </button>
@@ -466,28 +684,30 @@ export default function LoginPage() {
               {/* ── STEP: EMAIL ── */}
               {forgotStep === "email" && (
                 <>
-                  <div style={{ marginBottom:24 }}>
-                    <div style={{ width:48, height:48, borderRadius:14,
-                      background:"linear-gradient(135deg,rgba(37,99,235,.2),rgba(99,102,246,.15))",
-                      border:"1px solid rgba(59,130,246,.2)",
-                      display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14 }}>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 14,
+                      background: "linear-gradient(135deg,rgba(37,99,235,.2),rgba(99,102,246,.15))",
+                      border: "1px solid rgba(59,130,246,.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14
+                    }}>
                       <KeyRound size={22} color="#60a5fa" />
                     </div>
-                    <h2 style={{ color:"white", fontWeight:800, fontSize:"1.4rem", margin:"0 0 6px" }}>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.4rem", margin: "0 0 6px" }}>
                       Quên mật khẩu?
                     </h2>
-                    <p style={{ color:"#64748b", fontSize:13, margin:0, lineHeight:1.6 }}>
+                    <p style={{ color: "#64748b", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
                       Nhập email đăng ký của bạn. Chúng tôi sẽ gửi mã OTP để xác nhận danh tính.
                     </p>
                   </div>
 
-                  <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
-                      <label style={{ display:"block", color:"#cbd5e1", fontSize:11, fontWeight:500, marginBottom:5 }}>
+                      <label style={{ display: "block", color: "#cbd5e1", fontSize: 11, fontWeight: 500, marginBottom: 5 }}>
                         Địa chỉ Email
                       </label>
-                      <div style={{ position:"relative" }}>
-                        <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                           <Mail size={14} color="#64748b" />
                         </span>
                         <input
@@ -500,7 +720,7 @@ export default function LoginPage() {
                         />
                       </div>
                       {emailError && (
-                        <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
+                        <p style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                           <AlertCircle size={12} />{emailError}
                         </p>
                       )}
@@ -520,43 +740,45 @@ export default function LoginPage() {
               {/* ── STEP: OTP ── */}
               {forgotStep === "otp" && (
                 <>
-                  <div style={{ marginBottom:24 }}>
-                    <div style={{ width:48, height:48, borderRadius:14,
-                      background:"linear-gradient(135deg,rgba(16,185,129,.15),rgba(6,182,212,.1))",
-                      border:"1px solid rgba(16,185,129,.2)",
-                      display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14 }}>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 14,
+                      background: "linear-gradient(135deg,rgba(16,185,129,.15),rgba(6,182,212,.1))",
+                      border: "1px solid rgba(16,185,129,.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14
+                    }}>
                       <Mail size={22} color="#34d399" />
                     </div>
-                    <h2 style={{ color:"white", fontWeight:800, fontSize:"1.4rem", margin:"0 0 6px" }}>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.4rem", margin: "0 0 6px" }}>
                       Nhập mã xác nhận
                     </h2>
-               <p style={{ 
-  color: "#64748b", 
-  fontSize: 13, 
-  margin: 0, 
-  lineHeight: 1.65 
-}}>
-  Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
-  <strong style={{ color: "#94a3b8" }}>{email}</strong>
-  
-  <br />
-  
-  <span style={{ 
-    display: "block", 
-    textAlign: "center", 
-    color: "#60a5fa", 
-    fontWeight: 600,
-    fontSize: 13,
-    marginTop: 10,           // ← Khoảng cách vừa phải
-  }}>
-    Mã có hiệu lực trong 1 phút
-  </span>
-</p>
+                    <p style={{
+                      color: "#64748b",
+                      fontSize: 13,
+                      margin: 0,
+                      lineHeight: 1.65
+                    }}>
+                      Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
+                      <strong style={{ color: "#94a3b8" }}>{email}</strong>
+
+                      <br />
+
+                      <span style={{
+                        display: "block",
+                        textAlign: "center",
+                        color: "#60a5fa",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        marginTop: 10,           // ← Khoảng cách vừa phải
+                      }}>
+                        Mã có hiệu lực trong 1 phút
+                      </span>
+                    </p>
                   </div>
 
-                  <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                     <div>
-                      <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                         {otp.map((digit, idx) => (
                           <input key={idx} id={`otp-${idx}`}
                             className={`otp-input${digit ? " filled" : ""}`}
@@ -567,8 +789,10 @@ export default function LoginPage() {
                         ))}
                       </div>
                       {otpError && (
-                        <p style={{ display:"flex", alignItems:"center", justifyContent:"center",
-                          gap:3, color:"#ef4444", fontSize:12, marginTop:10 }}>
+                        <p style={{
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          gap: 3, color: "#ef4444", fontSize: 12, marginTop: 10
+                        }}>
                           <AlertCircle size={12} />{otpError}
                         </p>
                       )}
@@ -582,13 +806,15 @@ export default function LoginPage() {
                       )}
                     </button>
 
-                    <div style={{ textAlign:"center" }}>
-                      <p style={{ color:"#64748b", fontSize:12, margin:"0 0 6px" }}>Không nhận được mã?</p>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ color: "#64748b", fontSize: 12, margin: "0 0 6px" }}>Không nhận được mã?</p>
                       <button type="button" onClick={handleResendOtp} disabled={resendTimer > 0 || otpLoading}
-                        style={{ background:"none", border:"none", padding:0, fontFamily:"inherit",
+                        style={{
+                          background: "none", border: "none", padding: 0, fontFamily: "inherit",
                           color: resendTimer > 0 ? "#475569" : "#60a5fa",
-                          fontSize:12, fontWeight:600, cursor: resendTimer > 0 ? "not-allowed" : "pointer",
-                          transition:"color .2s", display:"inline-flex", alignItems:"center", gap:5 }}>
+                          fontSize: 12, fontWeight: 600, cursor: resendTimer > 0 ? "not-allowed" : "pointer",
+                          transition: "color .2s", display: "inline-flex", alignItems: "center", gap: 5
+                        }}>
                         {otpLoading ? (
                           <><RefreshCw size={12} className="fp-spin" />Đang gửi lại...</>
                         ) : resendTimer > 0 ? (
@@ -600,9 +826,11 @@ export default function LoginPage() {
                     </div>
 
                     <button type="button" onClick={() => setForgotStep("email")}
-                      style={{ background:"none", border:"none", padding:0, color:"#475569",
-                        fontSize:11, cursor:"pointer", fontFamily:"inherit", transition:"color .2s",
-                        display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}
+                      style={{
+                        background: "none", border: "none", padding: 0, color: "#475569",
+                        fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "color .2s",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 4
+                      }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
                       onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}>
                       <ArrowLeft size={11} />Đổi email khác
@@ -614,49 +842,55 @@ export default function LoginPage() {
               {/* ── STEP: NEW PASSWORD ── */}
               {forgotStep === "newpassword" && (
                 <>
-                  <div style={{ marginBottom:24 }}>
-                    <div style={{ width:48, height:48, borderRadius:14,
-                      background:"linear-gradient(135deg,rgba(37,99,235,.2),rgba(99,102,246,.15))",
-                      border:"1px solid rgba(59,130,246,.2)",
-                      display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14 }}>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 14,
+                      background: "linear-gradient(135deg,rgba(37,99,235,.2),rgba(99,102,246,.15))",
+                      border: "1px solid rgba(59,130,246,.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14
+                    }}>
                       <Lock size={22} color="#60a5fa" />
                     </div>
-                    <h2 style={{ color:"white", fontWeight:800, fontSize:"1.4rem", margin:"0 0 6px" }}>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.4rem", margin: "0 0 6px" }}>
                       Đặt mật khẩu mới
                     </h2>
-                    <p style={{ color:"#64748b", fontSize:13, margin:0, lineHeight:1.6 }}>
+                    <p style={{ color: "#64748b", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
                       Tạo mật khẩu mới cho tài khoản của bạn.
                     </p>
                   </div>
 
-                  <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     {/* New password */}
                     <div>
-                      <label style={{ display:"block", color:"#cbd5e1", fontSize:11, fontWeight:500, marginBottom:5 }}>
+                      <label style={{ display: "block", color: "#cbd5e1", fontSize: 11, fontWeight: 500, marginBottom: 5 }}>
                         Mật khẩu mới
                       </label>
-                      <div style={{ position:"relative" }}>
-                        <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                           <Lock size={14} color="#64748b" />
                         </span>
                         <input type={showNewPass ? "text" : "password"} value={newPassword}
-                          onChange={(e) => { setNewPassword(e.target.value); setNewPassError(p => ({ ...p, newPassword:"" })); }}
+                          onChange={(e) => { setNewPassword(e.target.value); setNewPassError(p => ({ ...p, newPassword: "" })); }}
                           onFocus={() => setNewPassFocused("new")} onBlur={() => setNewPassFocused("")}
                           placeholder="••••••••"
-                          style={{ background:"rgba(30,41,59,.8)",
-                            border: newPassFocused==="new" ? "1px solid #3b82f6" : "1px solid rgba(71,85,105,.5)",
-                            boxShadow: newPassFocused==="new" ? "0 0 0 3px rgba(59,130,246,.1)" : "none",
-                            color:"white", width:"100%", borderRadius:10, padding:"10px 38px 10px 34px",
-                            fontSize:13, outline:"none", transition:"all .2s", boxSizing:"border-box" as const }} />
+                          style={{
+                            background: "rgba(30,41,59,.8)",
+                            border: newPassFocused === "new" ? "1px solid #3b82f6" : "1px solid rgba(71,85,105,.5)",
+                            boxShadow: newPassFocused === "new" ? "0 0 0 3px rgba(59,130,246,.1)" : "none",
+                            color: "white", width: "100%", borderRadius: 10, padding: "10px 38px 10px 34px",
+                            fontSize: 13, outline: "none", transition: "all .2s", boxSizing: "border-box" as const
+                          }} />
                         <button type="button" onClick={() => setShowNewPass(v => !v)}
-                          style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
-                            border:"none", background:"transparent", cursor:"pointer", padding:2,
-                            display:"flex", alignItems:"center", color:"#64748b" }}>
+                          style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            border: "none", background: "transparent", cursor: "pointer", padding: 2,
+                            display: "flex", alignItems: "center", color: "#64748b"
+                          }}>
                           {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
                       {newPassError.newPassword && (
-                        <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
+                        <p style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                           <AlertCircle size={12} />{newPassError.newPassword}
                         </p>
                       )}
@@ -664,38 +898,42 @@ export default function LoginPage() {
 
                     {/* Confirm password */}
                     <div>
-                      <label style={{ display:"block", color:"#cbd5e1", fontSize:11, fontWeight:500, marginBottom:5 }}>
+                      <label style={{ display: "block", color: "#cbd5e1", fontSize: 11, fontWeight: 500, marginBottom: 5 }}>
                         Xác nhận mật khẩu
                       </label>
-                      <div style={{ position:"relative" }}>
-                        <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                           <Lock size={14} color="#64748b" />
                         </span>
                         <input type={showConfirmPass ? "text" : "password"} value={confirmPassword}
-                          onChange={(e) => { setConfirmPassword(e.target.value); setNewPassError(p => ({ ...p, confirmPassword:"" })); }}
+                          onChange={(e) => { setConfirmPassword(e.target.value); setNewPassError(p => ({ ...p, confirmPassword: "" })); }}
                           onFocus={() => setNewPassFocused("confirm")} onBlur={() => setNewPassFocused("")}
                           placeholder="••••••••"
-                          style={{ background:"rgba(30,41,59,.8)",
-                            border: newPassFocused==="confirm" ? "1px solid #3b82f6" : "1px solid rgba(71,85,105,.5)",
-                            boxShadow: newPassFocused==="confirm" ? "0 0 0 3px rgba(59,130,246,.1)" : "none",
-                            color:"white", width:"100%", borderRadius:10, padding:"10px 38px 10px 34px",
-                            fontSize:13, outline:"none", transition:"all .2s", boxSizing:"border-box" as const }} />
+                          style={{
+                            background: "rgba(30,41,59,.8)",
+                            border: newPassFocused === "confirm" ? "1px solid #3b82f6" : "1px solid rgba(71,85,105,.5)",
+                            boxShadow: newPassFocused === "confirm" ? "0 0 0 3px rgba(59,130,246,.1)" : "none",
+                            color: "white", width: "100%", borderRadius: 10, padding: "10px 38px 10px 34px",
+                            fontSize: 13, outline: "none", transition: "all .2s", boxSizing: "border-box" as const
+                          }} />
                         <button type="button" onClick={() => setShowConfirmPass(v => !v)}
-                          style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
-                            border:"none", background:"transparent", cursor:"pointer", padding:2,
-                            display:"flex", alignItems:"center", color:"#64748b" }}>
+                          style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            border: "none", background: "transparent", cursor: "pointer", padding: 2,
+                            display: "flex", alignItems: "center", color: "#64748b"
+                          }}>
                           {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
                       {newPassError.confirmPassword && (
-                        <p style={{ display:"flex", alignItems:"center", gap:3, color:"#ef4444", fontSize:12, marginTop:4 }}>
+                        <p style={{ display: "flex", alignItems: "center", gap: 3, color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                           <AlertCircle size={12} />{newPassError.confirmPassword}
                         </p>
                       )}
                     </div>
 
                     <button className="fp-primary-btn" onClick={handleResetPassword} disabled={otpLoading}
-                      style={{ marginTop:4 }}>
+                      style={{ marginTop: 4 }}>
                       {otpLoading ? (
                         <><RefreshCw size={15} className="fp-spin" />Đang cập nhật...</>
                       ) : (
@@ -708,24 +946,493 @@ export default function LoginPage() {
 
               {/* ── STEP: DONE ── */}
               {forgotStep === "done" && (
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
-                  textAlign:"center", gap:16, paddingTop:8 }}>
-                  <div className="success-icon" style={{ width:64, height:64, borderRadius:20,
-                    background:"linear-gradient(135deg,rgba(16,185,129,.2),rgba(16,185,129,.08))",
-                    border:"1px solid rgba(16,185,129,.3)",
-                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                  textAlign: "center", gap: 16, paddingTop: 8
+                }}>
+                  <div className="success-icon" style={{
+                    width: 64, height: 64, borderRadius: 20,
+                    background: "linear-gradient(135deg,rgba(16,185,129,.2),rgba(16,185,129,.08))",
+                    border: "1px solid rgba(16,185,129,.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>
                     <CheckCircle2 size={32} color="#34d399" />
                   </div>
                   <div>
-                    <h2 style={{ color:"white", fontWeight:800, fontSize:"1.3rem", margin:"0 0 8px" }}>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.3rem", margin: "0 0 8px" }}>
                       Đổi mật khẩu thành công!
                     </h2>
-                    <p style={{ color:"#64748b", fontSize:13, margin:0, lineHeight:1.7 }}>
+                    <p style={{ color: "#64748b", fontSize: 13, margin: 0, lineHeight: 1.7 }}>
                       Mật khẩu của bạn đã được cập nhật. Hãy đăng nhập lại.
                     </p>
                   </div>
-                  <button className="fp-primary-btn" onClick={switchToLogin} style={{ width:"100%", marginTop:8 }}>
+                  <button className="fp-primary-btn" onClick={switchToLogin} style={{ width: "100%", marginTop: 8 }}>
                     Đăng nhập ngay
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════════════════════════════
+                  VIEW: UNLOCK ACCOUNT
+          ════════════════════════════ */}
+          {view === "unlock" && (
+            <div>
+              {unlockStep === "email" && (
+                <div
+                  className="l-panel-switch"
+                  style={{
+                    width: "100%",
+                    maxWidth: 360,
+                    position: "relative",
+                  }}
+                >
+                  {/* Back button */}
+                  <button
+                    className="fp-back-btn"
+                    onClick={switchToLogin}
+                    style={{ marginBottom: 20 }}
+                  >
+                    <ArrowLeft size={14} />
+                    Quay lại đăng nhập
+                  </button>
+
+                  {/* Header */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        background:
+                          "linear-gradient(135deg,rgba(245,158,11,.18),rgba(251,191,36,.12))",
+                        border: "1px solid rgba(245,158,11,.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 14,
+                      }}
+                    >
+                      <ShieldAlert size={22} color="#f59e0b" />
+                    </div>
+
+                    <h2
+                      style={{
+                        color: "white",
+                        fontWeight: 800,
+                        fontSize: "1.4rem",
+                        margin: "0 0 6px",
+                      }}
+                    >
+                      Mở khóa tài khoản
+                    </h2>
+
+                    <p
+                      style={{
+                        color: "#64748b",
+                        fontSize: 13,
+                        margin: 0,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Gửi yêu cầu tới quản trị viên để xem xét mở khóa tài khoản của bạn.
+                    </p>
+                  </div>
+
+                  {/* Form */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 16,
+                    }}
+                  >
+                    {/* Username */}
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: "#cbd5e1",
+                          fontSize: 11,
+                          fontWeight: 500,
+                          marginBottom: 5,
+                        }}
+                      >
+                        Email tài khoản
+                      </label>
+
+                      <div style={{ position: "relative" }}>
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: 11,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <User size={14} color="#64748b" />
+                        </span>
+
+                        <input
+                          type="text"
+                          value={unlockUsername}
+                          onChange={(e) =>
+                            setUnlockUsername(e.target.value)
+                          }
+                          placeholder="Nhập email"
+                          style={{
+                            background: "rgba(30,41,59,.8)",
+                            border: "1px solid rgba(71,85,105,.5)",
+                            color: "white",
+                            width: "100%",
+                            borderRadius: 10,
+                            padding: "10px 12px 10px 34px",
+                            fontSize: 13,
+                            outline: "none",
+                            transition: "all .2s",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Submit */}
+                    <button
+                      className="fp-primary-btn"
+                      onClick={handleSendUnlockOtp}
+                    >
+                      <ShieldCheck size={15} />
+                      Gửi OTP
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {unlockStep === "disabled" && (
+                <div
+                  className="l-panel-switch"
+                  style={{
+                    width: "100%",
+                    maxWidth: 360,
+                    position: "relative",
+                    textAlign: "center",
+                  }}
+                >
+                  {/* Icon */}
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 16,
+                      background:
+                        "linear-gradient(135deg,rgba(239,68,68,.18),rgba(248,113,113,.12))",
+                      border: "1px solid rgba(239,68,68,.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 16px",
+                    }}
+                  >
+                    <ShieldAlert size={26} color="#ef4444" />
+                  </div>
+
+                  {/* Title */}
+                  <h2
+                    style={{
+                      color: "white",
+                      fontWeight: 800,
+                      fontSize: "1.4rem",
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    Tài khoản đã bị vô hiệu hóa
+                  </h2>
+
+                  {/* Description */}
+                  <p
+                    style={{
+                      color: "#94a3b8",
+                      fontSize: 13,
+                      lineHeight: 1.7,
+                      marginBottom: 20,
+                    }}
+                  >
+                    Tài khoản của bạn đã bị khóa hơn 30 ngày và đã bị vô hiệu hóa vĩnh viễn.
+                    <br />
+                    Bạn không thể mở khóa tài khoản này.
+                  </p>
+
+                  {/* Action buttons */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button
+                      className="fp-primary-btn"
+                      onClick={goRegister}
+                    >
+                      Tạo tài khoản mới
+                    </button>
+
+                    <button
+                      onClick={switchToLogin}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(71,85,105,.5)",
+                        color: "#94a3b8",
+                        padding: "10px",
+                        borderRadius: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Quay lại đăng nhập
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── STEP: OTP ── */}
+              {unlockStep === "otp" && (
+                <>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 14,
+                      background: "linear-gradient(135deg,rgba(16,185,129,.15),rgba(6,182,212,.1))",
+                      border: "1px solid rgba(16,185,129,.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14
+                    }}>
+                      <Mail size={22} color="#34d399" />
+                    </div>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.4rem", margin: "0 0 6px" }}>
+                      Nhập mã xác nhận
+                    </h2>
+                    <p style={{
+                      color: "#64748b",
+                      fontSize: 13,
+                      margin: 0,
+                      lineHeight: 1.65
+                    }}>
+                      Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
+                      <strong style={{ color: "#94a3b8" }}>{email}</strong>
+
+                      <br />
+
+                      <span style={{
+                        display: "block",
+                        textAlign: "center",
+                        color: "#60a5fa",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        marginTop: 10,           // ← Khoảng cách vừa phải
+                      }}>
+                        Mã có hiệu lực trong 1 phút
+                      </span>
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                        {otp.map((digit, idx) => (
+                          <input key={idx} id={`otp-${idx}`}
+                            className={`otp-input${digit ? " filled" : ""}`}
+                            type="text" inputMode="numeric" maxLength={1} value={digit}
+                            onChange={(e) => handleOtpChange(idx, e.target.value)}
+                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                            onFocus={(e) => e.target.select()} />
+                        ))}
+                      </div>
+                      {otpError && (
+                        <p style={{
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          gap: 3, color: "#ef4444", fontSize: 12, marginTop: 10
+                        }}>
+                          <AlertCircle size={12} />{otpError}
+                        </p>
+                      )}
+                    </div>
+
+                    <button className="fp-primary-btn" onClick={handleVerifyUnlockOtp} disabled={otpLoading}>
+                      {otpLoading ? (
+                        <><RefreshCw size={15} className="fp-spin" />Đang xác nhận...</>
+                      ) : (
+                        <><CheckCircle2 size={15} />Xác nhận mã OTP</>
+                      )}
+                    </button>
+
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ color: "#64748b", fontSize: 12, margin: "0 0 6px" }}>Không nhận được mã?</p>
+                      <button type="button" onClick={handleResendOtp} disabled={resendTimer > 0 || otpLoading}
+                        style={{
+                          background: "none", border: "none", padding: 0, fontFamily: "inherit",
+                          color: resendTimer > 0 ? "#475569" : "#60a5fa",
+                          fontSize: 12, fontWeight: 600, cursor: resendTimer > 0 ? "not-allowed" : "pointer",
+                          transition: "color .2s", display: "inline-flex", alignItems: "center", gap: 5
+                        }}>
+                        {otpLoading ? (
+                          <><RefreshCw size={12} className="fp-spin" />Đang gửi lại...</>
+                        ) : resendTimer > 0 ? (
+                          `Gửi lại sau ${resendTimer}s`
+                        ) : (
+                          <><RefreshCw size={12} />Gửi lại mã</>
+                        )}
+                      </button>
+                    </div>
+
+                    <button type="button" onClick={() => setForgotStep("email")}
+                      style={{
+                        background: "none", border: "none", padding: 0, color: "#475569",
+                        fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "color .2s",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 4
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}>
+                      <ArrowLeft size={11} />Đổi email khác
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {unlockStep === "reason" && (
+                <div
+                  className="l-panel-switch"
+                  style={{
+                    width: "100%",
+                    maxWidth: 360,
+                    position: "relative",
+                  }}
+                >
+                  {/* Back button */}
+                  <button
+                    className="fp-back-btn"
+                    onClick={switchToLogin}
+                    style={{ marginBottom: 20 }}
+                  >
+                    <ArrowLeft size={14} />
+                    Quay lại đăng nhập
+                  </button>
+
+                  {/* Header */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        background:
+                          "linear-gradient(135deg,rgba(245,158,11,.18),rgba(251,191,36,.12))",
+                        border: "1px solid rgba(245,158,11,.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 14,
+                      }}
+                    >
+                      <ShieldAlert size={22} color="#f59e0b" />
+                    </div>
+
+                    <h2
+                      style={{
+                        color: "white",
+                        fontWeight: 800,
+                        fontSize: "1.4rem",
+                        margin: "0 0 6px",
+                      }}
+                    >
+                      Mở khóa tài khoản
+                    </h2>
+
+                    <p
+                      style={{
+                        color: "#64748b",
+                        fontSize: 13,
+                        margin: 0,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Gửi yêu cầu tới quản trị viên để xem xét mở khóa tài khoản của bạn.
+                    </p>
+                  </div>
+
+                  {/* Form */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 16,
+                    }}
+                  >
+                    {/* Reason */}
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          color: "#cbd5e1",
+                          fontSize: 11,
+                          fontWeight: 500,
+                          marginBottom: 5,
+                        }}
+                      >
+                        Lý do yêu cầu mở khóa
+                      </label>
+
+                      <textarea
+                        value={unlockReason}
+                        onChange={(e) =>
+                          setUnlockReason(e.target.value)
+                        }
+                        placeholder="Hãy nhập lý do..."
+                        style={{
+                          width: "100%",
+                          minHeight: 110,
+                          resize: "none",
+                          borderRadius: 12,
+                          border: "1px solid rgba(71,85,105,.5)",
+                          background: "rgba(30,41,59,.8)",
+                          color: "white",
+                          padding: 12,
+                          fontSize: 13,
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+
+                    {/* Submit */}
+                    <button
+                      className="fp-primary-btn"
+                      onClick={handleUnlockRequest}
+                    >
+                      <ShieldCheck size={15} />
+                      Gửi yêu cầu mở khóa
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── STEP: DONE ── */}
+              {unlockStep === "done" && (
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                  textAlign: "center", gap: 16, paddingTop: 8
+                }}>
+                  <div className="success-icon" style={{
+                    width: 64, height: 64, borderRadius: 20,
+                    background: "linear-gradient(135deg,rgba(16,185,129,.2),rgba(16,185,129,.08))",
+                    border: "1px solid rgba(16,185,129,.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>
+                    <CheckCircle2 size={32} color="#34d399" />
+                  </div>
+                  <div>
+                    <h2 style={{ color: "white", fontWeight: 800, fontSize: "1.3rem", margin: "0 0 8px" }}>
+                      Gửi yêu cầu mở khóa thành công!
+                    </h2>
+                    <p style={{ color: "#64748b", fontSize: 13, margin: 0, lineHeight: 1.7 }}>
+                      Yêu cầu đã được gửi. Admin sẽ xem xét yêu cầu của bạn.
+                    </p>
+                  </div>
+                  <button className="fp-primary-btn" onClick={switchToLogin} style={{ width: "100%", marginTop: 8 }}>
+                    Về trang đăng nhập lại
                   </button>
                 </div>
               )}
@@ -734,19 +1441,23 @@ export default function LoginPage() {
         </div>
 
         {/* ── ILLUSTRATION PANEL ── */}
-        <div className="l-anim-illus l-illus-panel" style={{ width:300, flexDirection:"column",
-          alignItems:"center", justifyContent:"center", padding:"34px 24px",
-          position:"relative", overflow:"hidden",
-          background:"linear-gradient(160deg,rgba(37,99,235,.13) 0%,rgba(10,16,32,.6) 100%)" }}>
+        <div className="l-anim-illus l-illus-panel" style={{
+          width: 300, flexDirection: "column",
+          alignItems: "center", justifyContent: "center", padding: "34px 24px",
+          position: "relative", overflow: "hidden",
+          background: "linear-gradient(160deg,rgba(37,99,235,.13) 0%,rgba(10,16,32,.6) 100%)"
+        }}>
 
           {[360, 250].map((s) => (
-            <div key={s} style={{ position:"absolute", borderRadius:"50%", width:s, height:s,
-              top:"50%", left:"50%", transform:"translate(-50%,-50%)",
-              border:"1px solid rgba(59,130,246,.06)", pointerEvents:"none" }} />
+            <div key={s} style={{
+              position: "absolute", borderRadius: "50%", width: s, height: s,
+              top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              border: "1px solid rgba(59,130,246,.06)", pointerEvents: "none"
+            }} />
           ))}
 
-          <div className="l-illus" style={{ position:"relative", zIndex:2, width:"100%", maxWidth:220 }}>
-            <svg viewBox="0 0 220 240" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width:"100%" }}>
+          <div className="l-illus" style={{ position: "relative", zIndex: 2, width: "100%", maxWidth: 220 }}>
+            <svg viewBox="0 0 220 240" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%" }}>
               <ellipse cx="110" cy="130" rx="80" ry="60" fill="rgba(37,99,235,.06)" />
               <rect x="55" y="55" width="110" height="90" rx="16" fill="rgba(28,38,74,.97)" stroke="rgba(59,130,246,.35)" strokeWidth="1.2" />
               <circle cx="110" cy="85" r="20" fill="rgba(37,99,235,.25)" stroke="rgba(59,130,246,.5)" strokeWidth="1.5" />
@@ -784,27 +1495,29 @@ export default function LoginPage() {
                 <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" repeatCount="indefinite" />
               </circle>
             </svg>
-            <div style={{ position:"absolute", top:-6, right:-6,
-              background:"linear-gradient(135deg,#10b981,#34d399)", borderRadius:"50%",
-              width:38, height:38, display:"flex", alignItems:"center", justifyContent:"center",
-              boxShadow:"0 4px 12px rgba(16,185,129,.45)" }}>
+            <div style={{
+              position: "absolute", top: -6, right: -6,
+              background: "linear-gradient(135deg,#10b981,#34d399)", borderRadius: "50%",
+              width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(16,185,129,.45)"
+            }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
           </div>
 
-          <div style={{ textAlign:"center", marginTop:20, position:"relative", zIndex:2 }}>
-            <p style={{ color:"white", fontWeight:700, fontSize:13, margin:"0 0 4px" }}>Bảo mật & Mượt mà</p>
-            <p style={{ color:"#64748b", fontSize:11, margin:0, lineHeight:1.5 }}>
+          <div style={{ textAlign: "center", marginTop: 20, position: "relative", zIndex: 2 }}>
+            <p style={{ color: "white", fontWeight: 700, fontSize: 13, margin: "0 0 4px" }}>Bảo mật & Mượt mà</p>
+            <p style={{ color: "#64748b", fontSize: 11, margin: 0, lineHeight: 1.5 }}>
               Ưu tiên bảo mật và trải nghiệm<br />mượt mà, nhanh chóng
             </p>
           </div>
-          <div style={{ display:"flex", gap:24, marginTop:16, position:"relative", zIndex:2 }}>
-            {[{ v:"Mã hóa", l:"Dữ liệu" }, { v:"<50ms", l:"Độ trễ" }].map((s) => (
-              <div key={s.l} style={{ textAlign:"center" }}>
-                <div style={{ color:"#60a5fa", fontWeight:700, fontSize:13 }}>{s.v}</div>
-                <div style={{ color:"#475569", fontSize:10, marginTop:2 }}>{s.l}</div>
+          <div style={{ display: "flex", gap: 24, marginTop: 16, position: "relative", zIndex: 2 }}>
+            {[{ v: "Mã hóa", l: "Dữ liệu" }, { v: "<50ms", l: "Độ trễ" }].map((s) => (
+              <div key={s.l} style={{ textAlign: "center" }}>
+                <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: 13 }}>{s.v}</div>
+                <div style={{ color: "#475569", fontSize: 10, marginTop: 2 }}>{s.l}</div>
               </div>
             ))}
           </div>
