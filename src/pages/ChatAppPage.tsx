@@ -238,7 +238,7 @@ function getSenderName(
   myId: string | undefined,
   participants: Array<{ _id: string; displayName: string }> = [],
 ) {
-  if (message.senderId === myId) return "Bạn";
+  // Tìm trong participants luôn, không phân biệt mình hay người khác
   return (
     participants.find((p) => p._id === message.senderId)?.displayName ||
     "Người dùng"
