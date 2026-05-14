@@ -503,7 +503,6 @@ export const PostDetailModal = ({
               postId={post._id}
               commentsCount={post.commentsCount || 0}
               currentUserId={currentUserId}
-              isInDetail={true}
             />
           </div>
         </div>

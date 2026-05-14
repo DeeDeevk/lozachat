@@ -36,7 +36,7 @@ export const CommentItem = ({
   const [replying, setReplying] = useState(false);
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const pickerHideTimer = useRef<ReturnType<typeof setTimeout>>();
+  const pickerHideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const { userProfile } = useAuthStore();
   const { addComment, reactToComment } = usePostStore();

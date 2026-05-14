@@ -460,7 +460,7 @@ function OtpModal({ email, onVerified, onClose }: OtpModalProps) {
 // ── Main RegisterPage ─────────────────────────────────────────────────────────
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { signUp, loading } = useAuthStore();
+  const { signUp, loading: _loading } = useAuthStore();
   const { sendOTP2, loading: otpLoading } = useOtpStore();
 
   const [showPassword, setShowPassword] = useState(false);

@@ -82,16 +82,6 @@ export default function ConversationList({
     return other?.displayName || "Unknown";
   };
 
-  const getAvatarText = (conv: Conversation) => {
-    const name = getName(conv);
-    return name.slice(0, 2).toUpperCase();
-  };
-
-  const getAvatarUrl = (conv: Conversation) => {
-    if (conv.group) return conv.group.avatar ?? null; // ✅ trả về avatar nhóm nếu có
-    return getOtherUser(conv)?.avatarUrl ?? null;
-  };
-
   const isOnline = (conv: Conversation) => {
     if (conv.group) return false;
     const other = getOtherUser(conv);
@@ -99,23 +89,6 @@ export default function ConversationList({
 
     // Ép kiểu cả hai về string để tránh lệch Object ID
     return onlineUsers.some((id) => String(id) === String(other._id));
-  };
-
-  const getAvatarColor = (conv: Conversation) => {
-    const name = getName(conv);
-    const colors = [
-      "#3b82f6",
-      "#10b981",
-      "#8b5cf6",
-      "#f59e0b",
-      "#ef4444",
-      "#06b6d4",
-      "#ec4899",
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++)
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
   };
 
   const getDisplayParticipants = (conv: Conversation) => {
@@ -243,9 +216,7 @@ export default function ConversationList({
         >
           {filteredConvs.map((conv) => {
             const name = getName(conv);
-            const avatarUrl = getAvatarUrl(conv);
             const online = isOnline(conv);
-            const color = getAvatarColor(conv);
             // Sửa lại để đọc đúng từ unreadCounts (MongoDB Map serialize thành object)
             const unread =
               (conv as any).unreadCounts?.[user?.userId ?? ""] ??

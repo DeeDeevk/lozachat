@@ -28,12 +28,13 @@ import {
   getSafeMessagePreview,
 } from "@/utils/chatMessageCodec";
 import { lozaBotService } from "@/services/lozaBotService";
+import { callService } from "@/services/callService";
+import { Room, RoomEvent, Track } from "livekit-client";
 import {
   BarChart3,
   Ellipsis,
   FileUp,
   ImagePlus,
-  Mic,
   Pin,
   PinOff,
   Pencil,
@@ -55,10 +56,14 @@ import {
   X,
   Key,
   LogOut,
+  Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, PhoneIncoming,
+  Maximize2, Minimize2, PictureInPicture2,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
+
+
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -105,11 +110,6 @@ const CHAT_STICKER_LIST = [
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414808/LINEStorePC/main.png;compress=true?__=20161019",
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414804/LINEStorePC/main.png;compress=true?__=20161019",
   "https://sdl-stickershop.line.naver.jp/stickershop/v1/product/1414799/IOS/main_animation.png?__=20161019",
-];
-
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
 ];
 
 const REACTION_OPTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
@@ -235,7 +235,7 @@ function createPollId() {
 
 function getSenderName(
   message: Message,
-  myId: string | undefined,
+  _myId: string | undefined,
   participants: Array<{ _id: string; displayName: string }> = [],
 ) {
   // Tìm trong participants luôn, không phân biệt mình hay người khác
@@ -264,6 +264,73 @@ function formatCallDuration(totalSeconds: number) {
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
+
+type IconBtnVariant = "ghost" | "danger" | "success" | "primary" | "active";
+
+function IconBtn({
+  icon: Icon, onClick, variant = "ghost", size = 44, label, disabled, badge,
+}: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  onClick?: () => void;
+  variant?: IconBtnVariant;
+  size?: number;
+  label?: string;
+  disabled?: boolean;
+  badge?: React.ReactNode;
+}) {
+  const palette: Record<IconBtnVariant, { bg: string; color: string; border: string; shadow: string }> = {
+    ghost:   { bg: "rgba(255,255,255,.08)",                       color: "#f1f5f9", border: "1px solid rgba(255,255,255,.12)", shadow: "none" },
+    active:  { bg: "rgba(255,255,255,.95)",                       color: "#0f172a", border: "1px solid rgba(255,255,255,.95)", shadow: "0 8px 22px rgba(255,255,255,.2)" },
+    primary: { bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",     color: "#fff",    border: "1px solid rgba(59,130,246,.55)",  shadow: "0 10px 24px rgba(59,130,246,.45)" },
+    success: { bg: "linear-gradient(135deg,#22c55e,#16a34a)",     color: "#fff",    border: "1px solid rgba(34,197,94,.55)",   shadow: "0 10px 24px rgba(34,197,94,.45)" },
+    danger:  { bg: "linear-gradient(135deg,#ef4444,#dc2626)",     color: "#fff",    border: "1px solid rgba(239,68,68,.55)",   shadow: "0 10px 24px rgba(239,68,68,.45)" },
+  };
+  const p = palette[variant];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      style={{
+        position: "relative",
+        width: size, height: size, borderRadius: "50%",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: disabled ? "rgba(51,65,85,.4)" : p.bg,
+        color: disabled ? "#94a3b8" : p.color,
+        border: p.border, boxShadow: disabled ? "none" : p.shadow,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "transform .15s ease, box-shadow .15s ease, background .2s",
+      }}
+      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(.92)")}
+      onMouseUp={(e)   => (e.currentTarget.style.transform = "scale(1)")}
+      onMouseLeave={(e)=> (e.currentTarget.style.transform = "scale(1)")}
+    >
+      <Icon size={Math.round(size * 0.42)} strokeWidth={2} />
+      {badge}
+    </button>
+  );
+}
+
+function CallAvatar({ url, name, size = 96, ring = true }: { url?: string | null; name?: string; size?: number; ring?: boolean }) {
+  const initial = (name || "?").trim().charAt(0).toUpperCase();
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: "50%",
+        display: "grid", placeItems: "center", overflow: "hidden",
+        background: "linear-gradient(135deg,#6366f1,#ec4899)",
+        color: "white", fontWeight: 800, fontSize: size * 0.38,
+        border: ring ? "3px solid rgba(255,255,255,.18)" : "none",
+        boxShadow: "0 18px 40px rgba(0,0,0,.5)",
+        flexShrink: 0,
+      }}
+    >
+      {url ? <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
+    </div>
+  );
+}
+
 
 // --- GROUP SEEN AVATARS ---
 interface GroupSeenAvatarsProps {
@@ -483,7 +550,7 @@ export default function ChatPage() {
     dissolveGroup,
     leaveGroup,
     deleteConversationForMe,
-    updateMemberRole,
+    updateMemberRole: _updateMemberRole,
   } = useChatStore();
 
   const socketStore = useSocketStore();
@@ -528,6 +595,9 @@ export default function ChatPage() {
   const [showLeaveGroupConfirm, setShowLeaveGroupConfirm] = useState(false);
   const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string>("");
   const [showDeleteConvConfirm, setShowDeleteConvConfirm] = useState(false);
+  const [isCallMinimized, setIsCallMinimized] = useState(false);
+
+
 
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -556,13 +626,81 @@ export default function ChatPage() {
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [showThemePicker, setShowThemePicker] = useState(false);
 
-  // Call states
+  // ── LiveKit call states ──────────────────────────────────────────────────────
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callKind, setCallKind] = useState<CallKind | null>(null);
   const [callConversationId, setCallConversationId] = useState<string | null>(
     null,
   );
+  const [incomingRoomName, setIncomingRoomName] = useState<string | null>(null);
+  const [incomingIsGroupCall, setIncomingIsGroupCall] = useState(false);
   const [incomingCallerName, setIncomingCallerName] = useState<string>("");
+  const [incomingCallerAvatar, setIncomingCallerAvatar] = useState<string>("");
+  // Ringtone audio refs
+  const ringtoneCtxRef = useRef<AudioContext | null>(null);
+  const ringtoneOscRef = useRef<OscillatorNode | null>(null);
+  const ringtoneGainRef = useRef<GainNode | null>(null);
+  const ringtoneIntervalRef = useRef<number | null>(null);
+
+  const startRingtone = useCallback(() => {
+    try {
+      if (ringtoneCtxRef.current) return;
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 720;
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      ringtoneCtxRef.current = ctx;
+      ringtoneOscRef.current = osc;
+      ringtoneGainRef.current = gain;
+
+      // simple beep pattern: on 300ms, off 500ms
+      const tick = () => {
+        const g = ringtoneGainRef.current;
+        const c = ringtoneCtxRef.current;
+        if (!g || !c) return;
+        g.gain.cancelScheduledValues(c.currentTime);
+        g.gain.setValueAtTime(0.0001, c.currentTime);
+        g.gain.linearRampToValueAtTime(0.18, c.currentTime + 0.01);
+        g.gain.linearRampToValueAtTime(0.0001, c.currentTime + 0.32);
+      };
+
+      tick();
+      // call every 800ms
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      ringtoneIntervalRef.current = window.setInterval(tick, 800);
+    } catch (e) {
+      console.error("startRingtone error", e);
+    }
+  }, []);
+
+  const stopRingtone = useCallback(() => {
+    try {
+      if (ringtoneIntervalRef.current) {
+        clearInterval(ringtoneIntervalRef.current);
+        ringtoneIntervalRef.current = null;
+      }
+      const osc = ringtoneOscRef.current;
+      const ctx = ringtoneCtxRef.current;
+      if (osc) {
+        try { osc.stop(); } catch {}
+        ringtoneOscRef.current = null;
+      }
+      if (ctx) {
+        try { ctx.close(); } catch {}
+        ringtoneCtxRef.current = null;
+      }
+      ringtoneGainRef.current = null;
+    } catch (e) {
+      console.error("stopRingtone error", e);
+    }
+  }, []);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isVideoPiPActive, setIsVideoPiPActive] = useState(false);
@@ -572,18 +710,22 @@ export default function ChatPage() {
   const [upgradeRequesterName, setUpgradeRequesterName] = useState("");
   const [callConnectedAt, setCallConnectedAt] = useState<number | null>(null);
   const [callElapsedSeconds, setCallElapsedSeconds] = useState(0);
+  const [callParticipantIds, setCallParticipantIds] = useState<string[]>([]);
+  const [callParticipantCameraTracks, setCallParticipantCameraTracks] =
+    useState<Record<string, MediaStreamTrack | null>>({});
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(
     null,
   );
 
   const themeMenuRef = useRef<HTMLDivElement>(null);
-  const peerRef = useRef<RTCPeerConnection | null>(null);
-  const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
+  const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const participantVideoRefs = useRef<Record<string, HTMLVideoElement | null>>(
+    {},
+  );
 
   const selectedByConversation = useChatThemeStore(
     (state) => state.selectedByConversation,
@@ -592,16 +734,17 @@ export default function ChatPage() {
     (state) => state.setThemeForConversation,
   );
 
-  // ─── participantsCache: giữ avatar/tên người đã rời nhóm (from doc 14) ─────
+  // ─── participantsCache: giữ avatar/tên người đã rời nhóm ─────────────────────
   const participantsCache = useMemo(() => {
     const cache = new Map<
       string,
-      { displayName: string; avatarUrl?: string | null; role?: string }
+      { _id: string; displayName: string; avatarUrl?: string | null; role?: "admin" | "member" | "owner" }
     >();
     conversations.forEach((c) => {
       c.participants.forEach((p) => {
         if (!cache.has(p._id)) {
           cache.set(p._id, {
+            _id: p._id,
             displayName: p.displayName,
             avatarUrl: p.avatarUrl,
             role: p.role,
@@ -716,6 +859,11 @@ export default function ChatPage() {
     });
   }, [activeConversationId, messages, socket, user?.userId]);
 
+  // auto-thu nhỏ khi cuộc gọi voice đang in-call (tuỳ chọn)
+useEffect(() => {
+  if (callStatus === "idle") setIsCallMinimized(false);
+}, [callStatus]);
+
   // ─── Memos ───────────────────────────────────────────────────────────────────
   const activeConversation = useMemo(
     () => conversations.find((c) => c._id === activeConversationId),
@@ -782,6 +930,112 @@ export default function ChatPage() {
     [activeConversation, user?.userId],
   );
 
+  const callConversation = useMemo(
+    () => conversations.find((c) => c._id === callConversationId),
+    [conversations, callConversationId],
+  );
+
+  // Extract the call peer (other participant) from the call conversation, not the active chat
+  const callPeer = useMemo(
+    () => callConversation?.participants?.find((p) => p._id !== user?.userId),
+    [callConversation, user?.userId],
+  );
+
+  const isCurrentCallGroup =
+    callConversation?.type === "group" || incomingIsGroupCall;
+
+  const callPeerName = callPeer?.displayName || otherUser?.displayName || "Người dùng";
+  const callAvatarUrl = isCurrentCallGroup
+    ? userProfile?.avatarUrl || null
+    : callConversation
+      ? (callPeer?.avatarUrl || incomingCallerAvatar || null)
+      : (otherUser?.avatarUrl || null);
+  const callAvatarName = isCurrentCallGroup
+    ? userProfile?.displayName || user?.username || "Bạn"
+    : callConversation
+      ? (callPeer?.displayName || incomingCallerName || "Người dùng")
+      : (otherUser?.displayName || "Người dùng");
+
+  const callHeadline =
+    callStatus === "incoming"
+      ? isCurrentCallGroup
+        ? `${incomingCallerName || "Người dùng"} mời bạn tham gia cuộc gọi nhóm`
+        : `${incomingCallerName || "Người dùng"} đang gọi ${callKind === "video" ? "video" : "thoại"}`
+      : isCurrentCallGroup
+        ? "Bạn đã tham gia cuộc gọi nhóm"
+        : `Đang gọi ${callPeerName}`;
+
+  const callSubHeadline =
+    callStatus === "outgoing"
+      ? isCurrentCallGroup
+        ? "Đang bắt đầu phòng gọi nhóm"
+        : "Đang đổ chuông"
+      : callStatus === "connecting"
+        ? callKind === "video"
+          ? "Đang kết nối video"
+          : "Đang kết nối thoại"
+        : callStatus === "in-call"
+          ? isCurrentCallGroup
+            ? `Đang trong cuộc gọi nhóm • ${formatCallDuration(callElapsedSeconds)}`
+            : `Đang trong cuộc gọi • ${formatCallDuration(callElapsedSeconds)}`
+          : "Đang chờ phản hồi";
+
+  const callParticipantsInRoom = useMemo(() => {
+    if (!isCurrentCallGroup || callStatus === "idle") return [];
+    const conversationParticipants = callConversation?.participants || [];
+    const participantMap = new Map(
+      conversationParticipants.map((participant) => [
+        participant._id,
+        participant,
+      ]),
+    );
+    const ids =
+      callParticipantIds.length > 0
+        ? callParticipantIds
+        : user?.userId
+          ? [user.userId]
+          : [];
+    return ids.map((id) => {
+      if (id === user?.userId) {
+        return {
+          id,
+          displayName: userProfile?.displayName || user?.username || "Bạn",
+          avatarUrl: userProfile?.avatarUrl || "",
+          isSelf: true,
+        };
+      }
+      const participant = participantMap.get(id);
+      return {
+        id,
+        displayName: participant?.displayName || "Thành viên",
+        avatarUrl: participant?.avatarUrl || "",
+        isSelf: false,
+      };
+    });
+  }, [
+    callConversation?.participants,
+    callParticipantIds,
+    callStatus,
+    isCurrentCallGroup,
+    user?.userId,
+    user?.username,
+    userProfile?.avatarUrl,
+    userProfile?.displayName,
+  ]);
+
+  const groupCallParticipantTiles = useMemo(
+    () =>
+      callParticipantsInRoom.map((participant) => {
+        const cameraTrack = callParticipantCameraTracks[participant.id] || null;
+        return {
+          ...participant,
+          hasVideo: Boolean(cameraTrack),
+          videoStream: cameraTrack ? new MediaStream([cameraTrack]) : null,
+        };
+      }),
+    [callParticipantCameraTracks, callParticipantsInRoom],
+  );
+
   const otherAvatar = otherUser?.avatarUrl || "/miku.png";
 
   const activeChatTheme = useMemo(
@@ -822,6 +1076,758 @@ export default function ChatPage() {
     [activeChatTheme.messageAreaOverlay],
   );
 
+  const syncRoomStreams = useCallback((room: Room | null) => {
+    if (!room) {
+      setLocalStreamState(null);
+      setRemoteStream(null);
+      setCallParticipantIds([]);
+      setCallParticipantCameraTracks({});
+      return;
+    }
+
+    const localTracks = Array.from(
+      room.localParticipant.trackPublications.values(),
+    )
+      .map((pub) => pub.track)
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .map((t) => t.mediaStreamTrack)
+      .filter((t): t is MediaStreamTrack => Boolean(t));
+
+    setLocalStreamState(
+      localTracks.length > 0 ? new MediaStream(localTracks) : null,
+    );
+
+    const remoteTracks = Array.from(room.remoteParticipants.values())
+      .flatMap((p) => Array.from(p.trackPublications.values()))
+      .map((pub) => pub.track)
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .map((t) => t.mediaStreamTrack)
+      .filter((t): t is MediaStreamTrack => Boolean(t));
+
+    const participantIds = [
+      room.localParticipant.identity,
+      ...Array.from(room.remoteParticipants.keys()),
+    ].filter(Boolean);
+
+    setCallParticipantIds(Array.from(new Set(participantIds)));
+
+    const participantCameraTracks: Record<string, MediaStreamTrack | null> = {};
+    const localCamPub = Array.from(
+      room.localParticipant.trackPublications.values(),
+    ).find(
+      (pub) =>
+        pub.source === Track.Source.Camera &&
+        Boolean(pub.track?.mediaStreamTrack),
+    );
+    participantCameraTracks[room.localParticipant.identity] =
+      localCamPub?.track?.mediaStreamTrack || null;
+
+    room.remoteParticipants.forEach((participant, identity) => {
+      const remoteCamPub = Array.from(
+        participant.trackPublications.values(),
+      ).find(
+        (pub) =>
+          pub.source === Track.Source.Camera &&
+          Boolean(pub.track?.mediaStreamTrack),
+      );
+      participantCameraTracks[identity] =
+        remoteCamPub?.track?.mediaStreamTrack || null;
+    });
+
+    setCallParticipantCameraTracks(participantCameraTracks);
+    setRemoteStream(
+      remoteTracks.length > 0 ? new MediaStream(remoteTracks) : null,
+    );
+  }, []);
+
+  // ─── LiveKit call helpers ────────────────────────────────────────────────────
+  const cleanupCall = useCallback(() => {
+    if (roomRef.current) {
+      roomRef.current.disconnect();
+      roomRef.current = null;
+    }
+    try { stopRingtone(); } catch (e) { /* ignore */ }
+    setRemoteStream(null);
+    setLocalStreamState(null);
+    setCallStatus("idle");
+    setCallKind(null);
+    setCallConversationId(null);
+    setIncomingRoomName(null);
+    setIncomingIsGroupCall(false);
+    setIncomingCallerName("");
+    setIncomingCallerAvatar("");
+    setIsMicMuted(false);
+    setIsCameraOff(false);
+    setIsVideoPiPActive(false);
+    setIsUpgradeRequestPending(false);
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
+    setCallConnectedAt(null);
+    setCallElapsedSeconds(0);
+    setCallParticipantIds([]);
+    setCallParticipantCameraTracks({});
+  }, []);
+
+  // Play ringtone when incoming, stop otherwise
+  useEffect(() => {
+    if (callStatus === "incoming") {
+      startRingtone();
+    } else {
+      stopRingtone();
+    }
+    return () => void stopRingtone();
+  }, [callStatus, startRingtone, stopRingtone]);
+
+  const guardActiveCallBeforeJoin = useCallback(
+    (targetConversationId: string) => {
+      if (
+        callStatus !== "idle" &&
+        callConversationId &&
+        callConversationId !== targetConversationId
+      ) {
+        toast.error(
+          "Bạn đang tham gia vào 1 cuộc gọi, hãy kết thúc trước khi tham gia cuộc gọi khác.",
+        );
+        return false;
+      }
+      return true;
+    },
+    [callConversationId, callStatus],
+  );
+
+  const connectLiveKitRoom = useCallback(
+    async (
+      conversationId: string,
+      kind: CallKind,
+      notifyMode: "initiate" | "accept" | "join",
+      roomName?: string | null,
+    ) => {
+      const tokenResponse = await callService.createLiveKitToken(
+        conversationId,
+        kind,
+        roomName || undefined,
+      );
+
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+
+      const room = new Room({ adaptiveStream: true, dynacast: true });
+      const sync = () => syncRoomStreams(room);
+      room.on(RoomEvent.TrackSubscribed, sync);
+      room.on(RoomEvent.TrackUnsubscribed, sync);
+      room.on(RoomEvent.ParticipantConnected, sync);
+      room.on(RoomEvent.ParticipantDisconnected, sync);
+      room.on(RoomEvent.LocalTrackPublished, sync);
+      room.on(RoomEvent.LocalTrackUnpublished, sync);
+      room.on(RoomEvent.TrackMuted, sync);
+      room.on(RoomEvent.TrackUnmuted, sync);
+      room.on(RoomEvent.Disconnected, () => {
+        setRemoteStream(null);
+        setLocalStreamState(null);
+        setCallParticipantIds([]);
+        setCallParticipantCameraTracks({});
+      });
+
+      await room.connect(tokenResponse.wsUrl, tokenResponse.token, {
+        autoSubscribe: true,
+      });
+
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      let resolvedKind: CallKind = kind;
+      if (kind === "video") {
+        try {
+          await room.localParticipant.setCameraEnabled(true);
+          const hasCam = Array.from(
+            room.localParticipant.trackPublications.values(),
+          ).some(
+            (pub) => pub.source === Track.Source.Camera && Boolean(pub.track),
+          );
+          if (!hasCam) {
+            resolvedKind = "voice";
+            await room.localParticipant.setCameraEnabled(false);
+            toast.error(
+              "Không mở được camera. Nếu đang test 2 trình duyệt trên cùng máy, webcam có thể đang bị trình duyệt kia chiếm dụng.",
+            );
+          } else {
+            // Ensure microphone is still enabled after camera setup (fix audio drop in video calls)
+            const hasMic = Array.from(
+              room.localParticipant.trackPublications.values(),
+            ).some(
+              (pub) => pub.source === Track.Source.Microphone && Boolean(pub.track),
+            );
+            if (!hasMic) {
+              console.warn("Microphone track lost after camera enable, re-enabling...");
+              await room.localParticipant.setMicrophoneEnabled(true);
+            }
+          }
+        } catch (error) {
+          resolvedKind = "voice";
+          await room.localParticipant.setCameraEnabled(false);
+          console.error("setCameraEnabled error", error);
+          toast.error(
+            "Không thể bật camera ở trình duyệt này. Hãy cấp quyền camera hoặc đóng app khác đang dùng webcam.",
+          );
+        }
+      } else {
+        await room.localParticipant.setCameraEnabled(false);
+      }
+
+      roomRef.current = room;
+      setCallKind(resolvedKind);
+      setIsMicMuted(false);
+      setIsCameraOff(resolvedKind !== "video");
+      syncRoomStreams(room);
+
+      if (socket) {
+        if (notifyMode === "initiate") {
+          socket.emit("call:initiate", {
+            conversationId,
+            kind: resolvedKind,
+            roomName: tokenResponse.roomName,
+          });
+        } else if (notifyMode === "accept") {
+          socket.emit("call:accept", { conversationId });
+        } else {
+          socket.emit("call:join", { conversationId });
+        }
+      }
+
+      return tokenResponse.roomName;
+    },
+    [socket, syncRoomStreams],
+  );
+
+  const startCall = useCallback(
+    async (kind: CallKind) => {
+      if (!activeConversationId || !socket) {
+        toast.error("Không thể bắt đầu cuộc gọi lúc này");
+        return;
+      }
+      if (!guardActiveCallBeforeJoin(activeConversationId)) return;
+
+      try {
+        const isGroupCall = activeConversation?.type === "group";
+        cleanupCall();
+        setCallConversationId(activeConversationId);
+        setCallKind(kind);
+        setCallStatus(isGroupCall ? "connecting" : "outgoing");
+
+        await connectLiveKitRoom(activeConversationId, kind, "initiate");
+
+        if (isGroupCall) {
+          setCallConnectedAt(Date.now());
+          setCallStatus("in-call");
+        }
+      } catch (error) {
+        console.error("startCall error", error);
+        toast.error("Không thể bắt đầu cuộc gọi");
+        cleanupCall();
+      }
+    },
+    [
+      activeConversation?.type,
+      activeConversationId,
+      cleanupCall,
+      connectLiveKitRoom,
+      guardActiveCallBeforeJoin,
+      socket,
+    ],
+  );
+
+  const acceptIncomingCall = useCallback(
+    async (preferredKind?: CallKind) => {
+      if (!callConversationId || !callKind || !socket) return;
+      if (!guardActiveCallBeforeJoin(callConversationId)) return;
+
+      const joinKind = preferredKind || callKind;
+      try {
+        try { stopRingtone(); } catch {}
+        setCallKind(joinKind);
+        setCallStatus("connecting");
+        await connectLiveKitRoom(
+          callConversationId,
+          joinKind,
+          incomingIsGroupCall ? "join" : "accept",
+          incomingRoomName,
+        );
+        setCallConnectedAt(Date.now());
+        setCallStatus("in-call");
+        setIncomingIsGroupCall(false);
+        setIncomingRoomName(null);
+      } catch (error) {
+        console.error("acceptIncomingCall error", error);
+        toast.error("Không thể nhận cuộc gọi");
+        cleanupCall();
+      }
+    },
+    [
+      callConversationId,
+      callKind,
+      cleanupCall,
+      connectLiveKitRoom,
+      guardActiveCallBeforeJoin,
+      incomingIsGroupCall,
+      incomingRoomName,
+      socket,
+    ],
+  );
+
+  const rejectIncomingCall = useCallback(() => {
+    if (callConversationId && socket)
+      socket.emit("call:reject", { conversationId: callConversationId });
+    try { stopRingtone(); } catch {}
+    cleanupCall();
+  }, [callConversationId, cleanupCall, socket]);
+
+  const endCall = useCallback(() => {
+    if (callConversationId && socket)
+      socket.emit("call:end", { conversationId: callConversationId });
+    try { stopRingtone(); } catch {}
+    cleanupCall();
+  }, [callConversationId, cleanupCall, socket]);
+
+  const toggleMic = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    const nextMuted = !isMicMuted;
+    void room.localParticipant.setMicrophoneEnabled(!nextMuted);
+    setIsMicMuted(nextMuted);
+  }, [isMicMuted]);
+
+  const toggleCamera = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    const nextOff = !isCameraOff;
+    if (nextOff) {
+      void room.localParticipant.setCameraEnabled(false);
+      setIsCameraOff(true);
+      return;
+    }
+    void (async () => {
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+        const hasCam = Array.from(
+          room.localParticipant.trackPublications.values(),
+        ).some(
+          (pub) => pub.source === Track.Source.Camera && Boolean(pub.track),
+        );
+        if (!hasCam) {
+          setIsCameraOff(true);
+          toast.error(
+            "Không mở được camera. Có thể webcam đang bị trình duyệt khác sử dụng.",
+          );
+          return;
+        }
+        setIsCameraOff(false);
+      } catch (error) {
+        console.error("toggleCamera error", error);
+        setIsCameraOff(true);
+        toast.error("Không thể bật camera trên trình duyệt này");
+      }
+    })();
+  }, [isCameraOff]);
+
+  const upgradeVoiceToVideo = useCallback(async () => {
+    if (
+      callStatus !== "in-call" ||
+      callKind !== "voice" ||
+      !callConversationId ||
+      !socket
+    )
+      return;
+    const room = roomRef.current;
+    if (!room) return;
+
+    if (isCurrentCallGroup) {
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+        const hasCam = Array.from(
+          room.localParticipant.trackPublications.values(),
+        ).some(
+          (pub) => pub.source === Track.Source.Camera && Boolean(pub.track),
+        );
+        if (!hasCam) {
+          setIsCameraOff(true);
+          toast.error("Không thể bật camera trên thiết bị này");
+          return;
+        }
+        setCallKind("video");
+        setIsCameraOff(false);
+        toast("Bạn đã bật camera trong cuộc gọi nhóm");
+      } catch (error) {
+        console.error("group upgradeVoiceToVideo error", error);
+        setIsCameraOff(true);
+        toast.error("Không thể bật camera trên trình duyệt này");
+      }
+      return;
+    }
+
+    if (isUpgradeRequestPending) return;
+    socket.emit("call:upgrade-request", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    setIsUpgradeRequestPending(true);
+    toast("Đã gửi yêu cầu nâng cấp video");
+  }, [
+    callConversationId,
+    callKind,
+    callStatus,
+    isCurrentCallGroup,
+    isUpgradeRequestPending,
+    socket,
+  ]);
+
+  const acceptUpgradeRequest = useCallback(() => {
+    if (!callConversationId || !socket) return;
+    socket.emit("call:upgrade-accept", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    void (async () => {
+      const room = roomRef.current;
+      if (!room) return;
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+        const hasCam = Array.from(
+          room.localParticipant.trackPublications.values(),
+        ).some(
+          (pub) => pub.source === Track.Source.Camera && Boolean(pub.track),
+        );
+        if (!hasCam) {
+          setIsCameraOff(true);
+          toast.error(
+            "Đã chấp nhận nâng cấp video nhưng camera không mở được.",
+          );
+          return;
+        }
+        setCallKind("video");
+        setIsCameraOff(false);
+      } catch (error) {
+        console.error("acceptUpgradeRequest camera error", error);
+        setIsCameraOff(true);
+        toast.error("Không thể bật camera để nâng cấp video");
+      }
+    })();
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
+  }, [callConversationId, socket]);
+
+  const rejectUpgradeRequest = useCallback(() => {
+    if (!callConversationId || !socket) return;
+    socket.emit("call:upgrade-reject", {
+      conversationId: callConversationId,
+      kind: "video",
+    });
+    setIsUpgradeRequestIncoming(false);
+    setUpgradeRequesterName("");
+  }, [callConversationId, socket]);
+
+  const closeVideoPiP = useCallback(async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      }
+    } catch (error) {
+      console.error("closeVideoPiP error", error);
+    } finally {
+      setIsVideoPiPActive(false);
+    }
+  }, []);
+
+  const openVideoPiP = useCallback(async () => {
+    const videoEl = remoteVideoRef.current;
+    if (!videoEl) {
+      toast.error("Chưa có video đối phương để bật cửa sổ nổi");
+      return;
+    }
+    try {
+      if (
+        !document.pictureInPictureEnabled ||
+        !videoEl.requestPictureInPicture
+      ) {
+        toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
+        return;
+      }
+
+      // Ensure video element has a valid stream before requesting PiP
+      if (!videoEl.srcObject) {
+        // Wait for stream to be bound to video element (max 1 second)
+        let attempts = 0;
+        while (!videoEl.srcObject && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (!videoEl.srcObject) {
+          toast.error("Video stream chưa sẵn sàng");
+          return;
+        }
+      }
+
+      if (document.pictureInPictureElement && document.pictureInPictureElement !== videoEl) {
+        await document.exitPictureInPicture();
+      }
+      if (document.pictureInPictureElement !== videoEl) {
+        await videoEl.requestPictureInPicture();
+      }
+      setIsVideoPiPActive(true);
+    } catch (error) {
+      console.error("openVideoPiP error", error);
+      toast.error("Không thể bật cửa sổ nổi video");
+    }
+  }, []);
+
+  const toggleVideoPiP = useCallback(async () => {
+    if (document.pictureInPictureElement) {
+      await closeVideoPiP();
+      return;
+    }
+    await openVideoPiP();
+  }, [closeVideoPiP, openVideoPiP]);
+
+  const handleMinimizeCall = useCallback(async () => {
+    // For video calls, activate PiP with a small delay to ensure streams are bound
+    if (callKind === "video" && !isCurrentCallGroup) {
+      // Give the useEffect hooks time to bind streams to video elements
+      await new Promise(resolve => setTimeout(resolve, 100));
+      void openVideoPiP();
+    }
+    setIsCallMinimized(true);
+  }, [callKind, isCurrentCallGroup, openVideoPiP]);
+
+  const handleRestoreCall = useCallback(() => {
+    if (document.pictureInPictureElement) {
+      void closeVideoPiP();
+    }
+    setIsCallMinimized(false);
+  }, [closeVideoPiP]);
+
+  useEffect(() => {
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamState;
+      void localVideoRef.current.play().catch(() => undefined);
+    }
+  }, [localStreamState, callKind, isCallMinimized]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      void remoteVideoRef.current.play().catch(() => undefined);
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      void remoteAudioRef.current.play().catch(() => undefined);
+    }
+  }, [remoteStream, callKind, isCallMinimized]);
+
+  useEffect(() => {
+    if (!(callKind === "video" && isCurrentCallGroup)) {
+      participantVideoRefs.current = {};
+      return;
+    }
+    const activeIds = new Set(groupCallParticipantTiles.map((t) => t.id));
+    groupCallParticipantTiles.forEach((participant) => {
+      const videoEl = participantVideoRefs.current[participant.id];
+      if (!videoEl) return;
+      videoEl.srcObject = participant.videoStream;
+      videoEl.muted = participant.isSelf;
+      if (participant.videoStream) void videoEl.play().catch(() => undefined);
+    });
+    Object.keys(participantVideoRefs.current).forEach((id) => {
+      if (!activeIds.has(id)) delete participantVideoRefs.current[id];
+    });
+  }, [callKind, groupCallParticipantTiles, isCurrentCallGroup, isCallMinimized]);
+
+  useEffect(() => {
+    if (callKind === "video") return;
+    if (!document.pictureInPictureElement) {
+      setIsVideoPiPActive(false);
+      return;
+    }
+    void document.exitPictureInPicture().catch(() => undefined);
+    setIsVideoPiPActive(false);
+  }, [callKind]);
+
+  // ─── Socket call events ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
+
+    const onIncoming = (payload: {
+      conversationId: string;
+      kind: CallKind;
+      roomName?: string;
+      isGroup?: boolean;
+      fromDisplayName?: string;
+    }) => {
+      if (callStatus !== "idle") {
+        if (
+          callConversationId &&
+          callConversationId !== payload.conversationId
+        ) {
+          toast.error(
+            "Bạn đang tham gia vào 1 cuộc gọi, hãy kết thúc trước khi tham gia cuộc gọi khác.",
+          );
+        }
+        if (!payload.isGroup)
+          socket.emit("call:reject", {
+            conversationId: payload.conversationId,
+          });
+        return;
+      }
+      setCallConversationId(payload.conversationId);
+      setCallKind(payload.kind);
+      setIncomingRoomName(payload.roomName || null);
+      setIncomingIsGroupCall(Boolean(payload.isGroup));
+      setIncomingCallerName(payload.fromDisplayName || "Người dùng");
+      setCallStatus("incoming");
+    };
+
+    const onAccepted = (payload: { conversationId: string }) => {
+      if (payload.conversationId !== callConversationId) return;
+      setCallConnectedAt((prev) => prev || Date.now());
+      setCallStatus("in-call");
+    };
+
+    const onRejected = (payload: { conversationId: string }) => {
+      if (payload.conversationId !== callConversationId) return;
+      toast.error("Cuộc gọi đã bị từ chối");
+      cleanupCall();
+    };
+
+    const onUpgradeRequest = (payload: {
+      conversationId: string;
+      kind: CallKind;
+      fromDisplayName?: string;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      if (
+        callStatus !== "in-call" ||
+        callKind !== "voice" ||
+        isCurrentCallGroup
+      ) {
+        socket.emit("call:upgrade-reject", {
+          conversationId: payload.conversationId,
+          kind: payload.kind,
+        });
+        return;
+      }
+      setIsUpgradeRequestIncoming(true);
+      setUpgradeRequesterName(payload.fromDisplayName || "Người dùng");
+      toast("Bạn nhận được yêu cầu nâng cấp video");
+    };
+
+    const onUpgradeAccepted = async (payload: {
+      conversationId: string;
+      kind: CallKind;
+    }) => {
+      if (payload.conversationId !== callConversationId) return;
+      const room = roomRef.current;
+      if (room) {
+        try {
+          await room.localParticipant.setCameraEnabled(true);
+          const hasCam = Array.from(
+            room.localParticipant.trackPublications.values(),
+          ).some(
+            (pub) => pub.source === Track.Source.Camera && Boolean(pub.track),
+          );
+          if (!hasCam) {
+            setIsCameraOff(true);
+            toast.error(
+              "Đối phương đã chấp nhận video, nhưng camera của bạn không mở được.",
+            );
+            setIsUpgradeRequestPending(false);
+            return;
+          }
+          setCallKind("video");
+          setIsCameraOff(false);
+        } catch (error) {
+          console.error("onUpgradeAccepted camera error", error);
+          setIsCameraOff(true);
+          toast.error("Không thể bật camera để nâng cấp video");
+        }
+      }
+      setIsUpgradeRequestPending(false);
+    };
+
+    const onUpgradeRejected = (payload: { conversationId: string }) => {
+      if (payload.conversationId !== callConversationId) return;
+      setIsUpgradeRequestPending(false);
+      toast("Đối phương đã từ chối nâng cấp video");
+    };
+
+    const onOngoing = (payload: {
+      conversationId: string;
+      kind: CallKind;
+      roomName: string;
+      isGroup?: boolean;
+    }) => {
+      if (!payload.isGroup) return;
+      if (payload.conversationId !== activeConversationId) return;
+      toast(
+        "Cuộc gọi nhóm đang diễn ra. Bạn có thể tham gia từ thẻ cuộc gọi trong chat.",
+      );
+    };
+
+    const onEnded = (payload: { conversationId: string }) => {
+      if (payload.conversationId !== callConversationId) return;
+      toast("Cuộc gọi đã kết thúc");
+      cleanupCall();
+    };
+
+    socket.on("call:incoming", onIncoming);
+    socket.on("call:accepted", onAccepted);
+    socket.on("call:rejected", onRejected);
+    socket.on("call:ongoing", onOngoing);
+    socket.on("call:upgrade-request", onUpgradeRequest);
+    socket.on("call:upgrade-accept", onUpgradeAccepted);
+    socket.on("call:upgrade-reject", onUpgradeRejected);
+    socket.on("call:ended", onEnded);
+
+    return () => {
+      socket.off("call:incoming", onIncoming);
+      socket.off("call:accepted", onAccepted);
+      socket.off("call:rejected", onRejected);
+      socket.off("call:ongoing", onOngoing);
+      socket.off("call:upgrade-request", onUpgradeRequest);
+      socket.off("call:upgrade-accept", onUpgradeAccepted);
+      socket.off("call:upgrade-reject", onUpgradeRejected);
+      socket.off("call:ended", onEnded);
+    };
+  }, [
+    activeConversationId,
+    callConversationId,
+    callKind,
+    callStatus,
+    cleanupCall,
+    isCurrentCallGroup,
+    incomingRoomName,
+    socket,
+  ]);
+
+  // Extract incoming caller's avatar from conversation when receiving a call
+  useEffect(() => {
+    if (callStatus === "incoming" && callConversation && !incomingIsGroupCall) {
+      // Find the caller from conversation participants (not the current user)
+      const caller = callConversation.participants?.find(
+        (p) => p._id !== user?.userId,
+      );
+      if (caller?.avatarUrl) {
+        setIncomingCallerAvatar(caller.avatarUrl);
+      }
+    }
+  }, [callStatus, callConversation, incomingIsGroupCall, user?.userId]);
+
+  useEffect(() => {
+    return () => {
+      cleanupCall();
+    };
+  }, [cleanupCall]);
+
+  // ─── Messages ────────────────────────────────────────────────────────────────
   const currentMessages = useMemo(() => {
     if (!activeConversationId) return [];
     const data = messages[activeConversationId];
@@ -968,518 +1974,6 @@ export default function ChatPage() {
     });
     return map;
   }, [activeConversation, user?.userId]);
-
-  // ─── Call helpers ─────────────────────────────────────────────────────────────
-  const cleanupCall = useCallback(() => {
-    if (peerRef.current) {
-      peerRef.current.onicecandidate = null;
-      peerRef.current.ontrack = null;
-      peerRef.current.close();
-      peerRef.current = null;
-    }
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    }
-    pendingOfferRef.current = null;
-    setRemoteStream(null);
-    setLocalStreamState(null);
-    setCallStatus("idle");
-    setCallKind(null);
-    setCallConversationId(null);
-    setIncomingCallerName("");
-    setIsMicMuted(false);
-    setIsCameraOff(false);
-    setIsVideoPiPActive(false);
-    setIsUpgradeRequestPending(false);
-    setIsUpgradeRequestIncoming(false);
-    setUpgradeRequesterName("");
-    setCallConnectedAt(null);
-    setCallElapsedSeconds(0);
-  }, []);
-
-  const ensureLocalStream = useCallback(async (kind: CallKind) => {
-    const existing = localStreamRef.current;
-    if (existing) {
-      if (kind === "video" && existing.getVideoTracks().length === 0) {
-        try {
-          const videoStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-          videoStream
-            .getVideoTracks()
-            .forEach((track) => existing.addTrack(track));
-          setLocalStreamState(existing);
-        } catch (error) {
-          console.warn("Unable to add video track", error);
-        }
-      }
-      return existing;
-    }
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: kind === "video",
-      });
-    } catch (error) {
-      if (kind !== "video") throw error;
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-      setCallKind("voice");
-      toast.error("Không thể mở camera, đã chuyển sang gọi thoại");
-    }
-    localStreamRef.current = stream;
-    setLocalStreamState(stream);
-    return stream;
-  }, []);
-
-  const createPeer = useCallback(
-    (conversationId: string) => {
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
-      }
-      const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      peer.onicecandidate = (event) => {
-        if (!event.candidate || !socket) return;
-        socket.emit("call:ice-candidate", {
-          conversationId,
-          candidate: event.candidate,
-        });
-      };
-      peer.ontrack = (event) => {
-        if (event.streams?.[0]) setRemoteStream(event.streams[0]);
-      };
-      peerRef.current = peer;
-      return peer;
-    },
-    [socket],
-  );
-
-  const startCall = useCallback(
-    async (kind: CallKind) => {
-      if (!activeConversationId || !socket) {
-        toast.error("Không thể bắt đầu cuộc gọi lúc này");
-        return;
-      }
-      try {
-        cleanupCall();
-        setCallConversationId(activeConversationId);
-        setCallKind(kind);
-        setCallStatus("outgoing");
-        const stream = await ensureLocalStream(kind);
-        const peer = createPeer(activeConversationId);
-        stream.getTracks().forEach((track) => {
-          peer.addTrack(track, stream);
-        });
-        const offer = await peer.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: kind === "video",
-        });
-        await peer.setLocalDescription(offer);
-        socket.emit("call:initiate", {
-          conversationId: activeConversationId,
-          kind,
-          offer,
-        });
-      } catch (error) {
-        console.error("startCall error", error);
-        toast.error("Không thể bắt đầu cuộc gọi");
-        cleanupCall();
-      }
-    },
-    [activeConversationId, cleanupCall, createPeer, ensureLocalStream, socket],
-  );
-
-  const acceptIncomingCall = useCallback(async () => {
-    if (!callConversationId || !callKind || !pendingOfferRef.current || !socket)
-      return;
-    try {
-      setCallStatus("connecting");
-      const stream = await ensureLocalStream(callKind);
-      const peer = createPeer(callConversationId);
-      stream.getTracks().forEach((track) => {
-        peer.addTrack(track, stream);
-      });
-      await peer.setRemoteDescription(pendingOfferRef.current);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit("call:accept", { conversationId: callConversationId });
-      socket.emit("call:answer", {
-        conversationId: callConversationId,
-        answer,
-      });
-      setCallConnectedAt(Date.now());
-      setCallStatus("in-call");
-    } catch (error) {
-      console.error("acceptIncomingCall error", error);
-      toast.error("Không thể nhận cuộc gọi");
-      cleanupCall();
-    }
-  }, [
-    callConversationId,
-    callKind,
-    cleanupCall,
-    createPeer,
-    ensureLocalStream,
-    socket,
-  ]);
-
-  const rejectIncomingCall = useCallback(() => {
-    if (callConversationId && socket)
-      socket.emit("call:reject", { conversationId: callConversationId });
-    cleanupCall();
-  }, [callConversationId, cleanupCall, socket]);
-
-  const endCall = useCallback(() => {
-    if (callConversationId && socket)
-      socket.emit("call:end", { conversationId: callConversationId });
-    cleanupCall();
-  }, [callConversationId, cleanupCall, socket]);
-
-  const toggleMic = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    const nextMuted = !isMicMuted;
-    stream.getAudioTracks().forEach((track) => {
-      track.enabled = !nextMuted;
-    });
-    setIsMicMuted(nextMuted);
-  }, [isMicMuted]);
-
-  const toggleCamera = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    const nextOff = !isCameraOff;
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = !nextOff;
-    });
-    setIsCameraOff(nextOff);
-  }, [isCameraOff]);
-
-  const sendUpgradeOffer = useCallback(async () => {
-    if (!callConversationId || !socket) return;
-    const stream = await ensureLocalStream("video");
-    const peer = peerRef.current;
-    if (!peer) return;
-    const videoTracks = stream.getVideoTracks();
-    if (videoTracks.length === 0) throw new Error("No camera track available");
-    setCallKind("video");
-    setIsCameraOff(false);
-    videoTracks.forEach((track) => {
-      const alreadySent = peer
-        .getSenders()
-        .some((sender) => sender.track?.id === track.id);
-      if (!alreadySent) peer.addTrack(track, stream);
-    });
-    const offer = await peer.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-    });
-    await peer.setLocalDescription(offer);
-    socket.emit("call:upgrade-offer", {
-      conversationId: callConversationId,
-      kind: "video",
-      offer,
-    });
-  }, [callConversationId, ensureLocalStream, socket]);
-
-  const upgradeVoiceToVideo = useCallback(async () => {
-    if (
-      callStatus !== "in-call" ||
-      callKind !== "voice" ||
-      !callConversationId ||
-      !socket ||
-      isUpgradeRequestPending
-    )
-      return;
-    socket.emit("call:upgrade-request", {
-      conversationId: callConversationId,
-      kind: "video",
-    });
-    setIsUpgradeRequestPending(true);
-    toast("Đã gửi yêu cầu nâng cấp video");
-  }, [
-    callConversationId,
-    callKind,
-    callStatus,
-    isUpgradeRequestPending,
-    socket,
-  ]);
-
-  const acceptUpgradeRequest = useCallback(() => {
-    if (!callConversationId || !socket) return;
-    socket.emit("call:upgrade-accept", {
-      conversationId: callConversationId,
-      kind: "video",
-    });
-    setIsUpgradeRequestIncoming(false);
-    setUpgradeRequesterName("");
-  }, [callConversationId, socket]);
-
-  const rejectUpgradeRequest = useCallback(() => {
-    if (!callConversationId || !socket) return;
-    socket.emit("call:upgrade-reject", {
-      conversationId: callConversationId,
-      kind: "video",
-    });
-    setIsUpgradeRequestIncoming(false);
-    setUpgradeRequesterName("");
-  }, [callConversationId, socket]);
-
-  const toggleVideoPiP = useCallback(async () => {
-    const videoEl = remoteVideoRef.current;
-    if (!videoEl) {
-      toast.error("Chưa có video đối phương để bật cửa sổ nổi");
-      return;
-    }
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsVideoPiPActive(false);
-        return;
-      }
-      if (
-        !document.pictureInPictureEnabled ||
-        !videoEl.requestPictureInPicture
-      ) {
-        toast.error("Trình duyệt không hỗ trợ cửa sổ nổi video");
-        return;
-      }
-      await videoEl.requestPictureInPicture();
-      setIsVideoPiPActive(true);
-    } catch (error) {
-      console.error("toggleVideoPiP error", error);
-      toast.error("Không thể bật cửa sổ nổi video");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = localStreamState;
-      void localVideoRef.current.play().catch(() => undefined);
-    }
-  }, [localStreamState, callKind]);
-
-  useEffect(() => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      void remoteVideoRef.current.play().catch(() => undefined);
-    }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = remoteStream;
-      void remoteAudioRef.current.play().catch(() => undefined);
-    }
-  }, [remoteStream, callKind]);
-
-  useEffect(() => {
-    if (callKind === "video") return;
-    if (!document.pictureInPictureElement) {
-      setIsVideoPiPActive(false);
-      return;
-    }
-    void document.exitPictureInPicture().catch(() => undefined);
-    setIsVideoPiPActive(false);
-  }, [callKind]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const onIncoming = (payload: {
-      conversationId: string;
-      kind: CallKind;
-      offer: RTCSessionDescriptionInit;
-      fromDisplayName?: string;
-    }) => {
-      if (callStatus !== "idle") {
-        socket.emit("call:reject", { conversationId: payload.conversationId });
-        return;
-      }
-      pendingOfferRef.current = payload.offer;
-      setCallConversationId(payload.conversationId);
-      setCallKind(payload.kind);
-      setIncomingCallerName(payload.fromDisplayName || "Người dùng");
-      setCallStatus("incoming");
-    };
-
-    const onAccepted = () => {
-      setCallStatus((prev) => (prev === "outgoing" ? "connecting" : prev));
-    };
-    const onRejected = () => {
-      toast.error("Cuộc gọi đã bị từ chối");
-      cleanupCall();
-    };
-
-    const onAnswer = async (payload: { answer: RTCSessionDescriptionInit }) => {
-      try {
-        if (!peerRef.current) return;
-        await peerRef.current.setRemoteDescription(payload.answer);
-        setCallConnectedAt((prev) => prev || Date.now());
-        setCallStatus("in-call");
-      } catch (error) {
-        console.error("onAnswer error", error);
-        cleanupCall();
-      }
-    };
-
-    const onUpgradeOffer = async (payload: {
-      conversationId: string;
-      kind: CallKind;
-      offer: RTCSessionDescriptionInit;
-    }) => {
-      if (payload.conversationId !== callConversationId) return;
-      try {
-        if (!peerRef.current) return;
-        setCallStatus("connecting");
-        const stream = await ensureLocalStream(payload.kind);
-        if (payload.kind === "video" && stream.getVideoTracks().length === 0) {
-          toast.error("Không thể mở camera để nhận nâng cấp video");
-          setCallStatus("in-call");
-          return;
-        }
-        setIsUpgradeRequestIncoming(false);
-        setUpgradeRequesterName("");
-        setCallKind(payload.kind);
-        if (payload.kind === "video") {
-          const peer = peerRef.current;
-          stream.getVideoTracks().forEach((track) => {
-            const alreadyAdded = peer
-              .getSenders()
-              .some((sender) => sender.track?.id === track.id);
-            if (!alreadyAdded) peer.addTrack(track, stream);
-          });
-        }
-        await peerRef.current.setRemoteDescription(payload.offer);
-        const answer = await peerRef.current.createAnswer();
-        await peerRef.current.setLocalDescription(answer);
-        socket.emit("call:upgrade-answer", {
-          conversationId: payload.conversationId,
-          answer,
-        });
-        setCallStatus("in-call");
-      } catch (error) {
-        console.error("onUpgradeOffer error", error);
-        toast.error("Không thể nâng cấp lên video");
-      }
-    };
-
-    const onUpgradeAnswer = async (payload: {
-      conversationId: string;
-      answer: RTCSessionDescriptionInit;
-    }) => {
-      if (payload.conversationId !== callConversationId) return;
-      try {
-        if (!peerRef.current) return;
-        await peerRef.current.setRemoteDescription(payload.answer);
-        setIsUpgradeRequestPending(false);
-        setCallKind("video");
-        setCallStatus("in-call");
-      } catch (error) {
-        console.error("onUpgradeAnswer error", error);
-      }
-    };
-
-    const onUpgradeRequest = (payload: {
-      conversationId: string;
-      kind: CallKind;
-      fromDisplayName?: string;
-    }) => {
-      if (payload.conversationId !== callConversationId) return;
-      if (callStatus !== "in-call" || callKind !== "voice") {
-        socket.emit("call:upgrade-reject", {
-          conversationId: payload.conversationId,
-          kind: payload.kind,
-        });
-        return;
-      }
-      setIsUpgradeRequestIncoming(true);
-      setUpgradeRequesterName(payload.fromDisplayName || "Người dùng");
-      toast("Bạn nhận được yêu cầu nâng cấp video");
-    };
-
-    const onUpgradeAccepted = async (payload: {
-      conversationId: string;
-      kind: CallKind;
-    }) => {
-      if (payload.conversationId !== callConversationId) return;
-      try {
-        await sendUpgradeOffer();
-      } catch (error) {
-        setIsUpgradeRequestPending(false);
-        console.error("onUpgradeAccepted error", error);
-        toast.error("Không thể bắt đầu nâng cấp video");
-      }
-    };
-
-    const onUpgradeRejected = (payload: {
-      conversationId: string;
-      kind: CallKind;
-    }) => {
-      if (payload.conversationId !== callConversationId) return;
-      setIsUpgradeRequestPending(false);
-      toast("Đối phương đã từ chối nâng cấp video");
-    };
-
-    const onIceCandidate = async (payload: {
-      candidate: RTCIceCandidateInit;
-    }) => {
-      try {
-        if (!peerRef.current) return;
-        await peerRef.current.addIceCandidate(payload.candidate);
-      } catch (error) {
-        console.error("addIceCandidate error", error);
-      }
-    };
-
-    const onEnded = () => {
-      toast("Cuộc gọi đã kết thúc");
-      cleanupCall();
-    };
-
-    socket.on("call:incoming", onIncoming);
-    socket.on("call:accepted", onAccepted);
-    socket.on("call:rejected", onRejected);
-    socket.on("call:answer", onAnswer);
-    socket.on("call:upgrade-request", onUpgradeRequest);
-    socket.on("call:upgrade-accept", onUpgradeAccepted);
-    socket.on("call:upgrade-reject", onUpgradeRejected);
-    socket.on("call:upgrade-offer", onUpgradeOffer);
-    socket.on("call:upgrade-answer", onUpgradeAnswer);
-    socket.on("call:ice-candidate", onIceCandidate);
-    socket.on("call:ended", onEnded);
-
-    return () => {
-      socket.off("call:incoming", onIncoming);
-      socket.off("call:accepted", onAccepted);
-      socket.off("call:rejected", onRejected);
-      socket.off("call:answer", onAnswer);
-      socket.off("call:upgrade-request", onUpgradeRequest);
-      socket.off("call:upgrade-accept", onUpgradeAccepted);
-      socket.off("call:upgrade-reject", onUpgradeRejected);
-      socket.off("call:upgrade-offer", onUpgradeOffer);
-      socket.off("call:upgrade-answer", onUpgradeAnswer);
-      socket.off("call:ice-candidate", onIceCandidate);
-      socket.off("call:ended", onEnded);
-    };
-  }, [
-    callConversationId,
-    callKind,
-    callStatus,
-    cleanupCall,
-    ensureLocalStream,
-    sendUpgradeOffer,
-    socket,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      cleanupCall();
-    };
-  }, [cleanupCall]);
 
   // ─── Callbacks ───────────────────────────────────────────────────────────────
   const canRecall = useCallback(
@@ -2113,16 +2607,14 @@ export default function ChatPage() {
                   cursor: "zoom-in",
                   display: "block",
                 }}
-                onClick={(event) => {
-                  event.stopPropagation();
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (img.url) setImagePreviewUrl(img.url);
                 }}
               />
             </div>
           );
         }
-
-        // ── Nhiều ảnh: 
         return (
           <div
             style={{
@@ -2144,8 +2636,8 @@ export default function ChatPage() {
                   borderRadius: 10,
                   cursor: "zoom-in",
                 }}
-                onClick={(event) => {
-                  event.stopPropagation();
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (img.url) setImagePreviewUrl(img.url);
                 }}
               />
@@ -2195,38 +2687,6 @@ export default function ChatPage() {
         );
       }
 
-      if (payload.kind === "image" && payload.attachments?.length) {
-        return (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 4,
-              maxWidth: 280,
-            }}
-          >
-            {(payload.attachments ?? []).map((img, index) => (
-              <img
-                key={img.url || index}
-                src={img.url}
-                alt={img.name || "image"}
-                style={{
-                  width: "100%",
-                  height: 120,
-                  objectFit: "cover",
-                  borderRadius: 10,
-                  cursor: "zoom-in",
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (img.url) setImagePreviewUrl(img.url);
-                }}
-              />
-            ))}
-          </div>
-        );
-      }
-
       if (payload.kind === "audio" && payload.attachment?.url) {
         return (
           <div
@@ -2268,20 +2728,51 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "call" && payload.call) {
+        const callMeta = payload.call;
+        const isOngoingGroupCall =
+          callMeta.status === "started" &&
+          callMeta.isGroup &&
+          Boolean(callMeta.roomName);
         const callLabel =
-          payload.call.callType === "video"
-            ? "Cuộc gọi video"
-            : "Cuộc gọi thoại";
-        const finishedAt = payload.call.endedAt
-          ? formatMessageDateTime(payload.call.endedAt)
-          : "Đang diễn ra";
+          callMeta.callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại";
+        const finishedAt =
+          callMeta.status === "started"
+            ? "Đang diễn ra"
+            : callMeta.endedAt
+              ? formatMessageDateTime(callMeta.endedAt)
+              : "Đã kết thúc";
+
         return (
           <div
-            onClick={(event) => {
+            onClick={async (event) => {
               event.stopPropagation();
-              void startCall(
-                payload.call?.callType === "video" ? "video" : "voice",
-              );
+              if (
+                isOngoingGroupCall &&
+                activeConversationId &&
+                callMeta.roomName
+              ) {
+                if (!guardActiveCallBeforeJoin(activeConversationId)) return;
+                try {
+                  cleanupCall();
+                  setCallConversationId(activeConversationId);
+                  setCallKind(callMeta.callType);
+                  setCallStatus("connecting");
+                  await connectLiveKitRoom(
+                    activeConversationId,
+                    callMeta.callType,
+                    "join",
+                    callMeta.roomName,
+                  );
+                  setCallConnectedAt(Date.now());
+                  setCallStatus("in-call");
+                } catch (error) {
+                  console.error("join ongoing group call error", error);
+                  toast.error("Không thể tham gia cuộc gọi nhóm");
+                  cleanupCall();
+                }
+                return;
+              }
+              void startCall(callMeta.callType === "video" ? "video" : "voice");
             }}
             style={{
               minWidth: 250,
@@ -2305,12 +2796,12 @@ export default function ChatPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 background:
-                  payload.call.callType === "video"
+                  callMeta.callType === "video"
                     ? "rgba(59,130,246,.15)"
                     : "rgba(16,185,129,.15)",
               }}
             >
-              {payload.call.callType === "video" ? (
+              {callMeta.callType === "video" ? (
                 <Video size={18} color="#60a5fa" />
               ) : (
                 <Phone size={18} color="#34d399" />
@@ -2321,12 +2812,21 @@ export default function ChatPage() {
                 {callLabel}
               </div>
               <div style={{ color: "#cbd5e1", fontSize: 12 }}>
-                {formatCallDuration(payload.call.durationSeconds || 0)} •{" "}
-                {finishedAt}
+                {callMeta.status === "started"
+                  ? finishedAt
+                  : `${formatCallDuration(callMeta.durationSeconds || 0)} • ${finishedAt}`}
               </div>
               <div style={{ color: "#93c5fd", fontSize: 11, fontWeight: 600 }}>
-                Nhấn để gọi lại bằng thoại
+                {isOngoingGroupCall
+                  ? "Nhấn để tham gia cuộc gọi nhóm"
+                  : "Nhấn để gọi lại bằng thoại"}
               </div>
+              {callMeta.upgradedFrom === "voice" &&
+                callMeta.upgradedTo === "video" && (
+                  <div style={{ color: "#93c5fd", fontSize: 11 }}>
+                    Đã nâng cấp từ gọi thoại sang video
+                  </div>
+                )}
             </div>
           </div>
         );
@@ -2596,6 +3096,10 @@ export default function ChatPage() {
       renderLinks,
       startCall,
       user?.userId,
+      activeConversationId,
+      cleanupCall,
+      connectLiveKitRoom,
+      guardActiveCallBeforeJoin,
     ],
   );
 
@@ -3088,7 +3592,6 @@ export default function ChatPage() {
                   const messageKey =
                     message._id?.toString() || `${message.createdAt}-${index}`;
 
-                  // Tìm sender — ưu tiên participants hiện tại, fallback về cache (from doc 14)
                   const senderParticipant = !isMine
                     ? isGroup
                       ? (activeConversation.participants.find(
@@ -3099,7 +3602,7 @@ export default function ChatPage() {
                             message.senderId,
                           );
                           return cached
-                            ? { _id: message.senderId, ...cached }
+                            ? { ...cached, _id: message.senderId }
                             : {
                                 _id: message.senderId,
                                 displayName: "Người dùng",
@@ -4268,7 +4771,7 @@ export default function ChatPage() {
                   );
                 }
               }}
-              onAddMember={async (targetUserId) => {
+              onAddMember={async (targetUserId: string) => {
                 if (!activeConversationId) return;
                 try {
                   const result = await addMemberToGroup(
@@ -4331,7 +4834,7 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* ─── Modals (from doc 14) ─────────────────────────────────────────────── */}
+      {/* ─── Modals (group management) ─────────────────────────────────────────── */}
 
       {/* Delete conversation confirm */}
       {showDeleteConvConfirm && (
@@ -4608,10 +5111,7 @@ export default function ChatPage() {
                       if (isOwner && !selectedNewOwnerId) return;
                       setShowLeaveGroupConfirm(false);
                       try {
-                        await leaveGroup(
-                          activeConversationId,
-                          isOwner ? selectedNewOwnerId : undefined,
-                        );
+                        await leaveGroup(activeConversationId);
                         setSelectedNewOwnerId("");
                         toast.success("Đã rời khỏi nhóm");
                       } catch (error: any) {
@@ -4763,442 +5263,374 @@ export default function ChatPage() {
           </div>
         </div>
       )}
-
-      {/* ─── Call UI ─────────────────────────────────────────────────────────────── */}
-      {callStatus !== "idle" && (
-        <>
-          {callKind === "video" ? (
-            <div
-              style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 72,
-                background:
-                  "radial-gradient(circle at 25% 20%, rgba(30,64,175,.35), rgba(2,6,23,.92) 60%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "24px",
-              }}
-            >
-              <div
-                style={{
-                  width: "min(1200px, 95vw)",
-                  height: "min(760px, 92vh)",
-                  borderRadius: 24,
-                  overflow: "hidden",
-                  border: "1px solid rgba(148,163,184,.24)",
-                  background: "#020617",
-                  boxShadow: "0 40px 80px rgba(2,6,23,.7)",
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    position: "absolute",
-                    inset: 0,
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background:
-                      "linear-gradient(180deg, rgba(2,6,23,.72) 0%, rgba(2,6,23,.04) 24%, rgba(2,6,23,.58) 100%)",
-                    pointerEvents: "none",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "relative",
-                    zIndex: 1,
-                    padding: "18px 20px 12px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    color: "#e2e8f0",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 18 }}>
-                      {callStatus === "incoming"
-                        ? `${incomingCallerName || "Người dùng"} đang gọi video`
-                        : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
-                    </div>
-                    <div
-                      style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2 }}
-                    >
-                      {callStatus === "outgoing"
-                        ? "Đang đổ chuông"
-                        : callStatus === "connecting"
-                          ? "Đang kết nối video"
-                          : callStatus === "in-call"
-                            ? `Đang trong cuộc gọi • ${formatCallDuration(callElapsedSeconds)}`
-                            : "Đang chờ phản hồi"}
+{callStatus !== "idle" && (
+  <>
+    {/* ─── MINIMIZED PILL (luôn hiển thị khi thu nhỏ, mọi loại call) ─── */}
+    {isCallMinimized ? (
+      <div
+        style={{
+          position: "fixed", right: 18, bottom: 18, zIndex: 73,
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 14px 10px 10px",
+          borderRadius: 999,
+          background: "linear-gradient(135deg, rgba(15,23,42,.92), rgba(30,41,59,.92))",
+          border: "1px solid rgba(148,163,184,.25)",
+          boxShadow: "0 20px 44px rgba(0,0,0,.55)",
+          backdropFilter: "blur(16px)",
+          color: "#f1f5f9",
+          minWidth: 260,
+          cursor: "pointer",
+          animation: "scale-in .2s ease-out",
+        }}
+        onClick={() => void handleRestoreCall()}
+      >
+        <div style={{ position: "relative" }}>
+          <CallAvatar
+            url={callAvatarUrl}
+            name={callAvatarName}
+            size={42}
+            ring={false}
+          />
+          <span
+            style={{
+              position: "absolute", right: -2, bottom: -2, width: 12, height: 12,
+              borderRadius: "50%", background: "#22c55e",
+              border: "2px solid #0f172a",
+              boxShadow: "0 0 0 4px rgba(34,197,94,.25)",
+            }}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {callHeadline}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5 }}>
+            {callKind === "video" ? <VideoIcon size={11} /> : <Mic size={11} />}
+            {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callStatus === "incoming" ? "Đang gọi đến…" : "Đang kết nối…"}
+          </div>
+        </div>
+        <IconBtn
+          icon={Maximize2}
+          variant="ghost"
+          size={34}
+          label="Phóng to"
+          onClick={() => void handleRestoreCall()}
+        />
+        <IconBtn
+          icon={PhoneOff}
+          variant="danger"
+          size={34}
+          label="Kết thúc"
+          onClick={() => endCall()}
+        />
+      </div>
+    ) : callKind === "video" ? (
+      // ─── EXPANDED VIDEO ────────────────────────────────────────────
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 72,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          background:
+            "radial-gradient(1200px 600px at 15% 10%, rgba(56,189,248,.18), transparent 60%)," +
+            "radial-gradient(900px 500px at 85% 90%, rgba(168,85,247,.18), transparent 60%)," +
+            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+          backdropFilter: "blur(8px)",
+          animation: "fade-in .25s ease-out",
+        }}
+      >
+        <div
+          style={{
+            width: "min(1240px, 96vw)", height: "min(780px, 94vh)",
+            borderRadius: 28, overflow: "hidden", position: "relative",
+            display: "flex", flexDirection: "column",
+            background: "linear-gradient(180deg, rgba(15,23,42,.85) 0%, rgba(2,6,23,.95) 100%)",
+            border: "1px solid rgba(148,163,184,.18)",
+            boxShadow: "0 60px 120px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06)",
+          }}
+        >
+          {/* Stage video / avatar */}
+          {!isCurrentCallGroup && (
+            <>
+              <video
+                ref={remoteVideoRef} autoPlay playsInline
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+              />
+              {/* Fallback avatar when remote camera is off */}
+              {callStatus !== "in-call" && (
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                  <div style={{ display: "grid", placeItems: "center", gap: 18 }}>
+                    <CallAvatar
+                      url={callAvatarUrl}
+                      name={callAvatarName}
+                      size={140}
+                    />
+                    <div style={{ color: "#f1f5f9", fontSize: 22, fontWeight: 700 }}>{callHeadline}</div>
+                    <div style={{ color: "#94a3b8", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", animation: "pulse 1.4s ease-in-out infinite" }} />
+                      {callStatus === "incoming" ? "Cuộc gọi video đến…" : "Đang gọi…"}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void toggleVideoPiP()}
-                    style={{
-                      border: "1px solid rgba(148,163,184,.35)",
-                      background: isVideoPiPActive
-                        ? "rgba(96,165,250,.22)"
-                        : "rgba(15,23,42,.45)",
-                      color: "#e2e8f0",
-                      borderRadius: 999,
-                      padding: "7px 13px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"}
-                  </button>
                 </div>
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    position: "absolute",
-                    width: 220,
-                    height: 140,
-                    right: 20,
-                    bottom: 88,
-                    borderRadius: 16,
-                    objectFit: "cover",
-                    border: "1px solid rgba(148,163,184,.38)",
-                    boxShadow: "0 12px 30px rgba(2,6,23,.5)",
-                    background: "#0f172a",
-                    zIndex: 2,
-                  }}
+              )}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+                background: "linear-gradient(180deg, rgba(2,6,23,.7) 0%, transparent 22%, transparent 70%, rgba(2,6,23,.85) 100%)" }} />
+            </>
+          )}
+
+          {/* Top bar */}
+          <div style={{ position: "relative", zIndex: 2, padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <CallAvatar
+                  url={callAvatarUrl}
+                  name={callAvatarName}
+                  size={44}
+                  ring={false}
                 />
-                <div
-                  style={{
-                    marginTop: "auto",
-                    padding: "12px 18px 18px",
-                    position: "relative",
-                    zIndex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {callStatus === "incoming" ? (
-                    <>
-                      <button
-                        onClick={rejectIncomingCall}
-                        style={{
-                          border: "1px solid rgba(248,113,113,.4)",
-                          background: "rgba(248,113,113,.16)",
-                          color: "#fecaca",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Từ chối
-                      </button>
-                      <button
-                        onClick={() => void acceptIncomingCall()}
-                        style={{
-                          border: "none",
-                          background: "#2563eb",
-                          color: "white",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Nhận cuộc gọi
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {callStatus === "in-call" && (
-                        <>
-                          <button
-                            onClick={toggleMic}
-                            style={{
-                              border: "1px solid rgba(148,163,184,.35)",
-                              background: "rgba(148,163,184,.16)",
-                              color: "#e2e8f0",
-                              borderRadius: 12,
-                              padding: "10px 14px",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {isMicMuted ? "Bật mic" : "Tắt mic"}
-                          </button>
-                          <button
-                            onClick={toggleCamera}
-                            style={{
-                              border: "1px solid rgba(148,163,184,.35)",
-                              background: "rgba(148,163,184,.16)",
-                              color: "#e2e8f0",
-                              borderRadius: 12,
-                              padding: "10px 14px",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {isCameraOff ? "Bật cam" : "Tắt cam"}
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={endCall}
-                        style={{
-                          border: "none",
-                          background: "#dc2626",
-                          color: "white",
-                          borderRadius: 12,
-                          padding: "10px 16px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Kết thúc
-                      </button>
-                    </>
-                  )}
+              <div>
+                <div style={{ color: "#f8fafc", fontSize: 16, fontWeight: 800 }}>{callHeadline}</div>
+                <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: callStatus === "in-call" ? "#22c55e" : "#38bdf8" }} />
+                  {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
                 </div>
               </div>
             </div>
-          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              {!isCurrentCallGroup && (
+                <IconBtn icon={PictureInPicture2} variant={isVideoPiPActive ? "active" : "ghost"} size={38}
+                  label={isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"} onClick={() => void toggleVideoPiP()} />
+              )}
+              <IconBtn icon={Minimize2} variant="ghost" size={38} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
+            </div>
+          </div>
+
+          {/* Group grid hoặc local PiP */}
+          {isCurrentCallGroup ? (
             <div
               style={{
-                position: "fixed",
-                right: 18,
-                bottom: 18,
-                width: 340,
-                borderRadius: 18,
-                border: "1px solid rgba(148,163,184,.32)",
-                background: "linear-gradient(165deg, #0b1220 0%, #16243f 100%)",
-                boxShadow: "0 20px 48px rgba(0,0,0,.55)",
-                padding: 14,
-                zIndex: 71,
-                color: "#e2e8f0",
+                flex: 1, position: "relative", zIndex: 1, padding: "4px 22px 0",
+                display: "grid",
+                gridTemplateColumns: groupCallParticipantTiles.length <= 2
+                  ? "repeat(2, minmax(0, 1fr))"
+                  : "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 14, alignContent: "start", overflowY: "auto",
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                {callStatus === "incoming"
-                  ? `${incomingCallerName || "Người dùng"} đang gọi`
-                  : `Đang gọi ${otherUser?.displayName || "Người dùng"}`}
-              </div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
-                Cuộc gọi thoại •{" "}
-                {callStatus === "outgoing"
-                  ? "Đang đổ chuông"
-                  : callStatus === "connecting"
-                    ? "Đang kết nối"
-                    : callStatus === "in-call"
-                      ? "Đang trong cuộc gọi"
-                      : "Đang chờ phản hồi"}
-              </div>
-              {callStatus === "in-call" && (
-                <div
-                  style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 10 }}
+              {groupCallParticipantTiles.map((p) => (
+                <div key={p.id}
+                  style={{
+                    position: "relative", borderRadius: 20, overflow: "hidden",
+                    aspectRatio: "1 / 1", minHeight: 200,
+                    background: "linear-gradient(160deg, #0b1220 0%, #1e293b 100%)",
+                    border: "1px solid rgba(148,163,184,.18)",
+                    boxShadow: "0 12px 30px rgba(0,0,0,.4)",
+                  }}
                 >
-                  Thời lượng: {formatCallDuration(callElapsedSeconds)}
+                  <video
+                    ref={(el) => { participantVideoRefs.current[p.id] = el; }}
+                    autoPlay playsInline muted={p.isSelf}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: p.hasVideo ? "block" : "none" }}
+                  />
+                  {!p.hasVideo && (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center",
+                      background: "radial-gradient(circle at 30% 20%, rgba(99,102,241,.3), transparent 50%), radial-gradient(circle at 70% 80%, rgba(236,72,153,.22), transparent 55%)" }}>
+                      <CallAvatar url={p.avatarUrl} name={p.displayName} size={84} />
+                    </div>
+                  )}
+                  <div style={{
+                    position: "absolute", left: 10, right: 10, bottom: 10, borderRadius: 12, padding: "7px 10px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    background: "rgba(2,6,23,.55)", border: "1px solid rgba(255,255,255,.08)", backdropFilter: "blur(10px)",
+                  }}>
+                    <span style={{ fontSize: 12, color: "#f8fafc", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.displayName}{p.isSelf ? " (Bạn)" : ""}
+                    </span>
+                    {p.hasVideo
+                      ? <VideoIcon size={12} color="#86efac" />
+                      : <Mic size={12} color="#cbd5e1" />}
+                  </div>
                 </div>
-              )}
+              ))}
+            </div>
+          ) : (
+            <video ref={localVideoRef} autoPlay playsInline muted
+              style={{
+                position: "absolute", width: 220, height: 140, right: 22, bottom: 110,
+                borderRadius: 18, objectFit: "cover", background: "#0f172a",
+                border: "1.5px solid rgba(255,255,255,.18)",
+                boxShadow: "0 18px 40px rgba(0,0,0,.55)", zIndex: 2,
+              }}
+            />
+          )}
 
-              {callStatus === "in-call" &&
-                callKind === "voice" &&
-                isUpgradeRequestIncoming && (
-                  <div
-                    style={{
-                      marginBottom: 10,
-                      borderRadius: 10,
-                      border: "1px solid rgba(96,165,250,.35)",
-                      background: "rgba(59,130,246,.12)",
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#dbeafe",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {upgradeRequesterName || "Đối phương"} muốn nâng cấp lên
-                      video.
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <button
-                        onClick={rejectUpgradeRequest}
-                        style={{
-                          border: "1px solid rgba(248,113,113,.35)",
-                          background: "rgba(248,113,113,.12)",
-                          color: "#fecaca",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Từ chối
-                      </button>
-                      <button
-                        onClick={acceptUpgradeRequest}
-                        style={{
-                          border: "none",
-                          background: "#2563eb",
-                          color: "white",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Chấp nhận
-                      </button>
-                    </div>
-                  </div>
+          {/* Control bar — toàn bộ là nút icon tròn */}
+          <div style={{ marginTop: "auto", position: "relative", zIndex: 2, padding: "16px 22px 24px",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+            {callStatus === "incoming" ? (
+              <>
+                <IconBtn icon={PhoneOff} variant="danger" size={56} label="Từ chối" onClick={rejectIncomingCall} />
+                {callKind === "video" && (
+                  <IconBtn icon={Mic} variant="ghost" size={56} label="Nhận thoại" onClick={() => void acceptIncomingCall("voice")} />
                 )}
-              {callStatus === "in-call" &&
-                callKind === "voice" &&
-                isUpgradeRequestPending && (
-                  <div
-                    style={{ fontSize: 12, color: "#93c5fd", marginBottom: 10 }}
-                  >
-                    Đang chờ đối phương chấp nhận nâng cấp video...
-                  </div>
-                )}
-
-              <audio ref={remoteAudioRef} autoPlay />
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  justifyContent: "flex-end",
-                  flexWrap: "wrap",
-                }}
-              >
-                {callStatus === "incoming" ? (
+                <IconBtn icon={callKind === "video" ? VideoIcon : PhoneIncoming} variant="success" size={56}
+                  label={callKind === "video" ? "Nhận video" : "Nhận"}
+                  onClick={() => void acceptIncomingCall(callKind === "video" ? "video" : undefined)} />
+              </>
+            ) : (
+              <>
+                {callStatus === "in-call" && (
                   <>
-                    <button
-                      onClick={rejectIncomingCall}
-                      style={{
-                        border: "1px solid rgba(248,113,113,.35)",
-                        background: "rgba(248,113,113,.12)",
-                        color: "#fca5a5",
-                        borderRadius: 10,
-                        padding: "7px 12px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Từ chối
-                    </button>
-                    <button
-                      onClick={() => void acceptIncomingCall()}
-                      style={{
-                        border: "none",
-                        background: "#2563eb",
-                        color: "white",
-                        borderRadius: 10,
-                        padding: "7px 12px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Nhận
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {callStatus === "in-call" && (
-                      <>
-                        <button
-                          onClick={toggleMic}
-                          style={{
-                            border: "1px solid rgba(148,163,184,.3)",
-                            background: "rgba(148,163,184,.12)",
-                            color: "#e2e8f0",
-                            borderRadius: 10,
-                            padding: "7px 10px",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {isMicMuted ? "Bật mic" : "Tắt mic"}
-                        </button>
-                        <button
-                          onClick={() => void upgradeVoiceToVideo()}
-                          disabled={
-                            isUpgradeRequestPending || isUpgradeRequestIncoming
-                          }
-                          style={{
-                            border: "1px solid rgba(96,165,250,.35)",
-                            background:
-                              isUpgradeRequestPending ||
-                              isUpgradeRequestIncoming
-                                ? "rgba(51,65,85,.35)"
-                                : "rgba(59,130,246,.14)",
-                            color:
-                              isUpgradeRequestPending ||
-                              isUpgradeRequestIncoming
-                                ? "#94a3b8"
-                                : "#bfdbfe",
-                            borderRadius: 10,
-                            padding: "7px 10px",
-                            cursor:
-                              isUpgradeRequestPending ||
-                              isUpgradeRequestIncoming
-                                ? "not-allowed"
-                                : "pointer",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {isUpgradeRequestPending
-                            ? "Đang chờ chấp nhận"
-                            : "Nâng cấp video"}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={endCall}
-                      style={{
-                        border: "none",
-                        background: "#dc2626",
-                        color: "white",
-                        borderRadius: 10,
-                        padding: "7px 12px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Kết thúc
-                    </button>
+                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
+                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
+                    <IconBtn icon={isCameraOff ? VideoOff : VideoIcon} variant={isCameraOff ? "active" : "ghost"} size={52}
+                      label={isCameraOff ? "Bật cam" : "Tắt cam"} onClick={toggleCamera} />
                   </>
                 )}
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : (
+      // ─── EXPANDED VOICE ────────────────────────────────────────────
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 72,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          background:
+            "radial-gradient(900px 500px at 50% 0%, rgba(56,189,248,.18), transparent 60%)," +
+            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+          backdropFilter: "blur(8px)",
+          animation: "fade-in .25s ease-out",
+        }}
+      >
+        <div
+          style={{
+            width: "min(440px, 94vw)", borderRadius: 28, padding: 28,
+            background: "linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.95))",
+            border: "1px solid rgba(148,163,184,.2)",
+            boxShadow: "0 60px 120px rgba(0,0,0,.7)",
+            position: "relative",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 18,
+          }}
+        >
+          {/* top-right minimize */}
+          <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
+            <IconBtn icon={Minimize2} variant="ghost" size={34} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
+          </div>
+
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 12px", borderRadius: 999,
+            background: "rgba(56,189,248,.14)", border: "1px solid rgba(56,189,248,.32)",
+            color: "#bae6fd", fontSize: 11, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8",
+              boxShadow: "0 0 0 4px rgba(56,189,248,.25)", animation: "pulse 1.6s ease-in-out infinite" }} />
+            {isCurrentCallGroup ? "Cuộc gọi nhóm" : "Cuộc gọi thoại"}
+          </div>
+
+          {/* Avatar lớn với halo */}
+          <div style={{ position: "relative", display: "grid", placeItems: "center", padding: 14 }}>
+            <span style={{
+              position: "absolute", inset: 0, borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(56,189,248,.35), transparent 60%)",
+              animation: "pulse 2s ease-in-out infinite",
+            }} />
+            <CallAvatar
+              url={callAvatarUrl}
+              name={callAvatarName}
+              size={140}
+            />
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{ color: "#f8fafc", fontSize: 22, fontWeight: 800 }}>{callHeadline}</div>
+            <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
+              {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
+            </div>
+          </div>
+
+          {/* Group chips */}
+          {isCurrentCallGroup && callParticipantsInRoom.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: "100%" }}>
+              {callParticipantsInRoom.map((p) => (
+                <div key={p.id} title={p.displayName}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    borderRadius: 999, padding: "4px 9px 4px 4px",
+                    background: "rgba(2,6,23,.5)", border: "1px solid rgba(148,163,184,.22)",
+                  }}>
+                  <CallAvatar url={p.avatarUrl} name={p.displayName} size={22} ring={false} />
+                  <span style={{ fontSize: 11, color: "#e2e8f0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.displayName}{p.isSelf ? " (Bạn)" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upgrade request */}
+          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestIncoming && (
+            <div style={{
+              width: "100%", borderRadius: 14, padding: 12,
+              border: "1px solid rgba(96,165,250,.4)",
+              background: "linear-gradient(135deg, rgba(59,130,246,.18), rgba(14,165,233,.12))",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+            }}>
+              <span style={{ fontSize: 12, color: "#dbeafe" }}>
+                <strong>{upgradeRequesterName || "Đối phương"}</strong> muốn nâng cấp lên video
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <IconBtn icon={X} variant="danger" size={32} label="Từ chối" onClick={rejectUpgradeRequest} />
+                <IconBtn icon={VideoIcon} variant="success" size={32} label="Chấp nhận" onClick={acceptUpgradeRequest} />
               </div>
             </div>
           )}
-        </>
-      )}
+
+          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestPending && (
+            <div style={{ fontSize: 12, color: "#93c5fd", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#60a5fa", animation: "pulse 1.4s ease-in-out infinite" }} />
+              Đang chờ đối phương chấp nhận nâng cấp video…
+            </div>
+          )}
+
+          <audio ref={remoteAudioRef} autoPlay />
+
+          {/* Control bar */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+            {callStatus === "incoming" ? (
+              <>
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Từ chối" onClick={rejectIncomingCall} />
+                <IconBtn icon={PhoneIncoming} variant="success" size={58} label="Nhận" onClick={() => void acceptIncomingCall()} />
+              </>
+            ) : (
+              <>
+                {callStatus === "in-call" && (
+                  <>
+                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
+                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
+                    <IconBtn
+                      icon={VideoIcon}
+                      variant="primary"
+                      size={52}
+                      label={!isCurrentCallGroup && isUpgradeRequestPending ? "Đang chờ…" : isCurrentCallGroup ? "Bật camera" : "Nâng cấp video"}
+                      disabled={!isCurrentCallGroup && (isUpgradeRequestPending || isUpgradeRequestIncoming)}
+                      onClick={() => void upgradeVoiceToVideo()}
+                    />
+                  </>
+                )}
+                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </>
+)}
+
+
 
       {/* Context menu */}
       {contextMenu && (
