@@ -5,6 +5,7 @@ import type { SignInData, SignUpData } from "@/services/authService";
 import { AxiosError } from "axios";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
+import { broadcastLogin, broadcastLogout } from "@/hook/useSyncAuthBetweenTabs";
 
 interface UserProfile {
   _id: string;
@@ -31,7 +32,12 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
-  signIn: (data: SignInData) => Promise<boolean>;
+  forceLogoutMessage: string | null;
+  clearForceLogout: () => void;
+  signIn: (
+    data: SignInData,
+    forceLogin?: boolean,
+  ) => Promise<{ success: boolean; code?: string; message?: string }>;
   fetchMe: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -41,6 +47,7 @@ interface AuthState {
   clearState: () => void;
   setAccessToken: (accessToken: string) => void;
   setUserProfile: (user: UserProfile) => void;
+  initFromBroadcast: (accessToken: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -60,23 +67,23 @@ export const useAuthStore = create<AuthState>()(
           userProfile: user,
         })),
 
-      signIn: async (data: SignInData) => {
+      forceLogoutMessage: null,
+
+      clearForceLogout: () => set({ forceLogoutMessage: null }),
+
+      signIn: async (data: SignInData, forceLogin = false) => {
         set({ loading: true, error: null });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
         try {
-          const response = await authService.signIn(data);
-          // Lưu accessToken vào store (có thể cần xử lý thêm với jwt decode nếu cần)
+          const response = await authService.signIn(data, forceLogin);
           const token = response.accessToken;
-
-          // Giải mã JWT để lấy thông tin user (nếu cần)
           const payload = JSON.parse(atob(token.split(".")[1]));
 
           get().setAccessToken(token);
           await get().fetchMe();
 
           set({
-            //accessToken: token
             user: {
               userId: payload.userId,
               username: payload.username,
@@ -84,19 +91,33 @@ export const useAuthStore = create<AuthState>()(
             },
             loading: false,
           });
-          //lay du lieu user khi sign in
+
           await get().fetchCurrentUser();
           useChatStore.getState().fetchConversations();
-
+          broadcastLogin(token);
           toast.success(response.message);
-          return true;
+          return { success: true };
         } catch (error) {
-          const axiosError = error as AxiosError<{ message: string }>;
+          const axiosError = error as AxiosError<{
+            message: string;
+            code?: string;
+          }>;
+
+          // ✅ Xử lý SESSION_CONFLICT riêng - không toast error
+          if (axiosError.response?.status === 409) {
+            set({ loading: false });
+            return {
+              success: false,
+              code: axiosError.response.data.code,
+              message: axiosError.response.data.message,
+            };
+          }
+
           const errorMessage =
             axiosError.response?.data?.message || "Đăng nhập thất bại";
           set({ loading: false, error: errorMessage });
           toast.error(errorMessage);
-          return false;
+          return { success: false };
         }
       },
 
@@ -144,6 +165,8 @@ export const useAuthStore = create<AuthState>()(
             userProfile: null,
             error: null,
           });
+          // Broadcast đăng xuất tới các tab khác
+          broadcastLogout();
           toast.success("Đăng xuất thành công");
         }
       },
@@ -168,30 +191,18 @@ export const useAuthStore = create<AuthState>()(
       refresh: async () => {
         try {
           set({ loading: true });
-
-          const { user, fetchCurrentUser, setAccessToken } = get();
-
+          const { user, fetchMe, setAccessToken } = get();
           const accessToken = await authService.refresh();
 
           setAccessToken(accessToken);
-          console.log("Access token đã được làm mới:", accessToken);
+
           if (!user) {
-            await fetchCurrentUser();
+            await fetchMe();
           }
         } catch (error) {
-          console.error("Refresh token lỗi:", error);
-
-          try {
-            // 🔥 gọi API xoá session phía server
-            await authService.signOut();
-          } catch (e) {
-            console.warn("Không gọi được API logout:", e);
-          }
-
-          // 🔥 clear toàn bộ state phía client
-          get().clearState();
-
+          console.error(error);
           // toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          get().clearState();
         } finally {
           set({ loading: false });
         }
@@ -204,10 +215,37 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
       },
+      // useAuthStore.ts - thêm vào store implementation
+      initFromBroadcast: async (token: string) => {
+        // Set token TRƯỚC - để axios interceptor có token ngay
+        set({ accessToken: token, user: null, userProfile: null });
+
+        try {
+          // Giải mã JWT lấy user info cơ bản (không cần gọi API)
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          set({
+            user: {
+              userId: payload.userId,
+              username: payload.username,
+              role: payload.role,
+            },
+          });
+
+          // Fetch full profile
+          await get().fetchCurrentUser();
+
+          // Fetch conversations SAU KHI user đã có
+          await useChatStore.getState().fetchConversations();
+        } catch (error) {
+          console.error("Lỗi init từ broadcast:", error);
+          get().clearState();
+        }
+      },
     }),
     {
       name: "auth-storage",
       partialize: (state) => ({
+        accessToken: state.accessToken,
         user: state.user,
         userProfile: state.userProfile, // Lưu profile để hiện avatar/tên ngay lập tức
       }),
