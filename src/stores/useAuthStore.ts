@@ -16,6 +16,9 @@ interface UserProfile {
   bio?: string;
   phone?: string;
   role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +35,7 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  errorCode: string | null;
   forceLogoutMessage: string | null;
   clearForceLogout: () => void;
   signIn: (
@@ -58,6 +62,7 @@ export const useAuthStore = create<AuthState>()(
       userProfile: null,
       loading: false,
       error: null,
+      errorCode: null,
 
       setAccessToken: (accessToken) => {
         set({ accessToken });
