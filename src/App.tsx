@@ -31,7 +31,7 @@ function App() {
     }
     return () => disconnectSocket();
   }, [accessToken]);
-  
+
   return (
     <>
       <Toaster position="top-right" richColors />

@@ -3656,8 +3656,10 @@ useEffect(() => {
 
                   return (
                     <div
-                      key={messageKey}
+                      key={message._id || `${message.createdAt}-${index}`}
                       id={`msg-${message._id}`}
+                      // key={messageKey}
+                      // id={`msg-${message._id}`}
                       style={{
                         display: "flex",
                         flexDirection: "column",

@@ -1,9 +1,12 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { userService } from "@/services/userService";
+import type { AccountLockRequest } from "@/services/userService";
 import { useChangePasswordStore } from "@/stores/useOtpStore";
 import { useNavigate } from "react-router-dom";
+import { useOtpStore } from "@/stores/useOtpStore";
+import OtpModal from "@/components/OtpModal";
 
 interface UserProfile {
   _id: string;
@@ -14,6 +17,9 @@ interface UserProfile {
   bio?: string;
   phone?: string;
   role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,7 +38,7 @@ interface UpdateProfilePayload {
   bio?: string;
 }
 
-type Tab = "profile" | "password";
+type Tab = "profile" | "password" | "lock";
 
 export default function ProfileModal({
   onClose,
@@ -46,12 +52,24 @@ export default function ProfileModal({
     loading: cpLoading,
     clearState,
   } = useChangePasswordStore();
+  const {
+    sendOTP, verifyOTP, resetPassword,
+    loading: otpLoading,
+    isOtpVerified: _isOtpVerified,
+  } = useOtpStore();
 
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const [showLockOtpModal, setShowLockOtpModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitError, setSubmitError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [lockReason, setLockReason] = useState("");
+  const [lockSubmitting, setLockSubmitting] = useState(false);
+  const [myLockRequests, setMyLockRequests] = useState<AccountLockRequest[]>([]);
+  const [adminLockRequests, setAdminLockRequests] = useState<AccountLockRequest[]>([]);
+  const [lockRequestsLoading, setLockRequestsLoading] = useState(false);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
 
   // ── Profile form ──
   const [form, setForm] = useState({
@@ -78,6 +96,7 @@ export default function ProfileModal({
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [cpFocused, setCpFocused] = useState("");
+  const isAdmin = userProfile?.role === "admin";
 
   const getInitials = (name: string) =>
     name
@@ -104,6 +123,9 @@ export default function ProfileModal({
         username: userProfile.username,
         email: userProfile.email,
         role: userProfile.role,
+        isLocked: userProfile.isLocked,
+        lockedAt: userProfile.lockedAt,
+        lockedReason: userProfile.lockedReason,
         createdAt: userProfile.createdAt,
         updatedAt: user.updatedAt,
         displayName: user.displayName,
@@ -150,6 +172,9 @@ export default function ProfileModal({
         username: userProfile.username,
         email: userProfile.email,
         role: userProfile.role,
+        isLocked: userProfile.isLocked,
+        lockedAt: userProfile.lockedAt,
+        lockedReason: userProfile.lockedReason,
         createdAt: userProfile.createdAt,
         updatedAt: user.updatedAt,
         displayName: user.displayName,
@@ -176,6 +201,103 @@ export default function ProfileModal({
       console.error("Lỗi xóa tài khoản:", error);
     }
   }
+
+  const fetchLockRequests = async () => {
+    if (!userProfile) return;
+    setLockRequestsLoading(true);
+    try {
+      const myRequestsRes = await userService.getMyAccountLockRequests();
+      setMyLockRequests(myRequestsRes.requests);
+
+      if (isAdmin) {
+        const adminRequestsRes = await userService.getAccountLockRequests("pending");
+        setAdminLockRequests(adminRequestsRes.requests);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy yêu cầu khóa tài khoản:", error);
+      toast.error("Không thể tải danh sách yêu cầu khóa tài khoản");
+    } finally {
+      setLockRequestsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "lock") {
+      void fetchLockRequests();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, userProfile?._id, userProfile?.role]);
+
+  const handleRequestAccountLock = async () => {
+    setLockSubmitting(true);
+    try {
+      const { message } = await userService.requestAccountLock(lockReason.trim());
+      toast.success(message);
+      setLockReason("");
+      await fetchLockRequests();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "Không thể gửi yêu cầu khóa tài khoản";
+      toast.error(message);
+    } finally {
+      setLockSubmitting(false);
+    }
+  };
+
+  const handleRequestAccountLockClick = async () => {
+    try {
+      setLockSubmitting(true);
+
+      if (!userProfile?.email) {
+        toast.error("Không có email");
+        return;
+      }
+
+      setShowLockOtpModal(false); // reset trước
+      await new Promise(r => setTimeout(r, 0)); // force remount
+
+      setShowLockOtpModal(true);
+
+      await sendOTP(userProfile.email);
+    } catch (err) {
+      console.error(err);
+      toast.error("Không gửi được OTP");
+    } finally {
+      setLockSubmitting(false);
+    }
+  };
+
+  const handleReviewAccountLock = async (
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => {
+    setReviewingRequestId(requestId);
+    try {
+      const { message } = await userService.reviewAccountLockRequest(
+        requestId,
+        action,
+      );
+      toast.success(message);
+      await fetchLockRequests();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "Không thể xử lý yêu cầu khóa tài khoản";
+      toast.error(message);
+    } finally {
+      setReviewingRequestId(null);
+    }
+  };
+
+  const getRequestUserName = (request: AccountLockRequest) => {
+    if (typeof request.userId === "string") return request.userId;
+    return request.userId.displayName || request.userId.username;
+  };
+
+  const getStatusText = (status: AccountLockRequest["status"]) => {
+    if (status === "approved") return "Đã duyệt";
+    if (status === "rejected") return "Đã từ chối";
+    return "Đang chờ duyệt";
+  };
 
   // ── Change password handlers ──
   const validateCp = () => {
@@ -366,6 +488,40 @@ export default function ProfileModal({
               <div className="pm-sidebar-item-text">
                 <strong>Đổi mật khẩu</strong>
                 <span>Cập nhật mật khẩu tài khoản</span>
+              </div>
+            </button>
+
+            {/* Tab: Khóa tài khoản */}
+            <button
+              className={`pm-sidebar-item ${activeTab === "lock" ? "active" : ""}`}
+              onClick={() => setActiveTab("lock")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <rect
+                  x="4"
+                  y="10"
+                  width="16"
+                  height="10"
+                  rx="2"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M8 10V7a4 4 0 0 1 8 0v3"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M12 14v2"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="pm-sidebar-item-text">
+                <strong>Khóa tài khoản</strong>
+                <span>Gửi và duyệt yêu cầu khóa</span>
               </div>
             </button>
           </div>
@@ -948,10 +1104,268 @@ export default function ProfileModal({
             </div>
           )}
 
+          {/* ══════════════════════════════
+              CONTENT: KHÓA TÀI KHOẢN
+          ══════════════════════════════ */}
+          {activeTab === "lock" && (
+            <div className="pm-content">
+              <div className="pm-content-header">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect
+                    x="4"
+                    y="10"
+                    width="16"
+                    height="10"
+                    rx="2"
+                    stroke="#f59e0b"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M8 10V7a4 4 0 0 1 8 0v3"
+                    stroke="#f59e0b"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <h2>Khóa tài khoản</h2>
+              </div>
+              <p className="pm-content-subtitle">
+                Gửi yêu cầu khóa tài khoản và chờ admin duyệt
+              </p>
+
+              {userProfile?.isLocked ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(239,68,68,.35)",
+                    background: "rgba(239,68,68,.1)",
+                    borderRadius: 10,
+                    padding: 16,
+                    marginBottom: 18,
+                  }}
+                >
+                  <p style={{ color: "#fecaca", fontWeight: 700, margin: "0 0 6px" }}>
+                    Tài khoản này đã bị khóa
+                  </p>
+                  <p style={{ color: "#fca5a5", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+                    {userProfile.lockedReason || "Không có lý do khóa được ghi nhận."}
+                  </p>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: "1px solid #2d3748",
+                    background: "#171e2e",
+                    borderRadius: 12,
+                    padding: 18,
+                    marginBottom: 20,
+                  }}
+                >
+                  <label className="pm-label">Lý do muốn khóa tài khoản</label>
+                  <textarea
+                    value={lockReason}
+                    onChange={(e) => setLockReason(e.target.value)}
+                    placeholder="Ví dụ: Tôi muốn tạm ngừng sử dụng tài khoản này..."
+                    maxLength={500}
+                    style={{
+                      width: "100%",
+                      minHeight: 96,
+                      resize: "vertical",
+                      marginTop: 8,
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #374151",
+                      background: "#111827",
+                      color: "#f1f5f9",
+                      fontFamily: "inherit",
+                      fontSize: 14,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: 12,
+                      gap: 12,
+                    }}
+                  >
+                    <span style={{ color: "#64748b", fontSize: 12 }}>
+                      Admin phải duyệt thì tài khoản mới bị khóa.
+                    </span>
+                    <button
+                      className="pm-btn-primary"
+                      onClick={handleRequestAccountLockClick}
+                      disabled={lockSubmitting}
+                      style={{
+                        float: "none",
+                        background: "#d97706",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {lockSubmitting ? "Đang gửi..." : "Gửi yêu cầu khóa"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 22 }}>
+                <h3 style={{ color: "#f1f5f9", fontSize: 15, margin: "0 0 12px" }}>
+                  Yêu cầu của tôi
+                </h3>
+                {lockRequestsLoading ? (
+                  <p style={{ color: "#94a3b8", fontSize: 13 }}>Đang tải...</p>
+                ) : myLockRequests.length === 0 ? (
+                  <p style={{ color: "#64748b", fontSize: 13 }}>
+                    Bạn chưa gửi yêu cầu khóa tài khoản nào.
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 160, overflowY: "auto", paddingRight: 4, }}>
+                    {myLockRequests.map((request) => (
+                      <div
+                        key={request._id}
+                        style={{
+                          border: "1px solid #2d3748",
+                          background: "#111827",
+                          borderRadius: 10,
+                          padding: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <strong style={{ color: "#e2e8f0", fontSize: 13 }}>
+                            {getStatusText(request.status)}
+                          </strong>
+                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                            {new Date(request.createdAt).toLocaleDateString("vi-VN")}
+                          </span>
+                        </div>
+                        <p style={{ color: "#94a3b8", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                          {request.reason || "Không nhập lý do"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {isAdmin && (
+                <>
+                  <hr className="pm-divider" />
+                  <div>
+                    <h3 style={{ color: "#f1f5f9", fontSize: 15, margin: "0 0 12px" }}>
+                      Admin duyệt yêu cầu khóa
+                    </h3>
+                    {lockRequestsLoading ? (
+                      <p style={{ color: "#94a3b8", fontSize: 13 }}>Đang tải...</p>
+                    ) : adminLockRequests.length === 0 ? (
+                      <p style={{ color: "#64748b", fontSize: 13 }}>
+                        Không có yêu cầu khóa tài khoản đang chờ.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 160, overflowY: "auto", paddingRight: 4 }}>
+                        {adminLockRequests.map((request) => (
+                          <div
+                            key={request._id}
+                            style={{
+                              border: "1px solid #2d3748",
+                              background: "#111827",
+                              borderRadius: 10,
+                              padding: 14,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: 12,
+                                marginBottom: 8,
+                              }}
+                            >
+                              <div>
+                                <strong style={{ color: "#f1f5f9", fontSize: 14 }}>
+                                  {getRequestUserName(request)}
+                                </strong>
+                                <p style={{ color: "#64748b", fontSize: 12, margin: "3px 0 0" }}>
+                                  {new Date(request.createdAt).toLocaleString("vi-VN")}
+                                </p>
+                              </div>
+                              <span style={{ color: "#fbbf24", fontSize: 12, fontWeight: 700 }}>
+                                Đang chờ
+                              </span>
+                            </div>
+                            <p style={{ color: "#94a3b8", fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
+                              {request.reason || "Không nhập lý do"}
+                            </p>
+                            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => handleReviewAccountLock(request._id, "rejected")}
+                                disabled={reviewingRequestId === request._id}
+                                style={{
+                                  padding: "8px 14px",
+                                  background: "transparent",
+                                  border: "1px solid #64748b",
+                                  borderRadius: 8,
+                                  color: "#cbd5e1",
+                                  cursor: "pointer",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Từ chối
+                              </button>
+                              <button
+                                onClick={() => handleReviewAccountLock(request._id, "approved")}
+                                disabled={reviewingRequestId === request._id}
+                                style={{
+                                  padding: "8px 14px",
+                                  background: "#dc2626",
+                                  border: "none",
+                                  borderRadius: 8,
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Duyệt khóa
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <button className="pm-close" onClick={onClose}>
             ✕
           </button>
         </div>
+
+        {showLockOtpModal && (
+          <OtpModal
+            key={userProfile?.email}   // 👈 QUAN TRỌNG
+            email={userProfile?.email || ""}
+            onClose={() => setShowLockOtpModal(false)}
+            onVerified={async () => {
+              try {
+                await handleRequestAccountLock();
+                setShowLockOtpModal(false);
+              } catch (error) {
+                console.error(error);
+              }
+            }}
+          />
+        )}
       </div>
     </>
   );

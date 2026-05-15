@@ -126,6 +126,9 @@ export interface ChatState {
     name?: string;
     memberIds: string[];
   }) => Promise<void>;
+  pinnedMessages: Record<string, Message[]>;
+  pinMessage: (conversationId: string, messageId: string) => Promise<void>;
+  unpinMessage: (conversationId: string, messageId: string) => Promise<void>;
   updateMemberRole: (
     conversationId: string,
     targetUserId: string,

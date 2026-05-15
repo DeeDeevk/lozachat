@@ -105,6 +105,19 @@ export const chatService = {
     return res.data.conversation;
   },
 
+  async pinMessage(conversationId: string, messageId: string): Promise<Message[]> {
+    const res = await api.post(`/conversations/${conversationId}/pin/${messageId}`);
+    return res.data.pinnedMessages;
+  },
+
+  async unpinMessage(conversationId: string, messageId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/pin/${messageId}`);
+  },
+
+  async fetchPinnedMessages(conversationId: string): Promise<Message[]> {
+    const res = await api.get(`/conversations/${conversationId}/pins`);
+    return res.data.pinnedMessages;
+  },
   async updateGroupInfo(
     conversationId: string,
     formData: FormData,
@@ -139,23 +152,23 @@ export const chatService = {
     const res = await api.patch(`/messages/${messageId}/react`, { emoji });
     return { reactions: res.data.reactions || [] };
   },
-  async pinMessage(
-    messageId: string,
-  ): Promise<{ conversationId: string; pinnedMessages: PinnedMessage[] }> {
-    const res = await api.patch(`/messages/${messageId}/pin`);
-    return {
-      conversationId: res.data.conversationId,
-      pinnedMessages: res.data.pinnedMessages || [],
-    };
-  },
-  async fetchPinnedMessages(
-    conversationId: string,
-  ): Promise<{ pinnedMessages: PinnedMessage[] }> {
-    const res = await api.get(
-      `/conversations/${conversationId}/pinned-messages`,
-    );
-    return { pinnedMessages: res.data.pinnedMessages || [] };
-  },
+  // async pinMessage(
+  //   messageId: string,
+  // ): Promise<{ conversationId: string; pinnedMessages: PinnedMessage[] }> {
+  //   const res = await api.patch(`/messages/${messageId}/pin`);
+  //   return {
+  //     conversationId: res.data.conversationId,
+  //     pinnedMessages: res.data.pinnedMessages || [],
+  //   };
+  // },
+  // async fetchPinnedMessages(
+  //   conversationId: string,
+  // ): Promise<{ pinnedMessages: PinnedMessage[] }> {
+  //   const res = await api.get(
+  //     `/conversations/${conversationId}/pinned-messages`,
+  //   );
+  //   return { pinnedMessages: res.data.pinnedMessages || [] };
+  // },
   async updateConversationTheme(
     conversationId: string,
     themeId: string,

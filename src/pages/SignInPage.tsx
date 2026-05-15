@@ -85,13 +85,12 @@ export default function LoginPage() {
 
   // ── Sửa handleSubmit ──
   const handleSubmit = async () => {
-  if (!validate()) return;
-  const result = await signIn(formData, true); // ← forceLogin: true luôn
-  if (result?.success) {
-    navigate("/chat");
-  }
-};
-
+    if (!validate()) return;
+    const result = await signIn(formData, true); // ← forceLogin: true luôn
+    if (result?.success) {
+      navigate("/chat");
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
