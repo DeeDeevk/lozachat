@@ -4,6 +4,7 @@ import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
 import { useFriendStore } from "./useFriendStore";
+import { getDeviceId } from "@/utils/device";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
@@ -388,7 +389,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
 
     const socket: Socket = io(baseURL, {
-      auth: { token: accessToken },
+      auth: {
+        token: accessToken,
+        deviceId: getDeviceId(), // ← thêm dòng này
+      },
       transports: ["websocket"],
     });
 
