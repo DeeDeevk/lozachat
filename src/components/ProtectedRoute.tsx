@@ -2,6 +2,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import ForceLogoutDialog from "@/components/ForceLogoutDialog";
 
 const ProtectedRoute = () => {
   const {
@@ -16,7 +17,6 @@ const ProtectedRoute = () => {
   const [starting, setStarting] = useState(true);
 
   const init = async () => {
-    // có thể xảy ra khi refresh trang
     if (!accessToken) {
       await refresh();
     }
@@ -30,7 +30,6 @@ const ProtectedRoute = () => {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     init();
   }, []);
 
@@ -43,10 +42,15 @@ const ProtectedRoute = () => {
   }
 
   if (!accessToken) {
-    return <Navigate to="/signin" replace></Navigate>;
+    return <Navigate to="/signin" replace />;
   }
 
-  return <Outlet></Outlet>;
+  return (
+    <>
+      <ForceLogoutDialog />
+      <Outlet />
+    </>
+  );
 };
 
 export default ProtectedRoute;

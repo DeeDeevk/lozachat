@@ -21,12 +21,12 @@ api.interceptors.request.use(
 );
 
 // tự động gọi refresh api khi access token hết hạn
+// axiosInstance.ts
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
 
-    // những api không cần check
     if (
       originalRequest.url.includes("/auth/signin") ||
       originalRequest.url.includes("/auth/signup") ||
@@ -45,6 +45,21 @@ api.interceptors.response.use(
         const newAccessToken = res.data.accessToken;
 
         useAuthStore.getState().setAccessToken(newAccessToken);
+
+        // ✅ Thêm: decode và set user nếu chưa có
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser) {
+          try {
+            const payload = JSON.parse(atob(newAccessToken.split(".")[1]));
+            useAuthStore.setState({
+              user: {
+                userId: payload.userId,
+                username: payload.username,
+                role: payload.role,
+              },
+            });
+          } catch (_) {}
+        }
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);

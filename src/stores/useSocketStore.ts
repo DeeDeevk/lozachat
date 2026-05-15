@@ -31,6 +31,10 @@ const registerSocketEvents = (
   socket.off("left-group");
   socket.off("member-left");
   socket.off("removed-from-group");
+  socket.off("force-logout");
+  socket.on("force-logout", ({ message }: { message: string }) => {
+    useAuthStore.setState({ forceLogoutMessage: message });
+  });
   socket.on("removed-from-group", ({ conversationId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.filter(
@@ -142,19 +146,27 @@ const registerSocketEvents = (
         .applyEditMessage(messageId, conversationId, newContent, editedAt);
     },
   );
-  socket.on("message-edited", ({ messageId, conversationId, newContent, editedAt }) => {
-  useChatStore.getState().applyEditMessage(messageId, conversationId, newContent, editedAt);
-});
+  socket.on(
+    "message-edited",
+    ({ messageId, conversationId, newContent, editedAt }) => {
+      useChatStore
+        .getState()
+        .applyEditMessage(messageId, conversationId, newContent, editedAt);
+    },
+  );
   socket.on("message-reacted", ({ messageId, conversationId, reactions }) => {
     useChatStore
       .getState()
       .applyMessageReactions(messageId, conversationId, reactions || []);
   });
-  socket.on("conversation:pins-updated", ({ conversationId, pinnedMessages }) => {
-    useChatStore
-      .getState()
-      .applyPinnedMessages(conversationId, pinnedMessages || []);
-  });
+  socket.on(
+    "conversation:pins-updated",
+    ({ conversationId, pinnedMessages }) => {
+      useChatStore
+        .getState()
+        .applyPinnedMessages(conversationId, pinnedMessages || []);
+    },
+  );
   socket.on("conversation:theme-updated", ({ conversationId, themeId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.map((c) =>
@@ -306,9 +318,12 @@ const registerSocketEvents = (
       .getState()
       .updateMemberRole(conversationId, targetUserId, role);
   });
-  socket.on("group-join-request", ({ conversationId: _conversationId, request }) => {
-    useChatStore.getState().addJoinRequest(request);
-  });
+  socket.on(
+    "group-join-request",
+    ({ conversationId: _conversationId, request }) => {
+      useChatStore.getState().addJoinRequest(request);
+    },
+  );
 
   // Người được mời biết kết quả duyệt
   socket.on("join-request-reviewed", ({ conversationId, status }) => {

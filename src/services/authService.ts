@@ -15,18 +15,24 @@ export interface SignUpData {
 }
 
 export const authService = {
-    signIn: async (data: SignInData) => {
-    const deviceId = getDeviceId(); // thêm dòng này
+  signIn: async (data: SignInData, forceLogin = false) => {
+    // ← thêm forceLogin
+    const deviceId = getDeviceId();
+
+    console.log("=== signIn debug ===");
+    console.log("deviceId:", deviceId);
+    console.log("forceLogin:", forceLogin);
 
     const res = await api.post(
       "/auth/signin",
       {
         ...data,
-        deviceId, // gửi lên backend
+        deviceId,
+        forceLogin, // ← thêm vào body
       },
       {
         withCredentials: true,
-      }
+      },
     );
 
     return res.data;
@@ -64,5 +70,5 @@ export const authService = {
   fetchMe: async () => {
     const res = await api.get("/users/me", { withCredentials: true });
     return res.data.user;
-  }
+  },
 };
