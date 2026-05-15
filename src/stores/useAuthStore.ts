@@ -222,7 +222,14 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => set({ error: null }),
 
       clearState: () => {
-        set({ accessToken: null, user: null, loading: false });
+        set({
+          accessToken: null,
+          user: null,
+          userProfile: null,
+          loading: false,
+          error: null,
+          errorCode: null,
+        });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
       },

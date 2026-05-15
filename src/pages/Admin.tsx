@@ -26,6 +26,7 @@ import type {
   AccountLockRequestStatus,
 } from "@/services/userService";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 type AdminTab = "dashboard" | "users" | "lock" | "settings" | "unlock";
 type RequestFilter = AccountLockRequestStatus | "all";
@@ -166,6 +167,7 @@ const MetricCard = ({ icon: Icon, color, val, lbl, delta, up }: MetricCardProps)
 export default function LozaAdmin() {
   const navigate = useNavigate();
   const { userProfile } = useAuthStore();
+  const socket = useSocketStore((state) => state.socket);
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [filter, setFilter] = useState<RequestFilter>("pending");
   const [requests, setRequests] = useState<AccountLockRequest[]>([]);
@@ -212,6 +214,38 @@ export default function LozaAdmin() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, isAdmin]);
+
+  useEffect(() => {
+    if (!socket || !isAdmin) return;
+
+    const refreshLockRequests = () => {
+      void fetchRequests(filter);
+    };
+    const refreshUnlockRequests = () => {
+      void fetchUnlockRequests();
+    };
+    const notifyLockCreated = () => {
+      showToast("Có yêu cầu khóa tài khoản mới", "info");
+      refreshLockRequests();
+    };
+    const notifyUnlockCreated = () => {
+      showToast("Có yêu cầu mở khóa tài khoản mới", "info");
+      refreshUnlockRequests();
+    };
+
+    socket.on("account-lock-request:created", notifyLockCreated);
+    socket.on("account-lock-request:updated", refreshLockRequests);
+    socket.on("account-unlock-request:created", notifyUnlockCreated);
+    socket.on("account-unlock-request:updated", refreshUnlockRequests);
+
+    return () => {
+      socket.off("account-lock-request:created", notifyLockCreated);
+      socket.off("account-lock-request:updated", refreshLockRequests);
+      socket.off("account-unlock-request:created", notifyUnlockCreated);
+      socket.off("account-unlock-request:updated", refreshUnlockRequests);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isAdmin, filter]);
 
   const pendingCount = useMemo(
     () => pendingRequests.length,
