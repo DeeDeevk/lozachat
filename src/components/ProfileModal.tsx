@@ -54,8 +54,8 @@ export default function ProfileModal({
     clearState,
   } = useChangePasswordStore();
   const {
-    sendOTP, verifyOTP, resetPassword,
-    loading: otpLoading,
+    sendOTP,
+    // loading: otpLoading,
     isOtpVerified: _isOtpVerified,
   } = useOtpStore();
 
@@ -68,10 +68,16 @@ export default function ProfileModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [lockReason, setLockReason] = useState("");
   const [lockSubmitting, setLockSubmitting] = useState(false);
-  const [myLockRequests, setMyLockRequests] = useState<AccountLockRequest[]>([]);
-  const [adminLockRequests, setAdminLockRequests] = useState<AccountLockRequest[]>([]);
+  const [myLockRequests, setMyLockRequests] = useState<AccountLockRequest[]>(
+    [],
+  );
+  const [adminLockRequests, setAdminLockRequests] = useState<
+    AccountLockRequest[]
+  >([]);
   const [lockRequestsLoading, setLockRequestsLoading] = useState(false);
-  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(
+    null,
+  );
 
   // ── Profile form ──
   const [form, setForm] = useState({
@@ -202,7 +208,7 @@ export default function ProfileModal({
     } catch (error) {
       console.error("Lỗi xóa tài khoản:", error);
     }
-  }
+  };
 
   const fetchLockRequests = async () => {
     if (!userProfile) return;
@@ -212,7 +218,8 @@ export default function ProfileModal({
       setMyLockRequests(myRequestsRes.requests);
 
       if (isAdmin) {
-        const adminRequestsRes = await userService.getAccountLockRequests("pending");
+        const adminRequestsRes =
+          await userService.getAccountLockRequests("pending");
         setAdminLockRequests(adminRequestsRes.requests);
       }
     } catch (error) {
@@ -265,13 +272,16 @@ export default function ProfileModal({
   const handleRequestAccountLock = async () => {
     setLockSubmitting(true);
     try {
-      const { message } = await userService.requestAccountLock(lockReason.trim());
+      const { message } = await userService.requestAccountLock(
+        lockReason.trim(),
+      );
       toast.success(message);
       setLockReason("");
       await fetchLockRequests();
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || "Không thể gửi yêu cầu khóa tài khoản";
+        error?.response?.data?.message ||
+        "Không thể gửi yêu cầu khóa tài khoản";
       toast.error(message);
     } finally {
       setLockSubmitting(false);
@@ -288,7 +298,7 @@ export default function ProfileModal({
       }
 
       setShowLockOtpModal(false); // reset trước
-      await new Promise(r => setTimeout(r, 0)); // force remount
+      await new Promise((r) => setTimeout(r, 0)); // force remount
 
       setShowLockOtpModal(true);
 
@@ -315,7 +325,8 @@ export default function ProfileModal({
       await fetchLockRequests();
     } catch (error: any) {
       const message =
-        error?.response?.data?.message || "Không thể xử lý yêu cầu khóa tài khoản";
+        error?.response?.data?.message ||
+        "Không thể xử lý yêu cầu khóa tài khoản";
       toast.error(message);
     } finally {
       setReviewingRequestId(null);
@@ -758,13 +769,35 @@ export default function ProfileModal({
 
               <hr className="pm-divider" />
               {submitError && (
-                <p style={{ color: "#ef4444", fontSize: 12, marginBottom: 8, textAlign: "right" }}>
+                <p
+                  style={{
+                    color: "#ef4444",
+                    fontSize: 12,
+                    marginBottom: 8,
+                    textAlign: "right",
+                  }}
+                >
                   {submitError}
                 </p>
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <button
-                  style={{ padding: "11px 20px", background: "transparent", border: "1px solid #ef4444", borderRadius: 8, color: "#ef4444", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                  style={{
+                    padding: "11px 20px",
+                    background: "transparent",
+                    border: "1px solid #ef4444",
+                    borderRadius: 8,
+                    color: "#ef4444",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
                   onClick={() => setShowDeleteConfirm(true)}
                 >
                   Xóa tài khoản
@@ -777,21 +810,75 @@ export default function ProfileModal({
 
               {/* Modal xác nhận xóa */}
               {showDeleteConfirm && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
-                  <div style={{ background: "#1e2433", borderRadius: 12, padding: 28, width: 320, border: "1px solid #2d3748" }}>
-                    <h3 style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>Xóa tài khoản</h3>
-                    <p style={{ color: "#9ca3af", fontSize: 13, margin: "0 0 24px", lineHeight: 1.6 }}>
-                      Bạn có chắc muốn xóa tài khoản? Tất cả dữ liệu sẽ bị mất vĩnh viễn và không thể hoàn tác.
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(0,0,0,0.6)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 2000,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#1e2433",
+                      borderRadius: 12,
+                      padding: 28,
+                      width: 320,
+                      border: "1px solid #2d3748",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        color: "#f1f5f9",
+                        fontSize: 16,
+                        fontWeight: 600,
+                        margin: "0 0 8px",
+                      }}
+                    >
+                      Xóa tài khoản
+                    </h3>
+                    <p
+                      style={{
+                        color: "#9ca3af",
+                        fontSize: 13,
+                        margin: "0 0 24px",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Bạn có chắc muốn xóa tài khoản? Tất cả dữ liệu sẽ bị mất
+                      vĩnh viễn và không thể hoàn tác.
                     </p>
                     <div style={{ display: "flex", gap: 10 }}>
                       <button
-                        style={{ flex: 1, padding: "9px 0", background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#e2e8f0", fontSize: 13, cursor: "pointer" }}
+                        style={{
+                          flex: 1,
+                          padding: "9px 0",
+                          background: "transparent",
+                          border: "1px solid #374151",
+                          borderRadius: 8,
+                          color: "#e2e8f0",
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
                         onClick={() => setShowDeleteConfirm(false)}
                       >
                         Hủy
                       </button>
                       <button
-                        style={{ flex: 1, padding: "9px 0", background: "#ef4444", border: "none", borderRadius: 8, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                        style={{
+                          flex: 1,
+                          padding: "9px 0",
+                          background: "#ef4444",
+                          border: "none",
+                          borderRadius: 8,
+                          color: "white",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
                         onClick={handleDelete}
                       >
                         Xác nhận xóa
@@ -1095,15 +1182,11 @@ export default function ProfileModal({
                             Mật khẩu khớp
                           </>
                         ) : (
-                          <>
-                           
-                          </>
+                          <></>
                         )}
                       </span>
                     )}
                 </div>
-
-              
               </div>
 
               <hr className="pm-divider" />
@@ -1177,11 +1260,25 @@ export default function ProfileModal({
                     marginBottom: 18,
                   }}
                 >
-                  <p style={{ color: "#fecaca", fontWeight: 700, margin: "0 0 6px" }}>
+                  <p
+                    style={{
+                      color: "#fecaca",
+                      fontWeight: 700,
+                      margin: "0 0 6px",
+                    }}
+                  >
                     Tài khoản này đã bị khóa
                   </p>
-                  <p style={{ color: "#fca5a5", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
-                    {userProfile.lockedReason || "Không có lý do khóa được ghi nhận."}
+                  <p
+                    style={{
+                      color: "#fca5a5",
+                      fontSize: 13,
+                      margin: 0,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {userProfile.lockedReason ||
+                      "Không có lý do khóa được ghi nhận."}
                   </p>
                 </div>
               ) : (
@@ -1245,7 +1342,9 @@ export default function ProfileModal({
               )}
 
               <div style={{ marginBottom: 22 }}>
-                <h3 style={{ color: "#f1f5f9", fontSize: 15, margin: "0 0 12px" }}>
+                <h3
+                  style={{ color: "#f1f5f9", fontSize: 15, margin: "0 0 12px" }}
+                >
                   Yêu cầu của tôi
                 </h3>
                 {lockRequestsLoading ? (
@@ -1255,7 +1354,16 @@ export default function ProfileModal({
                     Bạn chưa gửi yêu cầu khóa tài khoản nào.
                   </p>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 160, overflowY: "auto", paddingRight: 4, }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      maxHeight: 160,
+                      overflowY: "auto",
+                      paddingRight: 4,
+                    }}
+                  >
                     {myLockRequests.map((request) => (
                       <div
                         key={request._id}
@@ -1278,10 +1386,19 @@ export default function ProfileModal({
                             {getStatusText(request.status)}
                           </strong>
                           <span style={{ color: "#64748b", fontSize: 12 }}>
-                            {new Date(request.createdAt).toLocaleDateString("vi-VN")}
+                            {new Date(request.createdAt).toLocaleDateString(
+                              "vi-VN",
+                            )}
                           </span>
                         </div>
-                        <p style={{ color: "#94a3b8", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                        <p
+                          style={{
+                            color: "#94a3b8",
+                            fontSize: 13,
+                            margin: 0,
+                            lineHeight: 1.5,
+                          }}
+                        >
                           {request.reason || "Không nhập lý do"}
                         </p>
                       </div>
@@ -1294,17 +1411,34 @@ export default function ProfileModal({
                 <>
                   <hr className="pm-divider" />
                   <div>
-                    <h3 style={{ color: "#f1f5f9", fontSize: 15, margin: "0 0 12px" }}>
+                    <h3
+                      style={{
+                        color: "#f1f5f9",
+                        fontSize: 15,
+                        margin: "0 0 12px",
+                      }}
+                    >
                       Admin duyệt yêu cầu khóa
                     </h3>
                     {lockRequestsLoading ? (
-                      <p style={{ color: "#94a3b8", fontSize: 13 }}>Đang tải...</p>
+                      <p style={{ color: "#94a3b8", fontSize: 13 }}>
+                        Đang tải...
+                      </p>
                     ) : adminLockRequests.length === 0 ? (
                       <p style={{ color: "#64748b", fontSize: 13 }}>
                         Không có yêu cầu khóa tài khoản đang chờ.
                       </p>
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 160, overflowY: "auto", paddingRight: 4 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                          maxHeight: 160,
+                          overflowY: "auto",
+                          paddingRight: 4,
+                        }}
+                      >
                         {adminLockRequests.map((request) => (
                           <div
                             key={request._id}
@@ -1324,23 +1458,57 @@ export default function ProfileModal({
                               }}
                             >
                               <div>
-                                <strong style={{ color: "#f1f5f9", fontSize: 14 }}>
+                                <strong
+                                  style={{ color: "#f1f5f9", fontSize: 14 }}
+                                >
                                   {getRequestUserName(request)}
                                 </strong>
-                                <p style={{ color: "#64748b", fontSize: 12, margin: "3px 0 0" }}>
-                                  {new Date(request.createdAt).toLocaleString("vi-VN")}
+                                <p
+                                  style={{
+                                    color: "#64748b",
+                                    fontSize: 12,
+                                    margin: "3px 0 0",
+                                  }}
+                                >
+                                  {new Date(request.createdAt).toLocaleString(
+                                    "vi-VN",
+                                  )}
                                 </p>
                               </div>
-                              <span style={{ color: "#fbbf24", fontSize: 12, fontWeight: 700 }}>
+                              <span
+                                style={{
+                                  color: "#fbbf24",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                }}
+                              >
                                 Đang chờ
                               </span>
                             </div>
-                            <p style={{ color: "#94a3b8", fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
+                            <p
+                              style={{
+                                color: "#94a3b8",
+                                fontSize: 13,
+                                margin: "0 0 12px",
+                                lineHeight: 1.5,
+                              }}
+                            >
                               {request.reason || "Không nhập lý do"}
                             </p>
-                            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 10,
+                                justifyContent: "flex-end",
+                              }}
+                            >
                               <button
-                                onClick={() => handleReviewAccountLock(request._id, "rejected")}
+                                onClick={() =>
+                                  handleReviewAccountLock(
+                                    request._id,
+                                    "rejected",
+                                  )
+                                }
                                 disabled={reviewingRequestId === request._id}
                                 style={{
                                   padding: "8px 14px",
@@ -1355,7 +1523,12 @@ export default function ProfileModal({
                                 Từ chối
                               </button>
                               <button
-                                onClick={() => handleReviewAccountLock(request._id, "approved")}
+                                onClick={() =>
+                                  handleReviewAccountLock(
+                                    request._id,
+                                    "approved",
+                                  )
+                                }
                                 disabled={reviewingRequestId === request._id}
                                 style={{
                                   padding: "8px 14px",
@@ -1387,7 +1560,7 @@ export default function ProfileModal({
 
         {showLockOtpModal && (
           <OtpModal
-            key={userProfile?.email}   // 👈 QUAN TRỌNG
+            key={userProfile?.email} // 👈 QUAN TRỌNG
             email={userProfile?.email || ""}
             onClose={() => setShowLockOtpModal(false)}
             onVerified={async () => {
