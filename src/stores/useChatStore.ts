@@ -634,7 +634,7 @@ export const useChatStore = create<ChatState>()(
               ...state.pinnedMessages,
               [conversationId]: (
                 state.pinnedMessages[conversationId] ?? []
-              ).filter((m) => m._id !== messageId),
+              ).filter((m) => m.messageId !== messageId),
             },
           }));
         } catch (error) {

@@ -90,10 +90,10 @@ export interface ChatState {
     messageId: string,
     conversationId: string,
   ) => Promise<void>;
-  fetchPinnedMessages: (conversationId: string) => Promise<Message[]>;
+  fetchPinnedMessages: (conversationId: string) => Promise<PinnedMessage[]>;
   applyPinnedMessages: (
     conversationId: string,
-    pinnedMessages: Message[],
+    pinnedMessages: PinnedMessage[],
   ) => void;
   updateConversationTheme: (
     conversationId: string,
@@ -126,7 +126,7 @@ export interface ChatState {
     name?: string;
     memberIds: string[];
   }) => Promise<void>;
-  pinnedMessages: Record<string, Message[]>;
+  pinnedMessages: Record<string, PinnedMessage[]>;
   pinMessage: (conversationId: string, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: string, messageId: string) => Promise<void>;
   updateMemberRole: (
