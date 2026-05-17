@@ -35,13 +35,13 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
-  errorCode: string | null;
   forceLogoutMessage: string | null;
   clearForceLogout: () => void;
   signIn: (
     data: SignInData,
     forceLogin?: boolean,
   ) => Promise<{ success: boolean; code?: string; message?: string }>;
+  errorCode: string | null;
   fetchMe: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -216,7 +216,14 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => set({ error: null }),
 
       clearState: () => {
-        set({ accessToken: null, user: null, loading: false });
+        set({
+          accessToken: null,
+          user: null,
+          userProfile: null,
+          loading: false,
+          error: null,
+          errorCode: null,
+        });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
       },

@@ -397,7 +397,10 @@ export const useChatStore = create<ChatState>()(
       },
       reactMessage: async (messageId, conversationId, emoji) => {
         try {
-          const { reactions } = await chatService.reactMessage(messageId, emoji);
+          const { reactions } = await chatService.reactMessage(
+            messageId,
+            emoji,
+          );
           get().applyMessageReactions(messageId, conversationId, reactions);
         } catch (error) {
           console.error("Lỗi khi react tin nhắn:", error);
@@ -432,7 +435,8 @@ export const useChatStore = create<ChatState>()(
         }
       },
       fetchPinnedMessages: async (conversationId) => {
-        const { pinnedMessages } = await chatService.fetchPinnedMessages(conversationId);
+        const { pinnedMessages } =
+          await chatService.fetchPinnedMessages(conversationId);
         get().applyPinnedMessages(conversationId, pinnedMessages);
         return pinnedMessages;
       },
@@ -603,7 +607,10 @@ export const useChatStore = create<ChatState>()(
       pinnedMessages: {},
       pinMessage: async (conversationId, messageId) => {
         try {
-          const messages = await chatService.pinMessage(conversationId, messageId);
+          const messages = await chatService.pinMessage(
+            conversationId,
+            messageId,
+          );
           set((state) => ({
             pinnedMessages: {
               ...state.pinnedMessages,
@@ -621,9 +628,9 @@ export const useChatStore = create<ChatState>()(
           set((state) => ({
             pinnedMessages: {
               ...state.pinnedMessages,
-              [conversationId]: (state.pinnedMessages[conversationId] ?? []).filter(
-                (m) => m._id !== messageId
-              ),
+              [conversationId]: (
+                state.pinnedMessages[conversationId] ?? []
+              ).filter((m) => m._id !== messageId),
             },
           }));
         } catch (error) {
@@ -718,7 +725,7 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           console.error("Lỗi khi rời nhóm:", error);
           throw error;
-        } 
+        }
       },
 
       addMemberToGroup: async (conversationId, targetUserId) => {
@@ -774,6 +781,43 @@ export const useChatStore = create<ChatState>()(
               : c,
           ),
         }));
+      },
+      // 👇 thêm vào đây
+      togglePinConversation: async (conversationId: string) => {
+        try {
+          const result =
+            await chatService.togglePinConversation(conversationId);
+          const { pinned, pinnedAt } = result;
+
+          set((state) => {
+            const updated = state.conversations.map((c) =>
+              c._id === conversationId
+                ? { ...c, pinnedAt: pinnedAt ?? null }
+                : c,
+            );
+            console.log(
+              "✅ updated conv:",
+              updated.find((c) => c._id === conversationId),
+            );
+            return { conversations: updated };
+          });
+
+          return pinned;
+        } catch (error) {
+          console.error("Lỗi khi ghim hội thoại:", error);
+          throw error;
+        }
+      },
+      removeJoinRequest: (requestId: string) => {
+        set((state) => {
+          const updated: typeof state.joinRequests = {};
+          for (const convId in state.joinRequests) {
+            updated[convId] = state.joinRequests[convId].filter(
+              (r) => r._id !== requestId,
+            );
+          }
+          return { joinRequests: updated };
+        });
       },
     }),
     {

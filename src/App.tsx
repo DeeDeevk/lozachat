@@ -16,9 +16,8 @@ import { useEffect } from "react";
 import PublicRoute from "./components/PublicRoute";
 import { useSyncAuthBetweenTabs } from "./hook/useSyncAuthBetweenTabs";
 import ForceLogoutDialog from "./components/ForceLogoutDialog"; // ← thêm import
-import AdminRoute from "./components/AdminRoute";
 import LozaAdmin from "./pages/Admin";
-
+import AdminRoute from "./components/AdminRoute";
 function App() {
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();

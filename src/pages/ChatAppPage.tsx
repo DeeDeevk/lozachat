@@ -56,14 +56,19 @@ import {
   X,
   Key,
   LogOut,
-  Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, PhoneIncoming,
-  Maximize2, Minimize2, PictureInPicture2,
+  Mic,
+  MicOff,
+  Video as VideoIcon,
+  VideoOff,
+  PhoneOff,
+  PhoneIncoming,
+  Maximize2,
+  Minimize2,
+  PictureInPicture2,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
-
-
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -268,7 +273,13 @@ function formatCallDuration(totalSeconds: number) {
 type IconBtnVariant = "ghost" | "danger" | "success" | "primary" | "active";
 
 function IconBtn({
-  icon: Icon, onClick, variant = "ghost", size = 44, label, disabled, badge,
+  icon: Icon,
+  onClick,
+  variant = "ghost",
+  size = 44,
+  label,
+  disabled,
+  badge,
 }: {
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   onClick?: () => void;
@@ -278,12 +289,40 @@ function IconBtn({
   disabled?: boolean;
   badge?: React.ReactNode;
 }) {
-  const palette: Record<IconBtnVariant, { bg: string; color: string; border: string; shadow: string }> = {
-    ghost:   { bg: "rgba(255,255,255,.08)",                       color: "#f1f5f9", border: "1px solid rgba(255,255,255,.12)", shadow: "none" },
-    active:  { bg: "rgba(255,255,255,.95)",                       color: "#0f172a", border: "1px solid rgba(255,255,255,.95)", shadow: "0 8px 22px rgba(255,255,255,.2)" },
-    primary: { bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",     color: "#fff",    border: "1px solid rgba(59,130,246,.55)",  shadow: "0 10px 24px rgba(59,130,246,.45)" },
-    success: { bg: "linear-gradient(135deg,#22c55e,#16a34a)",     color: "#fff",    border: "1px solid rgba(34,197,94,.55)",   shadow: "0 10px 24px rgba(34,197,94,.45)" },
-    danger:  { bg: "linear-gradient(135deg,#ef4444,#dc2626)",     color: "#fff",    border: "1px solid rgba(239,68,68,.55)",   shadow: "0 10px 24px rgba(239,68,68,.45)" },
+  const palette: Record<
+    IconBtnVariant,
+    { bg: string; color: string; border: string; shadow: string }
+  > = {
+    ghost: {
+      bg: "rgba(255,255,255,.08)",
+      color: "#f1f5f9",
+      border: "1px solid rgba(255,255,255,.12)",
+      shadow: "none",
+    },
+    active: {
+      bg: "rgba(255,255,255,.95)",
+      color: "#0f172a",
+      border: "1px solid rgba(255,255,255,.95)",
+      shadow: "0 8px 22px rgba(255,255,255,.2)",
+    },
+    primary: {
+      bg: "linear-gradient(135deg,#3b82f6,#0ea5e9)",
+      color: "#fff",
+      border: "1px solid rgba(59,130,246,.55)",
+      shadow: "0 10px 24px rgba(59,130,246,.45)",
+    },
+    success: {
+      bg: "linear-gradient(135deg,#22c55e,#16a34a)",
+      color: "#fff",
+      border: "1px solid rgba(34,197,94,.55)",
+      shadow: "0 10px 24px rgba(34,197,94,.45)",
+    },
+    danger: {
+      bg: "linear-gradient(135deg,#ef4444,#dc2626)",
+      color: "#fff",
+      border: "1px solid rgba(239,68,68,.55)",
+      shadow: "0 10px 24px rgba(239,68,68,.45)",
+    },
   };
   const p = palette[variant];
   return (
@@ -294,17 +333,24 @@ function IconBtn({
       aria-label={label}
       style={{
         position: "relative",
-        width: size, height: size, borderRadius: "50%",
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
         background: disabled ? "rgba(51,65,85,.4)" : p.bg,
         color: disabled ? "#94a3b8" : p.color,
-        border: p.border, boxShadow: disabled ? "none" : p.shadow,
+        border: p.border,
+        boxShadow: disabled ? "none" : p.shadow,
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "transform .15s ease, box-shadow .15s ease, background .2s",
       }}
-      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(.92)")}
-      onMouseUp={(e)   => (e.currentTarget.style.transform = "scale(1)")}
-      onMouseLeave={(e)=> (e.currentTarget.style.transform = "scale(1)")}
+      onMouseDown={(e) =>
+        !disabled && (e.currentTarget.style.transform = "scale(.92)")
+      }
+      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
     >
       <Icon size={Math.round(size * 0.42)} strokeWidth={2} />
       {badge}
@@ -312,25 +358,48 @@ function IconBtn({
   );
 }
 
-function CallAvatar({ url, name, size = 96, ring = true }: { url?: string | null; name?: string; size?: number; ring?: boolean }) {
+function CallAvatar({
+  url,
+  name,
+  size = 96,
+  ring = true,
+}: {
+  url?: string | null;
+  name?: string;
+  size?: number;
+  ring?: boolean;
+}) {
   const initial = (name || "?").trim().charAt(0).toUpperCase();
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: "50%",
-        display: "grid", placeItems: "center", overflow: "hidden",
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        display: "grid",
+        placeItems: "center",
+        overflow: "hidden",
         background: "linear-gradient(135deg,#6366f1,#ec4899)",
-        color: "white", fontWeight: 800, fontSize: size * 0.38,
+        color: "white",
+        fontWeight: 800,
+        fontSize: size * 0.38,
         border: ring ? "3px solid rgba(255,255,255,.18)" : "none",
         boxShadow: "0 18px 40px rgba(0,0,0,.5)",
         flexShrink: 0,
       }}
     >
-      {url ? <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
+      {url ? (
+        <img
+          src={url}
+          alt={name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        initial
+      )}
     </div>
   );
 }
-
 
 // --- GROUP SEEN AVATARS ---
 interface GroupSeenAvatarsProps {
@@ -551,7 +620,10 @@ export default function ChatPage() {
     leaveGroup,
     deleteConversationForMe,
     updateMemberRole: _updateMemberRole,
+    togglePinConversation,
   } = useChatStore();
+
+  const activeConv = conversations.find((c) => c._id === activeConversationId);
 
   const socketStore = useSocketStore();
 
@@ -596,8 +668,6 @@ export default function ChatPage() {
   const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string>("");
   const [showDeleteConvConfirm, setShowDeleteConvConfirm] = useState(false);
   const [isCallMinimized, setIsCallMinimized] = useState(false);
-
-
 
   const popupRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -645,7 +715,8 @@ export default function ChatPage() {
   const startRingtone = useCallback(() => {
     try {
       if (ringtoneCtxRef.current) return;
-      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      const AudioCtx =
+        window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
@@ -689,11 +760,15 @@ export default function ChatPage() {
       const osc = ringtoneOscRef.current;
       const ctx = ringtoneCtxRef.current;
       if (osc) {
-        try { osc.stop(); } catch {}
+        try {
+          osc.stop();
+        } catch {}
         ringtoneOscRef.current = null;
       }
       if (ctx) {
-        try { ctx.close(); } catch {}
+        try {
+          ctx.close();
+        } catch {}
         ringtoneCtxRef.current = null;
       }
       ringtoneGainRef.current = null;
@@ -738,7 +813,12 @@ export default function ChatPage() {
   const participantsCache = useMemo(() => {
     const cache = new Map<
       string,
-      { _id: string; displayName: string; avatarUrl?: string | null; role?: "admin" | "member" | "owner" }
+      {
+        _id: string;
+        displayName: string;
+        avatarUrl?: string | null;
+        role?: "admin" | "member" | "owner";
+      }
     >();
     conversations.forEach((c) => {
       c.participants.forEach((p) => {
@@ -860,9 +940,9 @@ export default function ChatPage() {
   }, [activeConversationId, messages, socket, user?.userId]);
 
   // auto-thu nhỏ khi cuộc gọi voice đang in-call (tuỳ chọn)
-useEffect(() => {
-  if (callStatus === "idle") setIsCallMinimized(false);
-}, [callStatus]);
+  useEffect(() => {
+    if (callStatus === "idle") setIsCallMinimized(false);
+  }, [callStatus]);
 
   // ─── Memos ───────────────────────────────────────────────────────────────────
   const activeConversation = useMemo(
@@ -944,17 +1024,18 @@ useEffect(() => {
   const isCurrentCallGroup =
     callConversation?.type === "group" || incomingIsGroupCall;
 
-  const callPeerName = callPeer?.displayName || otherUser?.displayName || "Người dùng";
+  const callPeerName =
+    callPeer?.displayName || otherUser?.displayName || "Người dùng";
   const callAvatarUrl = isCurrentCallGroup
     ? userProfile?.avatarUrl || null
     : callConversation
-      ? (callPeer?.avatarUrl || incomingCallerAvatar || null)
-      : (otherUser?.avatarUrl || null);
+      ? callPeer?.avatarUrl || incomingCallerAvatar || null
+      : otherUser?.avatarUrl || null;
   const callAvatarName = isCurrentCallGroup
     ? userProfile?.displayName || user?.username || "Bạn"
     : callConversation
-      ? (callPeer?.displayName || incomingCallerName || "Người dùng")
-      : (otherUser?.displayName || "Người dùng");
+      ? callPeer?.displayName || incomingCallerName || "Người dùng"
+      : otherUser?.displayName || "Người dùng";
 
   const callHeadline =
     callStatus === "incoming"
@@ -1146,7 +1227,11 @@ useEffect(() => {
       roomRef.current.disconnect();
       roomRef.current = null;
     }
-    try { stopRingtone(); } catch (e) { /* ignore */ }
+    try {
+      stopRingtone();
+    } catch (e) {
+      /* ignore */
+    }
     setRemoteStream(null);
     setLocalStreamState(null);
     setCallStatus("idle");
@@ -1256,10 +1341,13 @@ useEffect(() => {
             const hasMic = Array.from(
               room.localParticipant.trackPublications.values(),
             ).some(
-              (pub) => pub.source === Track.Source.Microphone && Boolean(pub.track),
+              (pub) =>
+                pub.source === Track.Source.Microphone && Boolean(pub.track),
             );
             if (!hasMic) {
-              console.warn("Microphone track lost after camera enable, re-enabling...");
+              console.warn(
+                "Microphone track lost after camera enable, re-enabling...",
+              );
               await room.localParticipant.setMicrophoneEnabled(true);
             }
           }
@@ -1344,7 +1432,9 @@ useEffect(() => {
 
       const joinKind = preferredKind || callKind;
       try {
-        try { stopRingtone(); } catch {}
+        try {
+          stopRingtone();
+        } catch {}
         setCallKind(joinKind);
         setCallStatus("connecting");
         await connectLiveKitRoom(
@@ -1378,14 +1468,18 @@ useEffect(() => {
   const rejectIncomingCall = useCallback(() => {
     if (callConversationId && socket)
       socket.emit("call:reject", { conversationId: callConversationId });
-    try { stopRingtone(); } catch {}
+    try {
+      stopRingtone();
+    } catch {}
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
   const endCall = useCallback(() => {
     if (callConversationId && socket)
       socket.emit("call:end", { conversationId: callConversationId });
-    try { stopRingtone(); } catch {}
+    try {
+      stopRingtone();
+    } catch {}
     cleanupCall();
   }, [callConversationId, cleanupCall, socket]);
 
@@ -1558,17 +1652,20 @@ useEffect(() => {
         // Wait for stream to be bound to video element (max 1 second)
         let attempts = 0;
         while (!videoEl.srcObject && attempts < 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
           attempts++;
         }
-        
+
         if (!videoEl.srcObject) {
           toast.error("Video stream chưa sẵn sàng");
           return;
         }
       }
 
-      if (document.pictureInPictureElement && document.pictureInPictureElement !== videoEl) {
+      if (
+        document.pictureInPictureElement &&
+        document.pictureInPictureElement !== videoEl
+      ) {
         await document.exitPictureInPicture();
       }
       if (document.pictureInPictureElement !== videoEl) {
@@ -1593,7 +1690,7 @@ useEffect(() => {
     // For video calls, activate PiP with a small delay to ensure streams are bound
     if (callKind === "video" && !isCurrentCallGroup) {
       // Give the useEffect hooks time to bind streams to video elements
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       void openVideoPiP();
     }
     setIsCallMinimized(true);
@@ -1640,7 +1737,12 @@ useEffect(() => {
     Object.keys(participantVideoRefs.current).forEach((id) => {
       if (!activeIds.has(id)) delete participantVideoRefs.current[id];
     });
-  }, [callKind, groupCallParticipantTiles, isCurrentCallGroup, isCallMinimized]);
+  }, [
+    callKind,
+    groupCallParticipantTiles,
+    isCurrentCallGroup,
+    isCallMinimized,
+  ]);
 
   useEffect(() => {
     if (callKind === "video") return;
@@ -1870,7 +1972,8 @@ useEffect(() => {
             }
           : undefined,
         unread: c.unreadCounts?.[user?.userId || ""] || 0,
-        pinned: false,
+        pinned: !!(c as any).pinnedAt, // 👈 sửa từ false thành này
+        pinnedAt: (c as any).pinnedAt ?? null, // 👈 thêm dòng này
         isStranger: c.isStranger,
         strangerStatus: c.strangerStatus,
       })),
@@ -4818,6 +4921,11 @@ useEffect(() => {
                   toast.error("Không thể cập nhật cài đặt");
                 }
               }}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
+                await togglePinConversation(activeConversationId);
+              }}
             />
           ) : (
             <ConversationInfoPanel
@@ -4825,6 +4933,11 @@ useEffect(() => {
               messages={displayMessages}
               currentUserId={user?.userId}
               onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
+                await togglePinConversation(activeConversationId);
+              }}
             />
           ))}
 
@@ -5265,374 +5378,814 @@ useEffect(() => {
           </div>
         </div>
       )}
-{callStatus !== "idle" && (
-  <>
-    {/* ─── MINIMIZED PILL (luôn hiển thị khi thu nhỏ, mọi loại call) ─── */}
-    {isCallMinimized ? (
-      <div
-        style={{
-          position: "fixed", right: 18, bottom: 18, zIndex: 73,
-          display: "flex", alignItems: "center", gap: 12,
-          padding: "10px 14px 10px 10px",
-          borderRadius: 999,
-          background: "linear-gradient(135deg, rgba(15,23,42,.92), rgba(30,41,59,.92))",
-          border: "1px solid rgba(148,163,184,.25)",
-          boxShadow: "0 20px 44px rgba(0,0,0,.55)",
-          backdropFilter: "blur(16px)",
-          color: "#f1f5f9",
-          minWidth: 260,
-          cursor: "pointer",
-          animation: "scale-in .2s ease-out",
-        }}
-        onClick={() => void handleRestoreCall()}
-      >
-        <div style={{ position: "relative" }}>
-          <CallAvatar
-            url={callAvatarUrl}
-            name={callAvatarName}
-            size={42}
-            ring={false}
-          />
-          <span
-            style={{
-              position: "absolute", right: -2, bottom: -2, width: 12, height: 12,
-              borderRadius: "50%", background: "#22c55e",
-              border: "2px solid #0f172a",
-              boxShadow: "0 0 0 4px rgba(34,197,94,.25)",
-            }}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {callHeadline}
-          </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5 }}>
-            {callKind === "video" ? <VideoIcon size={11} /> : <Mic size={11} />}
-            {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callStatus === "incoming" ? "Đang gọi đến…" : "Đang kết nối…"}
-          </div>
-        </div>
-        <IconBtn
-          icon={Maximize2}
-          variant="ghost"
-          size={34}
-          label="Phóng to"
-          onClick={() => void handleRestoreCall()}
-        />
-        <IconBtn
-          icon={PhoneOff}
-          variant="danger"
-          size={34}
-          label="Kết thúc"
-          onClick={() => endCall()}
-        />
-      </div>
-    ) : callKind === "video" ? (
-      // ─── EXPANDED VIDEO ────────────────────────────────────────────
-      <div
-        style={{
-          position: "fixed", inset: 0, zIndex: 72,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-          background:
-            "radial-gradient(1200px 600px at 15% 10%, rgba(56,189,248,.18), transparent 60%)," +
-            "radial-gradient(900px 500px at 85% 90%, rgba(168,85,247,.18), transparent 60%)," +
-            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
-          backdropFilter: "blur(8px)",
-          animation: "fade-in .25s ease-out",
-        }}
-      >
-        <div
-          style={{
-            width: "min(1240px, 96vw)", height: "min(780px, 94vh)",
-            borderRadius: 28, overflow: "hidden", position: "relative",
-            display: "flex", flexDirection: "column",
-            background: "linear-gradient(180deg, rgba(15,23,42,.85) 0%, rgba(2,6,23,.95) 100%)",
-            border: "1px solid rgba(148,163,184,.18)",
-            boxShadow: "0 60px 120px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06)",
-          }}
-        >
-          {/* Stage video / avatar */}
-          {!isCurrentCallGroup && (
-            <>
-              <video
-                ref={remoteVideoRef} autoPlay playsInline
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-              />
-              {/* Fallback avatar when remote camera is off */}
-              {callStatus !== "in-call" && (
-                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-                  <div style={{ display: "grid", placeItems: "center", gap: 18 }}>
-                    <CallAvatar
-                      url={callAvatarUrl}
-                      name={callAvatarName}
-                      size={140}
-                    />
-                    <div style={{ color: "#f1f5f9", fontSize: 22, fontWeight: 700 }}>{callHeadline}</div>
-                    <div style={{ color: "#94a3b8", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", animation: "pulse 1.4s ease-in-out infinite" }} />
-                      {callStatus === "incoming" ? "Cuộc gọi video đến…" : "Đang gọi…"}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
-                background: "linear-gradient(180deg, rgba(2,6,23,.7) 0%, transparent 22%, transparent 70%, rgba(2,6,23,.85) 100%)" }} />
-            </>
-          )}
-
-          {/* Top bar */}
-          <div style={{ position: "relative", zIndex: 2, padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      {callStatus !== "idle" && (
+        <>
+          {/* ─── MINIMIZED PILL (luôn hiển thị khi thu nhỏ, mọi loại call) ─── */}
+          {isCallMinimized ? (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                bottom: 18,
+                zIndex: 73,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 14px 10px 10px",
+                borderRadius: 999,
+                background:
+                  "linear-gradient(135deg, rgba(15,23,42,.92), rgba(30,41,59,.92))",
+                border: "1px solid rgba(148,163,184,.25)",
+                boxShadow: "0 20px 44px rgba(0,0,0,.55)",
+                backdropFilter: "blur(16px)",
+                color: "#f1f5f9",
+                minWidth: 260,
+                cursor: "pointer",
+                animation: "scale-in .2s ease-out",
+              }}
+              onClick={() => void handleRestoreCall()}
+            >
+              <div style={{ position: "relative" }}>
                 <CallAvatar
                   url={callAvatarUrl}
                   name={callAvatarName}
-                  size={44}
+                  size={42}
                   ring={false}
                 />
-              <div>
-                <div style={{ color: "#f8fafc", fontSize: 16, fontWeight: 800 }}>{callHeadline}</div>
-                <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: callStatus === "in-call" ? "#22c55e" : "#38bdf8" }} />
-                  {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {!isCurrentCallGroup && (
-                <IconBtn icon={PictureInPicture2} variant={isVideoPiPActive ? "active" : "ghost"} size={38}
-                  label={isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"} onClick={() => void toggleVideoPiP()} />
-              )}
-              <IconBtn icon={Minimize2} variant="ghost" size={38} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
-            </div>
-          </div>
-
-          {/* Group grid hoặc local PiP */}
-          {isCurrentCallGroup ? (
-            <div
-              style={{
-                flex: 1, position: "relative", zIndex: 1, padding: "4px 22px 0",
-                display: "grid",
-                gridTemplateColumns: groupCallParticipantTiles.length <= 2
-                  ? "repeat(2, minmax(0, 1fr))"
-                  : "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: 14, alignContent: "start", overflowY: "auto",
-              }}
-            >
-              {groupCallParticipantTiles.map((p) => (
-                <div key={p.id}
+                <span
                   style={{
-                    position: "relative", borderRadius: 20, overflow: "hidden",
-                    aspectRatio: "1 / 1", minHeight: 200,
-                    background: "linear-gradient(160deg, #0b1220 0%, #1e293b 100%)",
-                    border: "1px solid rgba(148,163,184,.18)",
-                    boxShadow: "0 12px 30px rgba(0,0,0,.4)",
+                    position: "absolute",
+                    right: -2,
+                    bottom: -2,
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    background: "#22c55e",
+                    border: "2px solid #0f172a",
+                    boxShadow: "0 0 0 4px rgba(34,197,94,.25)",
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 13,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <video
-                    ref={(el) => { participantVideoRefs.current[p.id] = el; }}
-                    autoPlay playsInline muted={p.isSelf}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: p.hasVideo ? "block" : "none" }}
-                  />
-                  {!p.hasVideo && (
-                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center",
-                      background: "radial-gradient(circle at 30% 20%, rgba(99,102,241,.3), transparent 50%), radial-gradient(circle at 70% 80%, rgba(236,72,153,.22), transparent 55%)" }}>
-                      <CallAvatar url={p.avatarUrl} name={p.displayName} size={84} />
-                    </div>
-                  )}
-                  <div style={{
-                    position: "absolute", left: 10, right: 10, bottom: 10, borderRadius: 12, padding: "7px 10px",
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-                    background: "rgba(2,6,23,.55)", border: "1px solid rgba(255,255,255,.08)", backdropFilter: "blur(10px)",
-                  }}>
-                    <span style={{ fontSize: 12, color: "#f8fafc", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {p.displayName}{p.isSelf ? " (Bạn)" : ""}
-                    </span>
-                    {p.hasVideo
-                      ? <VideoIcon size={12} color="#86efac" />
-                      : <Mic size={12} color="#cbd5e1" />}
-                  </div>
+                  {callHeadline}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <video ref={localVideoRef} autoPlay playsInline muted
-              style={{
-                position: "absolute", width: 220, height: 140, right: 22, bottom: 110,
-                borderRadius: 18, objectFit: "cover", background: "#0f172a",
-                border: "1.5px solid rgba(255,255,255,.18)",
-                boxShadow: "0 18px 40px rgba(0,0,0,.55)", zIndex: 2,
-              }}
-            />
-          )}
-
-          {/* Control bar — toàn bộ là nút icon tròn */}
-          <div style={{ marginTop: "auto", position: "relative", zIndex: 2, padding: "16px 22px 24px",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
-            {callStatus === "incoming" ? (
-              <>
-                <IconBtn icon={PhoneOff} variant="danger" size={56} label="Từ chối" onClick={rejectIncomingCall} />
-                {callKind === "video" && (
-                  <IconBtn icon={Mic} variant="ghost" size={56} label="Nhận thoại" onClick={() => void acceptIncomingCall("voice")} />
-                )}
-                <IconBtn icon={callKind === "video" ? VideoIcon : PhoneIncoming} variant="success" size={56}
-                  label={callKind === "video" ? "Nhận video" : "Nhận"}
-                  onClick={() => void acceptIncomingCall(callKind === "video" ? "video" : undefined)} />
-              </>
-            ) : (
-              <>
-                {callStatus === "in-call" && (
-                  <>
-                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
-                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
-                    <IconBtn icon={isCameraOff ? VideoOff : VideoIcon} variant={isCameraOff ? "active" : "ghost"} size={52}
-                      label={isCameraOff ? "Bật cam" : "Tắt cam"} onClick={toggleCamera} />
-                  </>
-                )}
-                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    ) : (
-      // ─── EXPANDED VOICE ────────────────────────────────────────────
-      <div
-        style={{
-          position: "fixed", inset: 0, zIndex: 72,
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-          background:
-            "radial-gradient(900px 500px at 50% 0%, rgba(56,189,248,.18), transparent 60%)," +
-            "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
-          backdropFilter: "blur(8px)",
-          animation: "fade-in .25s ease-out",
-        }}
-      >
-        <div
-          style={{
-            width: "min(440px, 94vw)", borderRadius: 28, padding: 28,
-            background: "linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.95))",
-            border: "1px solid rgba(148,163,184,.2)",
-            boxShadow: "0 60px 120px rgba(0,0,0,.7)",
-            position: "relative",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 18,
-          }}
-        >
-          {/* top-right minimize */}
-          <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
-            <IconBtn icon={Minimize2} variant="ghost" size={34} label="Thu nhỏ" onClick={() => void handleMinimizeCall()} />
-          </div>
-
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "5px 12px", borderRadius: 999,
-            background: "rgba(56,189,248,.14)", border: "1px solid rgba(56,189,248,.32)",
-            color: "#bae6fd", fontSize: 11, fontWeight: 700, letterSpacing: .5, textTransform: "uppercase",
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8",
-              boxShadow: "0 0 0 4px rgba(56,189,248,.25)", animation: "pulse 1.6s ease-in-out infinite" }} />
-            {isCurrentCallGroup ? "Cuộc gọi nhóm" : "Cuộc gọi thoại"}
-          </div>
-
-          {/* Avatar lớn với halo */}
-          <div style={{ position: "relative", display: "grid", placeItems: "center", padding: 14 }}>
-            <span style={{
-              position: "absolute", inset: 0, borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(56,189,248,.35), transparent 60%)",
-              animation: "pulse 2s ease-in-out infinite",
-            }} />
-            <CallAvatar
-              url={callAvatarUrl}
-              name={callAvatarName}
-              size={140}
-            />
-          </div>
-
-          <div style={{ textAlign: "center" }}>
-            <div style={{ color: "#f8fafc", fontSize: 22, fontWeight: 800 }}>{callHeadline}</div>
-            <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
-              {callStatus === "in-call" ? formatCallDuration(callElapsedSeconds) : callSubHeadline}
-            </div>
-          </div>
-
-          {/* Group chips */}
-          {isCurrentCallGroup && callParticipantsInRoom.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: "100%" }}>
-              {callParticipantsInRoom.map((p) => (
-                <div key={p.id} title={p.displayName}
+                <div
                   style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    borderRadius: 999, padding: "4px 9px 4px 4px",
-                    background: "rgba(2,6,23,.5)", border: "1px solid rgba(148,163,184,.22)",
-                  }}>
-                  <CallAvatar url={p.avatarUrl} name={p.displayName} size={22} ring={false} />
-                  <span style={{ fontSize: 11, color: "#e2e8f0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.displayName}{p.isSelf ? " (Bạn)" : ""}
-                  </span>
+                    fontSize: 11,
+                    color: "#94a3b8",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  {callKind === "video" ? (
+                    <VideoIcon size={11} />
+                  ) : (
+                    <Mic size={11} />
+                  )}
+                  {callStatus === "in-call"
+                    ? formatCallDuration(callElapsedSeconds)
+                    : callStatus === "incoming"
+                      ? "Đang gọi đến…"
+                      : "Đang kết nối…"}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Upgrade request */}
-          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestIncoming && (
-            <div style={{
-              width: "100%", borderRadius: 14, padding: 12,
-              border: "1px solid rgba(96,165,250,.4)",
-              background: "linear-gradient(135deg, rgba(59,130,246,.18), rgba(14,165,233,.12))",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-            }}>
-              <span style={{ fontSize: 12, color: "#dbeafe" }}>
-                <strong>{upgradeRequesterName || "Đối phương"}</strong> muốn nâng cấp lên video
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <IconBtn icon={X} variant="danger" size={32} label="Từ chối" onClick={rejectUpgradeRequest} />
-                <IconBtn icon={VideoIcon} variant="success" size={32} label="Chấp nhận" onClick={acceptUpgradeRequest} />
               </div>
+              <IconBtn
+                icon={Maximize2}
+                variant="ghost"
+                size={34}
+                label="Phóng to"
+                onClick={() => void handleRestoreCall()}
+              />
+              <IconBtn
+                icon={PhoneOff}
+                variant="danger"
+                size={34}
+                label="Kết thúc"
+                onClick={() => endCall()}
+              />
             </div>
-          )}
-
-          {callStatus === "in-call" && callKind === "voice" && !isCurrentCallGroup && isUpgradeRequestPending && (
-            <div style={{ fontSize: 12, color: "#93c5fd", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#60a5fa", animation: "pulse 1.4s ease-in-out infinite" }} />
-              Đang chờ đối phương chấp nhận nâng cấp video…
-            </div>
-          )}
-
-          <audio ref={remoteAudioRef} autoPlay />
-
-          {/* Control bar */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
-            {callStatus === "incoming" ? (
-              <>
-                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Từ chối" onClick={rejectIncomingCall} />
-                <IconBtn icon={PhoneIncoming} variant="success" size={58} label="Nhận" onClick={() => void acceptIncomingCall()} />
-              </>
-            ) : (
-              <>
-                {callStatus === "in-call" && (
+          ) : callKind === "video" ? (
+            // ─── EXPANDED VIDEO ────────────────────────────────────────────
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 72,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+                background:
+                  "radial-gradient(1200px 600px at 15% 10%, rgba(56,189,248,.18), transparent 60%)," +
+                  "radial-gradient(900px 500px at 85% 90%, rgba(168,85,247,.18), transparent 60%)," +
+                  "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+                backdropFilter: "blur(8px)",
+                animation: "fade-in .25s ease-out",
+              }}
+            >
+              <div
+                style={{
+                  width: "min(1240px, 96vw)",
+                  height: "min(780px, 94vh)",
+                  borderRadius: 28,
+                  overflow: "hidden",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  background:
+                    "linear-gradient(180deg, rgba(15,23,42,.85) 0%, rgba(2,6,23,.95) 100%)",
+                  border: "1px solid rgba(148,163,184,.18)",
+                  boxShadow:
+                    "0 60px 120px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06)",
+                }}
+              >
+                {/* Stage video / avatar */}
+                {!isCurrentCallGroup && (
                   <>
-                    <IconBtn icon={isMicMuted ? MicOff : Mic} variant={isMicMuted ? "active" : "ghost"} size={52}
-                      label={isMicMuted ? "Bật mic" : "Tắt mic"} onClick={toggleMic} />
-                    <IconBtn
-                      icon={VideoIcon}
-                      variant="primary"
-                      size={52}
-                      label={!isCurrentCallGroup && isUpgradeRequestPending ? "Đang chờ…" : isCurrentCallGroup ? "Bật camera" : "Nâng cấp video"}
-                      disabled={!isCurrentCallGroup && (isUpgradeRequestPending || isUpgradeRequestIncoming)}
-                      onClick={() => void upgradeVoiceToVideo()}
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                    {/* Fallback avatar when remote camera is off */}
+                    {callStatus !== "in-call" && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "grid",
+                            placeItems: "center",
+                            gap: 18,
+                          }}
+                        >
+                          <CallAvatar
+                            url={callAvatarUrl}
+                            name={callAvatarName}
+                            size={140}
+                          />
+                          <div
+                            style={{
+                              color: "#f1f5f9",
+                              fontSize: 22,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {callHeadline}
+                          </div>
+                          <div
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: 13,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: "50%",
+                                background: "#38bdf8",
+                                animation: "pulse 1.4s ease-in-out infinite",
+                              }}
+                            />
+                            {callStatus === "incoming"
+                              ? "Cuộc gọi video đến…"
+                              : "Đang gọi…"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        pointerEvents: "none",
+                        background:
+                          "linear-gradient(180deg, rgba(2,6,23,.7) 0%, transparent 22%, transparent 70%, rgba(2,6,23,.85) 100%)",
+                      }}
                     />
                   </>
                 )}
-                <IconBtn icon={PhoneOff} variant="danger" size={58} label="Kết thúc" onClick={endCall} />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    )}
-  </>
-)}
 
+                {/* Top bar */}
+                <div
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    padding: "18px 22px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <CallAvatar
+                      url={callAvatarUrl}
+                      name={callAvatarName}
+                      size={44}
+                      ring={false}
+                    />
+                    <div>
+                      <div
+                        style={{
+                          color: "#f8fafc",
+                          fontSize: 16,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {callHeadline}
+                      </div>
+                      <div
+                        style={{
+                          color: "#94a3b8",
+                          fontSize: 12,
+                          marginTop: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background:
+                              callStatus === "in-call" ? "#22c55e" : "#38bdf8",
+                          }}
+                        />
+                        {callStatus === "in-call"
+                          ? formatCallDuration(callElapsedSeconds)
+                          : callSubHeadline}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {!isCurrentCallGroup && (
+                      <IconBtn
+                        icon={PictureInPicture2}
+                        variant={isVideoPiPActive ? "active" : "ghost"}
+                        size={38}
+                        label={
+                          isVideoPiPActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"
+                        }
+                        onClick={() => void toggleVideoPiP()}
+                      />
+                    )}
+                    <IconBtn
+                      icon={Minimize2}
+                      variant="ghost"
+                      size={38}
+                      label="Thu nhỏ"
+                      onClick={() => void handleMinimizeCall()}
+                    />
+                  </div>
+                </div>
 
+                {/* Group grid hoặc local PiP */}
+                {isCurrentCallGroup ? (
+                  <div
+                    style={{
+                      flex: 1,
+                      position: "relative",
+                      zIndex: 1,
+                      padding: "4px 22px 0",
+                      display: "grid",
+                      gridTemplateColumns:
+                        groupCallParticipantTiles.length <= 2
+                          ? "repeat(2, minmax(0, 1fr))"
+                          : "repeat(auto-fit, minmax(240px, 1fr))",
+                      gap: 14,
+                      alignContent: "start",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {groupCallParticipantTiles.map((p) => (
+                      <div
+                        key={p.id}
+                        style={{
+                          position: "relative",
+                          borderRadius: 20,
+                          overflow: "hidden",
+                          aspectRatio: "1 / 1",
+                          minHeight: 200,
+                          background:
+                            "linear-gradient(160deg, #0b1220 0%, #1e293b 100%)",
+                          border: "1px solid rgba(148,163,184,.18)",
+                          boxShadow: "0 12px 30px rgba(0,0,0,.4)",
+                        }}
+                      >
+                        <video
+                          ref={(el) => {
+                            participantVideoRefs.current[p.id] = el;
+                          }}
+                          autoPlay
+                          playsInline
+                          muted={p.isSelf}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: p.hasVideo ? "block" : "none",
+                          }}
+                        />
+                        {!p.hasVideo && (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "grid",
+                              placeItems: "center",
+                              background:
+                                "radial-gradient(circle at 30% 20%, rgba(99,102,241,.3), transparent 50%), radial-gradient(circle at 70% 80%, rgba(236,72,153,.22), transparent 55%)",
+                            }}
+                          >
+                            <CallAvatar
+                              url={p.avatarUrl}
+                              name={p.displayName}
+                              size={84}
+                            />
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 10,
+                            right: 10,
+                            bottom: 10,
+                            borderRadius: 12,
+                            padding: "7px 10px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            background: "rgba(2,6,23,.55)",
+                            border: "1px solid rgba(255,255,255,.08)",
+                            backdropFilter: "blur(10px)",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: "#f8fafc",
+                              fontWeight: 700,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {p.displayName}
+                            {p.isSelf ? " (Bạn)" : ""}
+                          </span>
+                          {p.hasVideo ? (
+                            <VideoIcon size={12} color="#86efac" />
+                          ) : (
+                            <Mic size={12} color="#cbd5e1" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                      position: "absolute",
+                      width: 220,
+                      height: 140,
+                      right: 22,
+                      bottom: 110,
+                      borderRadius: 18,
+                      objectFit: "cover",
+                      background: "#0f172a",
+                      border: "1.5px solid rgba(255,255,255,.18)",
+                      boxShadow: "0 18px 40px rgba(0,0,0,.55)",
+                      zIndex: 2,
+                    }}
+                  />
+                )}
+
+                {/* Control bar — toàn bộ là nút icon tròn */}
+                <div
+                  style={{
+                    marginTop: "auto",
+                    position: "relative",
+                    zIndex: 2,
+                    padding: "16px 22px 24px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 14,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {callStatus === "incoming" ? (
+                    <>
+                      <IconBtn
+                        icon={PhoneOff}
+                        variant="danger"
+                        size={56}
+                        label="Từ chối"
+                        onClick={rejectIncomingCall}
+                      />
+                      {callKind === "video" && (
+                        <IconBtn
+                          icon={Mic}
+                          variant="ghost"
+                          size={56}
+                          label="Nhận thoại"
+                          onClick={() => void acceptIncomingCall("voice")}
+                        />
+                      )}
+                      <IconBtn
+                        icon={callKind === "video" ? VideoIcon : PhoneIncoming}
+                        variant="success"
+                        size={56}
+                        label={callKind === "video" ? "Nhận video" : "Nhận"}
+                        onClick={() =>
+                          void acceptIncomingCall(
+                            callKind === "video" ? "video" : undefined,
+                          )
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {callStatus === "in-call" && (
+                        <>
+                          <IconBtn
+                            icon={isMicMuted ? MicOff : Mic}
+                            variant={isMicMuted ? "active" : "ghost"}
+                            size={52}
+                            label={isMicMuted ? "Bật mic" : "Tắt mic"}
+                            onClick={toggleMic}
+                          />
+                          <IconBtn
+                            icon={isCameraOff ? VideoOff : VideoIcon}
+                            variant={isCameraOff ? "active" : "ghost"}
+                            size={52}
+                            label={isCameraOff ? "Bật cam" : "Tắt cam"}
+                            onClick={toggleCamera}
+                          />
+                        </>
+                      )}
+                      <IconBtn
+                        icon={PhoneOff}
+                        variant="danger"
+                        size={58}
+                        label="Kết thúc"
+                        onClick={endCall}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            // ─── EXPANDED VOICE ────────────────────────────────────────────
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 72,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+                background:
+                  "radial-gradient(900px 500px at 50% 0%, rgba(56,189,248,.18), transparent 60%)," +
+                  "linear-gradient(180deg, #05060a 0%, #0a0f1d 100%)",
+                backdropFilter: "blur(8px)",
+                animation: "fade-in .25s ease-out",
+              }}
+            >
+              <div
+                style={{
+                  width: "min(440px, 94vw)",
+                  borderRadius: 28,
+                  padding: 28,
+                  background:
+                    "linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.95))",
+                  border: "1px solid rgba(148,163,184,.2)",
+                  boxShadow: "0 60px 120px rgba(0,0,0,.7)",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 18,
+                }}
+              >
+                {/* top-right minimize */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 14,
+                    right: 14,
+                    display: "flex",
+                    gap: 8,
+                  }}
+                >
+                  <IconBtn
+                    icon={Minimize2}
+                    variant="ghost"
+                    size={34}
+                    label="Thu nhỏ"
+                    onClick={() => void handleMinimizeCall()}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 12px",
+                    borderRadius: 999,
+                    background: "rgba(56,189,248,.14)",
+                    border: "1px solid rgba(56,189,248,.32)",
+                    color: "#bae6fd",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#38bdf8",
+                      boxShadow: "0 0 0 4px rgba(56,189,248,.25)",
+                      animation: "pulse 1.6s ease-in-out infinite",
+                    }}
+                  />
+                  {isCurrentCallGroup ? "Cuộc gọi nhóm" : "Cuộc gọi thoại"}
+                </div>
+
+                {/* Avatar lớn với halo */}
+                <div
+                  style={{
+                    position: "relative",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 14,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "50%",
+                      background:
+                        "radial-gradient(circle, rgba(56,189,248,.35), transparent 60%)",
+                      animation: "pulse 2s ease-in-out infinite",
+                    }}
+                  />
+                  <CallAvatar
+                    url={callAvatarUrl}
+                    name={callAvatarName}
+                    size={140}
+                  />
+                </div>
+
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{ color: "#f8fafc", fontSize: 22, fontWeight: 800 }}
+                  >
+                    {callHeadline}
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
+                    {callStatus === "in-call"
+                      ? formatCallDuration(callElapsedSeconds)
+                      : callSubHeadline}
+                  </div>
+                </div>
+
+                {/* Group chips */}
+                {isCurrentCallGroup && callParticipantsInRoom.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      justifyContent: "center",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {callParticipantsInRoom.map((p) => (
+                      <div
+                        key={p.id}
+                        title={p.displayName}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          borderRadius: 999,
+                          padding: "4px 9px 4px 4px",
+                          background: "rgba(2,6,23,.5)",
+                          border: "1px solid rgba(148,163,184,.22)",
+                        }}
+                      >
+                        <CallAvatar
+                          url={p.avatarUrl}
+                          name={p.displayName}
+                          size={22}
+                          ring={false}
+                        />
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#e2e8f0",
+                            maxWidth: 140,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {p.displayName}
+                          {p.isSelf ? " (Bạn)" : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upgrade request */}
+                {callStatus === "in-call" &&
+                  callKind === "voice" &&
+                  !isCurrentCallGroup &&
+                  isUpgradeRequestIncoming && (
+                    <div
+                      style={{
+                        width: "100%",
+                        borderRadius: 14,
+                        padding: 12,
+                        border: "1px solid rgba(96,165,250,.4)",
+                        background:
+                          "linear-gradient(135deg, rgba(59,130,246,.18), rgba(14,165,233,.12))",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: "#dbeafe" }}>
+                        <strong>{upgradeRequesterName || "Đối phương"}</strong>{" "}
+                        muốn nâng cấp lên video
+                      </span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <IconBtn
+                          icon={X}
+                          variant="danger"
+                          size={32}
+                          label="Từ chối"
+                          onClick={rejectUpgradeRequest}
+                        />
+                        <IconBtn
+                          icon={VideoIcon}
+                          variant="success"
+                          size={32}
+                          label="Chấp nhận"
+                          onClick={acceptUpgradeRequest}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                {callStatus === "in-call" &&
+                  callKind === "voice" &&
+                  !isCurrentCallGroup &&
+                  isUpgradeRequestPending && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#93c5fd",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#60a5fa",
+                          animation: "pulse 1.4s ease-in-out infinite",
+                        }}
+                      />
+                      Đang chờ đối phương chấp nhận nâng cấp video…
+                    </div>
+                  )}
+
+                <audio ref={remoteAudioRef} autoPlay />
+
+                {/* Control bar */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 14,
+                    marginTop: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {callStatus === "incoming" ? (
+                    <>
+                      <IconBtn
+                        icon={PhoneOff}
+                        variant="danger"
+                        size={58}
+                        label="Từ chối"
+                        onClick={rejectIncomingCall}
+                      />
+                      <IconBtn
+                        icon={PhoneIncoming}
+                        variant="success"
+                        size={58}
+                        label="Nhận"
+                        onClick={() => void acceptIncomingCall()}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {callStatus === "in-call" && (
+                        <>
+                          <IconBtn
+                            icon={isMicMuted ? MicOff : Mic}
+                            variant={isMicMuted ? "active" : "ghost"}
+                            size={52}
+                            label={isMicMuted ? "Bật mic" : "Tắt mic"}
+                            onClick={toggleMic}
+                          />
+                          <IconBtn
+                            icon={VideoIcon}
+                            variant="primary"
+                            size={52}
+                            label={
+                              !isCurrentCallGroup && isUpgradeRequestPending
+                                ? "Đang chờ…"
+                                : isCurrentCallGroup
+                                  ? "Bật camera"
+                                  : "Nâng cấp video"
+                            }
+                            disabled={
+                              !isCurrentCallGroup &&
+                              (isUpgradeRequestPending ||
+                                isUpgradeRequestIncoming)
+                            }
+                            onClick={() => void upgradeVoiceToVideo()}
+                          />
+                        </>
+                      )}
+                      <IconBtn
+                        icon={PhoneOff}
+                        variant="danger"
+                        size={58}
+                        label="Kết thúc"
+                        onClick={endCall}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Context menu */}
       {contextMenu && (

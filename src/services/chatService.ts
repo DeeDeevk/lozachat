@@ -105,8 +105,13 @@ export const chatService = {
     return res.data.conversation;
   },
 
-  async pinMessage(conversationId: string, messageId: string): Promise<Message[]> {
-    const res = await api.post(`/conversations/${conversationId}/pin/${messageId}`);
+  async pinMessage(
+    conversationId: string,
+    messageId: string,
+  ): Promise<Message[]> {
+    const res = await api.post(
+      `/conversations/${conversationId}/pin/${messageId}`,
+    );
     return res.data.pinnedMessages;
   },
 
@@ -230,5 +235,10 @@ export const chatService = {
       settings,
     );
     return res.data;
+  },
+
+  togglePinConversation: async (conversationId: string) => {
+    const res = await api.patch(`/conversations/${conversationId}/toggle-pin`);
+    return res.data as { pinned: boolean; pinnedAt: string | null };
   },
 };

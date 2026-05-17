@@ -11,12 +11,13 @@ import {
   KeyRound,
   CheckCircle2,
   RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useOtpStore } from "@/stores/useOtpStore";
 import { userService } from "@/services/userService";
-import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 interface LoginData {
   username: string;
@@ -76,7 +77,9 @@ export default function LoginPage() {
   const [unlockStep, setUnlockStep] = useState<UnlockStep>("email");
   const [unlockUsername, setUnlockUsername] = useState("");
   const [unlockReason, setUnlockReason] = useState("");
-  const { errorCode } = useAuthStore.getState();
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+  const [otpLoadingLocal, setOtpLoadingLocal] = useState(false);
 
   useEffect(() => {
     console.log("VIEW CHANGED:", view);
@@ -95,17 +98,14 @@ export default function LoginPage() {
     return !e.username && !e.password;
   };
 
-  // const handleSubmit = async () => {
-  //   if (!validate()) return;
-  //   const success = await signIn(formData);
-  //   if (success) navigate("/chat");
-  // };
-
+  // ── handleSubmit: giữ forceLogin: true từ file 1, giữ errorCode handling từ file 2 ──
   const handleSubmit = async () => {
     if (!validate()) return;
 
     console.log("CURRENT VIEW =", view);
-    const success = await signIn(formData);
+    // Truyền forceLogin: true như file 1, đồng thời xử lý errorCode như file 2
+    const result = await signIn(formData, true);
+    const success = result?.success ?? result;
 
     if (success) {
       navigate("/chat");
@@ -113,7 +113,6 @@ export default function LoginPage() {
     }
 
     const { errorCode } = useAuthStore.getState();
-
     console.log("ERROR CODE =", errorCode);
 
     if (errorCode === "ACCOUNT_LOCKED") {
@@ -123,7 +122,8 @@ export default function LoginPage() {
     }
 
     if (errorCode === "ACCOUNT_DISABLED") {
-      setView("disabled_account");
+      setView("unlock");
+      setUnlockStep("disabled");
       return;
     }
   };
@@ -209,7 +209,6 @@ export default function LoginPage() {
     }
   };
 
-  // Verify OTP — gọi API kiểm tra OTP có đúng không
   const handleVerifyOtp = async () => {
     const code = otp.join("");
     if (code.length < 6) {
@@ -219,7 +218,7 @@ export default function LoginPage() {
     await verifyOTP(email, code);
     const { error, isOtpVerified } = useOtpStore.getState();
     if (error) {
-      setOtpError(error); // hiện lỗi ngay dưới ô OTP
+      setOtpError(error);
       toast.error(error);
       return;
     }
@@ -242,7 +241,6 @@ export default function LoginPage() {
     return !e.newPassword && !e.confirmPassword;
   };
 
-  // Reset password — chỉ truyền email + newPassword (store mới không cần otp nữa)
   const handleResetPassword = async () => {
     if (!validateNewPassword()) return;
     await resetPassword(email, newPassword);
@@ -255,28 +253,19 @@ export default function LoginPage() {
     setForgotStep("done");
   };
 
-  const [unlockLoading, setUnlockLoading] = useState(false);
-  const [unlockError, setUnlockError] = useState("");
-  const [otpLoadingLocal, setOtpLoadingLocal] = useState(false);
-
+  // ── Unlock account handlers ──
   const handleSendUnlockOtp = async () => {
     try {
       setOtpLoadingLocal(true);
-
       await sendOTP(unlockUsername);
-
       setUnlockStep("otp");
     } catch (err: any) {
       console.error(err);
-
       const code = err?.response?.data?.code;
-
-      // 👇 account bị vô hiệu hóa vĩnh viễn
       if (code === "ACCOUNT_DISABLED") {
         setUnlockStep("disabled");
         return;
       }
-
       toast.error(err?.response?.data?.message || "Không gửi được OTP");
     } finally {
       setOtpLoadingLocal(false);
@@ -285,56 +274,42 @@ export default function LoginPage() {
 
   const handleVerifyUnlockOtp = async () => {
     const code = otp.join("");
-
     if (code.length < 6) {
       setOtpError("Nhập đủ 6 số");
       return;
     }
-
     await verifyOTP(unlockUsername, code);
-
     const { isOtpVerified, error } = useOtpStore.getState();
-
     if (error) {
       setOtpError(error);
       return;
     }
-
     if (isOtpVerified) {
-      setUnlockStep("reason"); // 👈 QUAN TRỌNG
+      setUnlockStep("reason");
     }
   };
 
   const handleUnlockRequest = async () => {
     try {
       setUnlockError("");
-
       if (!unlockReason.trim()) {
         setUnlockError("Vui lòng nhập lý do mở khóa");
         return;
       }
-
       setUnlockLoading(true);
-
       const response = await userService.requestAccountUnlock(
         unlockUsername.trim(),
         unlockReason.trim(),
       );
-
       toast.success(response.message || "Đã gửi yêu cầu mở khóa tài khoản");
-
       setUnlockUsername("");
       setUnlockReason("");
-
       setUnlockStep("done");
     } catch (error: any) {
       console.error("Lỗi gửi yêu cầu mở khóa:", error);
-
       const message =
         error?.response?.data?.message || "Không thể gửi yêu cầu mở khóa";
-
       setUnlockError(message);
-
       toast.error(message);
     } finally {
       setUnlockLoading(false);
@@ -360,7 +335,9 @@ export default function LoginPage() {
     setErrors({ username: "", password: "" });
   };
 
-  // ── Shared input style ──
+  const goRegister = () => navigate("/signup");
+
+  // ── Shared input styles ──
   const inputBase = (fieldName: string): React.CSSProperties => ({
     background: "rgba(30,41,59,.8)",
     border:
@@ -391,6 +368,26 @@ export default function LoginPage() {
     transition: "all .2s",
     boxSizing: "border-box" as const,
   };
+
+  // ── Reusable OTP input block ──
+  const renderOtpInputs = () => (
+    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+      {otp.map((digit, idx) => (
+        <input
+          key={idx}
+          id={`otp-${idx}`}
+          className={`otp-input${digit ? " filled" : ""}`}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={digit}
+          onChange={(e) => handleOtpChange(idx, e.target.value)}
+          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+          onFocus={(e) => e.target.select()}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div
@@ -437,6 +434,7 @@ export default function LoginPage() {
         }
 
         input::placeholder { color: rgba(148,163,184,.55); }
+        textarea::placeholder { color: rgba(148,163,184,.55); }
 
         .otp-input {
           width: 44px; height: 52px; border-radius: 12px; border: 1.5px solid rgba(71,85,105,.5);
@@ -513,8 +511,8 @@ export default function LoginPage() {
             height: p.s,
             background: p.c,
             top: p.t,
-            left: p.l,
-            right: p.r,
+            left: (p as any).l,
+            right: (p as any).r,
             animationDelay: `${i * 0.35}s`,
           }}
         />
@@ -863,6 +861,7 @@ export default function LoginPage() {
                   />
                 </div>
 
+                {/* Register + Unlock links */}
                 <p
                   style={{
                     textAlign: "center",
@@ -877,10 +876,9 @@ export default function LoginPage() {
                   }}
                 >
                   <span>Chưa có tài khoản?</span>
-
                   <button
                     type="button"
-                    onClick={() => navigate("/signup")}
+                    onClick={goRegister}
                     style={{
                       background: "none",
                       border: "none",
@@ -903,10 +901,12 @@ export default function LoginPage() {
                   </button>
 
                   <span>• Tài khoản bị khóa?</span>
-
                   <button
                     type="button"
-                    onClick={() => setView("unlock")}
+                    onClick={() => {
+                      setUnlockStep("email");
+                      setView("unlock");
+                    }}
                     style={{
                       background: "none",
                       border: "none",
@@ -1126,7 +1126,7 @@ export default function LoginPage() {
                           color: "#60a5fa",
                           fontWeight: 600,
                           fontSize: 13,
-                          marginTop: 10, // ← Khoảng cách vừa phải
+                          marginTop: 10,
                         }}
                       >
                         Mã có hiệu lực trong 1 phút
@@ -1142,30 +1142,7 @@ export default function LoginPage() {
                     }}
                   >
                     <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          justifyContent: "center",
-                        }}
-                      >
-                        {otp.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            id={`otp-${idx}`}
-                            className={`otp-input${digit ? " filled" : ""}`}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) =>
-                              handleOtpChange(idx, e.target.value)
-                            }
-                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        ))}
-                      </div>
+                      {renderOtpInputs()}
                       {otpError && (
                         <p
                           style={{
@@ -1357,7 +1334,10 @@ export default function LoginPage() {
                           value={newPassword}
                           onChange={(e) => {
                             setNewPassword(e.target.value);
-                            setNewPassError((p) => ({ ...p, newPassword: "" }));
+                            setNewPassError((p) => ({
+                              ...p,
+                              newPassword: "",
+                            }));
                           }}
                           onFocus={() => setNewPassFocused("new")}
                           onBlur={() => setNewPassFocused("")}
@@ -1607,20 +1587,16 @@ export default function LoginPage() {
           )}
 
           {/* ════════════════════════════
-                  VIEW: UNLOCK ACCOUNT
+              VIEW: UNLOCK ACCOUNT
           ════════════════════════════ */}
           {view === "unlock" && (
-            <div>
+            <div style={{ width: "100%", maxWidth: 360 }}>
+              {/* ── UNLOCK STEP: EMAIL ── */}
               {unlockStep === "email" && (
                 <div
                   className="l-panel-switch"
-                  style={{
-                    width: "100%",
-                    maxWidth: 360,
-                    position: "relative",
-                  }}
+                  style={{ position: "relative" }}
                 >
-                  {/* Back button */}
                   <button
                     className="fp-back-btn"
                     onClick={switchToLogin}
@@ -1630,7 +1606,6 @@ export default function LoginPage() {
                     Quay lại đăng nhập
                   </button>
 
-                  {/* Header */}
                   <div style={{ marginBottom: 24 }}>
                     <div
                       style={{
@@ -1648,7 +1623,6 @@ export default function LoginPage() {
                     >
                       <ShieldAlert size={22} color="#f59e0b" />
                     </div>
-
                     <h2
                       style={{
                         color: "white",
@@ -1659,7 +1633,6 @@ export default function LoginPage() {
                     >
                       Mở khóa tài khoản
                     </h2>
-
                     <p
                       style={{
                         color: "#64748b",
@@ -1673,7 +1646,6 @@ export default function LoginPage() {
                     </p>
                   </div>
 
-                  {/* Form */}
                   <div
                     style={{
                       display: "flex",
@@ -1681,7 +1653,6 @@ export default function LoginPage() {
                       gap: 16,
                     }}
                   >
-                    {/* Username */}
                     <div>
                       <label
                         style={{
@@ -1694,7 +1665,6 @@ export default function LoginPage() {
                       >
                         Email tài khoản
                       </label>
-
                       <div style={{ position: "relative" }}>
                         <span
                           style={{
@@ -1707,7 +1677,6 @@ export default function LoginPage() {
                         >
                           <User size={14} color="#64748b" />
                         </span>
-
                         <input
                           type="text"
                           value={unlockUsername}
@@ -1723,35 +1692,39 @@ export default function LoginPage() {
                             fontSize: 13,
                             outline: "none",
                             transition: "all .2s",
-                            boxSizing: "border-box",
+                            boxSizing: "border-box" as const,
                           }}
                         />
                       </div>
                     </div>
 
-                    {/* Submit */}
                     <button
                       className="fp-primary-btn"
                       onClick={handleSendUnlockOtp}
+                      disabled={otpLoadingLocal}
                     >
-                      <ShieldCheck size={15} />
-                      Gửi OTP
+                      {otpLoadingLocal ? (
+                        <>
+                          <RefreshCw size={15} className="fp-spin" />
+                          Đang gửi...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck size={15} />
+                          Gửi OTP
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* ── UNLOCK STEP: DISABLED ── */}
               {unlockStep === "disabled" && (
                 <div
                   className="l-panel-switch"
-                  style={{
-                    width: "100%",
-                    maxWidth: 360,
-                    position: "relative",
-                    textAlign: "center",
-                  }}
+                  style={{ position: "relative", textAlign: "center" }}
                 >
-                  {/* Icon */}
                   <div
                     style={{
                       width: 56,
@@ -1768,8 +1741,6 @@ export default function LoginPage() {
                   >
                     <ShieldAlert size={26} color="#ef4444" />
                   </div>
-
-                  {/* Title */}
                   <h2
                     style={{
                       color: "white",
@@ -1780,8 +1751,6 @@ export default function LoginPage() {
                   >
                     Tài khoản đã bị vô hiệu hóa
                   </h2>
-
-                  {/* Description */}
                   <p
                     style={{
                       color: "#94a3b8",
@@ -1795,8 +1764,6 @@ export default function LoginPage() {
                     <br />
                     Bạn không thể mở khóa tài khoản này.
                   </p>
-
-                  {/* Action buttons */}
                   <div
                     style={{
                       display: "flex",
@@ -1807,7 +1774,6 @@ export default function LoginPage() {
                     <button className="fp-primary-btn" onClick={goRegister}>
                       Tạo tài khoản mới
                     </button>
-
                     <button
                       onClick={switchToLogin}
                       style={{
@@ -1817,6 +1783,8 @@ export default function LoginPage() {
                         padding: "10px",
                         borderRadius: 10,
                         cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: 13,
                       }}
                     >
                       Quay lại đăng nhập
@@ -1825,9 +1793,9 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* ── STEP: OTP ── */}
+              {/* ── UNLOCK STEP: OTP ── */}
               {unlockStep === "otp" && (
-                <>
+                <div className="l-panel-switch">
                   <div style={{ marginBottom: 24 }}>
                     <div
                       style={{
@@ -1864,7 +1832,9 @@ export default function LoginPage() {
                       }}
                     >
                       Chúng tôi đã gửi mã OTP 6 chữ số đến{" "}
-                      <strong style={{ color: "#94a3b8" }}>{email}</strong>
+                      <strong style={{ color: "#94a3b8" }}>
+                        {unlockUsername}
+                      </strong>
                       <br />
                       <span
                         style={{
@@ -1873,7 +1843,7 @@ export default function LoginPage() {
                           color: "#60a5fa",
                           fontWeight: 600,
                           fontSize: 13,
-                          marginTop: 10, // ← Khoảng cách vừa phải
+                          marginTop: 10,
                         }}
                       >
                         Mã có hiệu lực trong 1 phút
@@ -1889,30 +1859,7 @@ export default function LoginPage() {
                     }}
                   >
                     <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          justifyContent: "center",
-                        }}
-                      >
-                        {otp.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            id={`otp-${idx}`}
-                            className={`otp-input${digit ? " filled" : ""}`}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) =>
-                              handleOtpChange(idx, e.target.value)
-                            }
-                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        ))}
-                      </div>
+                      {renderOtpInputs()}
                       {otpError && (
                         <p
                           style={{
@@ -1996,7 +1943,7 @@ export default function LoginPage() {
 
                     <button
                       type="button"
-                      onClick={() => setForgotStep("email")}
+                      onClick={() => setUnlockStep("email")}
                       style={{
                         background: "none",
                         border: "none",
@@ -2022,19 +1969,15 @@ export default function LoginPage() {
                       Đổi email khác
                     </button>
                   </div>
-                </>
+                </div>
               )}
 
+              {/* ── UNLOCK STEP: REASON ── */}
               {unlockStep === "reason" && (
                 <div
                   className="l-panel-switch"
-                  style={{
-                    width: "100%",
-                    maxWidth: 360,
-                    position: "relative",
-                  }}
+                  style={{ position: "relative" }}
                 >
-                  {/* Back button */}
                   <button
                     className="fp-back-btn"
                     onClick={switchToLogin}
@@ -2044,7 +1987,6 @@ export default function LoginPage() {
                     Quay lại đăng nhập
                   </button>
 
-                  {/* Header */}
                   <div style={{ marginBottom: 24 }}>
                     <div
                       style={{
@@ -2062,7 +2004,6 @@ export default function LoginPage() {
                     >
                       <ShieldAlert size={22} color="#f59e0b" />
                     </div>
-
                     <h2
                       style={{
                         color: "white",
@@ -2073,7 +2014,6 @@ export default function LoginPage() {
                     >
                       Mở khóa tài khoản
                     </h2>
-
                     <p
                       style={{
                         color: "#64748b",
@@ -2087,7 +2027,6 @@ export default function LoginPage() {
                     </p>
                   </div>
 
-                  {/* Form */}
                   <div
                     style={{
                       display: "flex",
@@ -2095,7 +2034,6 @@ export default function LoginPage() {
                       gap: 16,
                     }}
                   >
-                    {/* Reason */}
                     <div>
                       <label
                         style={{
@@ -2108,7 +2046,6 @@ export default function LoginPage() {
                       >
                         Lý do yêu cầu mở khóa
                       </label>
-
                       <textarea
                         value={unlockReason}
                         onChange={(e) => setUnlockReason(e.target.value)}
@@ -2124,24 +2061,49 @@ export default function LoginPage() {
                           padding: 12,
                           fontSize: 13,
                           outline: "none",
-                          boxSizing: "border-box",
+                          boxSizing: "border-box" as const,
+                          fontFamily: "inherit",
                         }}
                       />
+                      {unlockError && (
+                        <p
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 3,
+                            color: "#ef4444",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          <AlertCircle size={12} />
+                          {unlockError}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Submit */}
                     <button
                       className="fp-primary-btn"
                       onClick={handleUnlockRequest}
+                      disabled={unlockLoading}
                     >
-                      <ShieldCheck size={15} />
-                      Gửi yêu cầu mở khóa
+                      {unlockLoading ? (
+                        <>
+                          <RefreshCw size={15} className="fp-spin" />
+                          Đang gửi...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck size={15} />
+                          Gửi yêu cầu mở khóa
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* ── STEP: DONE ── */}
+              {/* ── UNLOCK STEP: DONE ── */}
               {unlockStep === "done" && (
                 <div
                   style={{

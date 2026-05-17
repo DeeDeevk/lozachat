@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, UserSearch, UsersRound } from "lucide-react";
+import { Search, UserSearch, UsersRound, Pin } from "lucide-react";
 import { formatTime } from "@/utils/formatTime";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -113,13 +113,17 @@ export default function ConversationList({
       return matchesSearch;
     })
     .sort((a, b) => {
+      // 👇 pinned lên đầu
+      const aPinned = !!(a as any).pinnedAt;
+      const bPinned = !!(b as any).pinnedAt;
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
       const timeA = a.lastMessage?.createdAt
         ? new Date(a.lastMessage.createdAt).getTime()
         : 0;
       const timeB = b.lastMessage?.createdAt
         ? new Date(b.lastMessage.createdAt).getTime()
         : 0;
-
       return timeB - timeA;
     });
 
@@ -465,6 +469,18 @@ export default function ConversationList({
                       <div className="cl-badge">
                         {unread > 9 ? "9+" : unread}
                       </div>
+                    )}
+                    {conv.pinned && (
+                      <Pin
+                        size={13}
+                        style={{
+                          color: "#f59e0b",
+                          flexShrink: 0,
+                          marginLeft: 2,
+                          fill: "#f59e0b", // 👈 fill vàng full
+                          filter: "drop-shadow(0 0 4px rgba(245,158,11,0.6))", // 👈 glow vàng
+                        }}
+                      />
                     )}
                   </div>
                 </div>

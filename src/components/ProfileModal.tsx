@@ -7,6 +7,7 @@ import { useChangePasswordStore } from "@/stores/useOtpStore";
 import { useNavigate } from "react-router-dom";
 import { useOtpStore } from "@/stores/useOtpStore";
 import OtpModal from "@/components/OtpModal";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 interface UserProfile {
   _id: string;
@@ -59,6 +60,7 @@ export default function ProfileModal({
   } = useOtpStore();
 
   const navigate = useNavigate();
+  const socket = useSocketStore((state) => state.socket);
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [showLockOtpModal, setShowLockOtpModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -227,6 +229,38 @@ export default function ProfileModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, userProfile?._id, userProfile?.role]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const refreshLockRequests = () => {
+      if (activeTab === "lock") {
+        void fetchLockRequests();
+      }
+    };
+    const handleReviewed = () => {
+      toast.info("Yêu cầu khóa tài khoản của bạn đã được admin xử lý");
+      refreshLockRequests();
+    };
+    const handleAccountLocked = () => {
+      toast.error("Tài khoản của bạn đã bị khóa");
+      onClose();
+      navigate("/signin");
+    };
+
+    socket.on("account-lock-request:created", refreshLockRequests);
+    socket.on("account-lock-request:updated", refreshLockRequests);
+    socket.on("account-lock-request:reviewed", handleReviewed);
+    socket.on("account:locked", handleAccountLocked);
+
+    return () => {
+      socket.off("account-lock-request:created", refreshLockRequests);
+      socket.off("account-lock-request:updated", refreshLockRequests);
+      socket.off("account-lock-request:reviewed", handleReviewed);
+      socket.off("account:locked", handleAccountLocked);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, activeTab]);
 
   const handleRequestAccountLock = async () => {
     setLockSubmitting(true);

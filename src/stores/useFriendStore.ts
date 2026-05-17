@@ -11,7 +11,9 @@ interface FriendState {
     receiverId?: string;
     fromUserId?: string;
     requestId?: string;
+    request?: FriendRequest;
     newFriend?: Friend;
+    status?: string;
   }) => void;
   targetStatuses: Record<string, RequestStatus>;
   friends: Friend[];
@@ -210,6 +212,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     requestId?: string;
     request?: FriendRequest;
     newFriend?: Friend;
+    status?: string;
   }) => {
     const authStore = useAuthStore.getState();
     const myId = authStore.user?.userId || authStore.userProfile?._id;
@@ -244,7 +247,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
               return {
                 targetStatuses: {
                   ...state.targetStatuses,
-                  [update.targetUserId]: "sent" as RequestStatus,
+                  [update.targetUserId]: (update.status || "sent") as RequestStatus,
                 },
               };
             }
@@ -282,7 +285,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
               const friendId =
                 update.senderId === myId ? update.receiverId : update.senderId;
               if (friendId) {
-                newStatuses[friendId] = "friend";
+                newStatuses[friendId] = (update.status || "friend") as RequestStatus;
               }
               const newFriends = state.friends.filter(
                 (f) => f._id !== update.newFriend?._id,

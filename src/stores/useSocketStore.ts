@@ -4,6 +4,7 @@ import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
 import { useFriendStore } from "./useFriendStore";
+import { getDeviceId } from "@/utils/device";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
@@ -32,9 +33,6 @@ const registerSocketEvents = (
   socket.off("member-left");
   socket.off("removed-from-group");
   socket.off("force-logout");
-  socket.on("force-logout", ({ message }: { message: string }) => {
-    useAuthStore.setState({ forceLogoutMessage: message });
-  });
   socket.on("removed-from-group", ({ conversationId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.filter(
@@ -118,9 +116,37 @@ const registerSocketEvents = (
   socket.off("message-reacted");
   socket.off("conversation:pins-updated");
   socket.off("conversation:theme-updated");
+  socket.off("account:locked");
+  socket.off("force-logout");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
+
+  const forceSignOut = (message?: string) => {
+    if (message) {
+      console.warn(message);
+    }
+
+    useAuthStore.getState().clearState();
+    socket.disconnect();
+
+    if (window.location.pathname !== "/signin") {
+      window.location.assign("/signin");
+    }
+  };
+
+  socket.on("account:locked", ({ message }) => {
+    forceSignOut(message || "Tài khoản của bạn đã bị khóa");
+  });
+
+  // ✅ Sửa thành: chỉ set message, để dialog tự xử lý logout
+  socket.on("force-logout", ({ message }) => {
+    useAuthStore.setState({
+      forceLogoutMessage:
+        message || "Phiên đăng nhập của bạn đã bị thay thế trên thiết bị khác.",
+    });
+  });
+
   socket.on("message-read", ({ userId, conversationId, messageId }) => {
     useChatStore.getState().updateLastRead(userId, conversationId, messageId);
   });
@@ -326,13 +352,17 @@ const registerSocketEvents = (
   );
 
   // Người được mời biết kết quả duyệt
-  socket.on("join-request-reviewed", ({ conversationId, status }) => {
-    if (status === "rejected") {
-      // Có thể toast thông báo bị từ chối ở đây
-      console.log(`Yêu cầu vào nhóm ${conversationId} bị từ chối`);
-    }
-    // Nếu approved thì "added-to-group" sẽ được emit tiếp theo
-  });
+  socket.on(
+    "join-request-reviewed",
+    ({ conversationId, requestId, status }) => {
+      // Dù approved hay rejected, đều xóa request khỏi danh sách chờ
+      useChatStore.getState().removeJoinRequest(requestId);
+
+      if (status === "rejected") {
+        console.log(`Yêu cầu vào nhóm ${conversationId} bị từ chối`);
+      }
+    },
+  );
 
   // Được thêm vào nhóm thành công
   socket.on("added-to-group", ({ conversation }) => {
@@ -388,7 +418,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
 
     const socket: Socket = io(baseURL, {
-      auth: { token: accessToken },
+      auth: {
+        token: accessToken,
+        deviceId: getDeviceId(), // ← thêm dòng này
+      },
       transports: ["websocket"],
     });
 

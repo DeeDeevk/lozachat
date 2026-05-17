@@ -157,6 +157,8 @@ export interface ChatState {
     conversationId: string,
     member: Conversation["participants"][0],
   ) => void;
+
+  togglePinConversation: (conversationId: string) => Promise<boolean>;
 }
 
 export interface FriendUpdateEvent {
