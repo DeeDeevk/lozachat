@@ -3,6 +3,7 @@ import type {
   ConversationResponse,
   Message,
   MessageReaction,
+  PinnedMessage,
 } from "@/types/chat";
 
 interface FetchMessageProps {
@@ -107,7 +108,7 @@ export const chatService = {
   async pinMessage(
     conversationId: string,
     messageId: string,
-  ): Promise<Message[]> {
+  ): Promise<PinnedMessage[]> {
     const res = await api.post(
       `/conversations/${conversationId}/pin/${messageId}`,
     );
@@ -118,7 +119,7 @@ export const chatService = {
     await api.delete(`/conversations/${conversationId}/pin/${messageId}`);
   },
 
-  async fetchPinnedMessages(conversationId: string): Promise<Message[]> {
+  async fetchPinnedMessages(conversationId: string): Promise<PinnedMessage[]> {
     const res = await api.get(`/conversations/${conversationId}/pins`);
     return res.data.pinnedMessages;
   },
