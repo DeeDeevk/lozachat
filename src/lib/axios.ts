@@ -36,9 +36,7 @@ api.interceptors.response.use(
     ];
 
     if (
-      ignoredRefreshRoutes.some((route) =>
-        originalRequest.url.includes(route)
-      )
+      ignoredRefreshRoutes.some((route) => originalRequest.url.includes(route))
     ) {
       return Promise.reject(error);
     }
@@ -53,21 +51,6 @@ api.interceptors.response.use(
         const newAccessToken = res.data.accessToken;
 
         useAuthStore.getState().setAccessToken(newAccessToken);
-
-        // ✅ Thêm: decode và set user nếu chưa có
-        const currentUser = useAuthStore.getState().user;
-        if (!currentUser) {
-          try {
-            const payload = JSON.parse(atob(newAccessToken.split(".")[1]));
-            useAuthStore.setState({
-              user: {
-                userId: payload.userId,
-                username: payload.username,
-                role: payload.role,
-              },
-            });
-          } catch (_) {}
-        }
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);

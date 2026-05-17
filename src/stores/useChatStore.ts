@@ -808,6 +808,17 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
+      removeJoinRequest: (requestId: string) => {
+        set((state) => {
+          const updated: typeof state.joinRequests = {};
+          for (const convId in state.joinRequests) {
+            updated[convId] = state.joinRequests[convId].filter(
+              (r) => r._id !== requestId,
+            );
+          }
+          return { joinRequests: updated };
+        });
+      },
     }),
     {
       name: "chat-storage",

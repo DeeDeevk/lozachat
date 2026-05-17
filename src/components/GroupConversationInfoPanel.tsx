@@ -778,7 +778,9 @@ export default function GroupConversationInfoPanel({
                         width: 30,
                         height: 30,
                         borderRadius: "50%",
-                        background: "#1e293b",
+                        background: req.invitedUserId.avatarUrl
+                          ? "transparent"
+                          : "#1e293b",
                         border: "1px solid rgba(148,163,184,0.2)",
                         display: "flex",
                         alignItems: "center",
@@ -787,9 +789,22 @@ export default function GroupConversationInfoPanel({
                         fontWeight: 700,
                         color: "#94a3b8",
                         flexShrink: 0,
+                        overflow: "hidden",
                       }}
                     >
-                      {req.invitedUserId.displayName?.[0]?.toUpperCase()}
+                      {req.invitedUserId.avatarUrl ? (
+                        <img
+                          src={req.invitedUserId.avatarUrl}
+                          alt={req.invitedUserId.displayName}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        req.invitedUserId.displayName?.[0]?.toUpperCase()
+                      )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p
