@@ -16,6 +16,9 @@ interface UserProfile {
   bio?: string;
   phone?: string;
   role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +41,7 @@ interface AuthState {
     data: SignInData,
     forceLogin?: boolean,
   ) => Promise<{ success: boolean; code?: string; message?: string }>;
+  errorCode: string | null;
   fetchMe: () => Promise<void>;
   signUp: (data: SignUpData) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -58,6 +62,7 @@ export const useAuthStore = create<AuthState>()(
       userProfile: null,
       loading: false,
       error: null,
+      errorCode: null,
 
       setAccessToken: (accessToken) => {
         set({ accessToken });
@@ -114,8 +119,18 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const errorMessage =
-            axiosError.response?.data?.message || "Đăng nhập thất bại";
-          set({ loading: false, error: errorMessage });
+            axiosError.response?.data?.message ||
+            "Đăng nhập thất bại";
+
+          const errorCode =
+            axiosError.response?.data?.code || null;
+
+          set({
+            loading: false,
+            error: errorMessage,
+            errorCode,
+          });
+
           toast.error(errorMessage);
           return { success: false };
         }
@@ -211,7 +226,14 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => set({ error: null }),
 
       clearState: () => {
-        set({ accessToken: null, user: null, loading: false });
+        set({
+          accessToken: null,
+          user: null,
+          userProfile: null,
+          loading: false,
+          error: null,
+          errorCode: null,
+        });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
       },
