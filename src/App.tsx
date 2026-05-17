@@ -17,6 +17,8 @@ import PublicRoute from "./components/PublicRoute";
 import { useSyncAuthBetweenTabs } from "./hook/useSyncAuthBetweenTabs";
 import ForceLogoutDialog from "./components/ForceLogoutDialog"; // ← thêm import
 
+import LozaAdmin from "./pages/Admin";
+import AdminRoute from "./components/AdminRoute";
 function App() {
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
@@ -47,6 +49,9 @@ function App() {
             <Route path="/chat" element={<ChatAppPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/social" element={<SocialPage />} />
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<LozaAdmin />} />
+            </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

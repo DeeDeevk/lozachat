@@ -8,6 +8,7 @@ import {
   HelpCircle,
   User,
   LogOut,
+  Shield,
 } from "lucide-react";
 import ProfileModal from "./ProfileModal";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -44,8 +45,10 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const userProfile = useAuthStore((s) => s.userProfile);
+  const user = useAuthStore((s) => s.user);
   const setUserProfile = useAuthStore((s) => s.setUserProfile);
   const signOut = useAuthStore((s) => s.signOut);
+  const isAdmin = (userProfile?.role || user?.role) === "admin";
 
   const myName = userProfile?.displayName || "Bạn";
   const myUsername =
@@ -54,15 +57,13 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const myColor = randomColor(myName);
 
   const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [_avatarPreview, _setAvatarPreview] = useState<string | null>(
-    userProfile?.avatarUrl ?? null,
-  );
   const [open, setOpen] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isChat = location.pathname === "/chat";
   const isFriends = location.pathname === "/friends";
   const isFeed = location.pathname === "/social";
+  const isAdminPage = location.pathname === "/admin";
 
   const navItems = [
     {
@@ -83,6 +84,16 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
       path: "/social",
       active: isFeed,
     },
+    ...(isAdmin
+      ? [
+          {
+            icon: <Shield size={22} />,
+            label: "Admin",
+            path: "/admin",
+            active: isAdminPage,
+          },
+        ]
+      : []),
   ];
 
   useEffect(() => {

@@ -33,9 +33,6 @@ const registerSocketEvents = (
   socket.off("member-left");
   socket.off("removed-from-group");
   socket.off("force-logout");
-  socket.on("force-logout", ({ message }: { message: string }) => {
-    useAuthStore.setState({ forceLogoutMessage: message });
-  });
   socket.on("removed-from-group", ({ conversationId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.filter(
@@ -119,9 +116,37 @@ const registerSocketEvents = (
   socket.off("message-reacted");
   socket.off("conversation:pins-updated");
   socket.off("conversation:theme-updated");
+  socket.off("account:locked");
+  socket.off("force-logout");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
+
+  const forceSignOut = (message?: string) => {
+    if (message) {
+      console.warn(message);
+    }
+
+    useAuthStore.getState().clearState();
+    socket.disconnect();
+
+    if (window.location.pathname !== "/signin") {
+      window.location.assign("/signin");
+    }
+  };
+
+  socket.on("account:locked", ({ message }) => {
+    forceSignOut(message || "Tài khoản của bạn đã bị khóa");
+  });
+
+  // ✅ Sửa thành: chỉ set message, để dialog tự xử lý logout
+  socket.on("force-logout", ({ message }) => {
+    useAuthStore.setState({
+      forceLogoutMessage:
+        message || "Phiên đăng nhập của bạn đã bị thay thế trên thiết bị khác.",
+    });
+  });
+
   socket.on("message-read", ({ userId, conversationId, messageId }) => {
     useChatStore.getState().updateLastRead(userId, conversationId, messageId);
   });

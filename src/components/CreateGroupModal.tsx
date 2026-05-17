@@ -6,9 +6,14 @@ import { useChatStore } from "@/stores/useChatStore";
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  initialMemberIds?: string[];
 }
 
-export default function CreateGroupModal({ isOpen, onClose }: Props) {
+export default function CreateGroupModal({
+  isOpen,
+  onClose,
+  initialMemberIds = [],
+}: Props) {
   const [groupName, setGroupName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -24,7 +29,7 @@ export default function CreateGroupModal({ isOpen, onClose }: Props) {
       getFriends();
       setGroupName("");
       setSearchQuery("");
-      setSelectedIds([]);
+      setSelectedIds(initialMemberIds); // 👈 thay [] bằng initialMemberIds
       setSearchResult(null);
       setSelectedStrangers([]);
     }

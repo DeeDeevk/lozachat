@@ -9,6 +9,9 @@ interface UserProfile {
   bio?: string;
   phone?: string;
   role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +25,35 @@ interface UpdateProfilePayload {
 interface UpdateProfileResponse {
   message: string;
   user: UserProfile;
+}
+
+export type AccountLockRequestStatus = "pending" | "approved" | "rejected";
+
+export interface AccountLockRequest {
+  _id: string;
+  userId: string | UserProfile;
+  reason: string;
+  status: AccountLockRequestStatus;
+  reviewedBy?: string | Pick<UserProfile, "_id" | "username" | "displayName" | "avatarUrl">;
+  reviewedAt?: string;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountUnlockRequest {
+  _id: string;
+  userId: string | UserProfile;
+  reason: string;
+  status: AccountLockRequestStatus;
+  reviewedBy?: string | Pick<
+    UserProfile,
+    "_id" | "username" | "displayName" | "avatarUrl"
+  >;
+  reviewedAt?: string;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const userService = {
@@ -42,6 +74,74 @@ export const userService = {
 
   deleteMe: async (): Promise<{ message: string }> => {
     const res = await api.delete("/users/me");
+    return res.data;
+  },
+
+  requestAccountLock: async (
+    reason?: string,
+  ): Promise<{ message: string; request: AccountLockRequest }> => {
+    const res = await api.post("/users/lock-requests", { reason });
+    return res.data;
+  },
+
+  getMyAccountLockRequests: async (): Promise<{ requests: AccountLockRequest[] }> => {
+    const res = await api.get("/users/lock-requests/me");
+    return res.data;
+  },
+
+  getAccountLockRequests: async (
+    status: AccountLockRequestStatus | "all" = "pending",
+  ): Promise<{ requests: AccountLockRequest[] }> => {
+    const res = await api.get("/users/lock-requests", { params: { status } });
+    return res.data;
+  },
+
+  reviewAccountLockRequest: async (
+    requestId: string,
+    action: "approved" | "rejected",
+    adminNote?: string,
+  ): Promise<{ message: string; request: AccountLockRequest }> => {
+    const res = await api.patch(`/users/lock-requests/${requestId}/review`, {
+      action,
+      adminNote,
+    });
+    return res.data;
+  },
+
+  requestAccountUnlock: async (
+    username: string,
+    reason: string,
+  ): Promise<{
+    message: string;
+    request: AccountUnlockRequest;
+  }> => {
+    const res = await api.post(
+      "/users/unlock-requests",
+      {
+        username,
+        reason,
+      }
+    );
+
+    return res.data;
+  },
+
+  getAccountUnlockRequests: async (): Promise<{
+    requests: AccountLockRequest[];
+  }> => {
+    const res = await api.get("/users/unlock-requests");
+    return res.data;
+  },
+
+  reviewAccountUnlockRequest: async (
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => {
+    const res = await api.patch(
+      `/users/unlock-requests/${requestId}/review`,
+      { action }
+    );
+
     return res.data;
   },
 };
