@@ -64,7 +64,7 @@ export interface Conversation {
   isStranger: boolean;
   strangerStatus: "pending" | "accepted" | "declined";
   initiatorId?: string;
-  pinnedMessages?: PinnedMessage[];
+  pinnedMessages?: Message[];
 }
 
 export interface ConversationResponse {
