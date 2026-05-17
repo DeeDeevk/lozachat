@@ -90,7 +90,7 @@ export interface ChatState {
     messageId: string,
     conversationId: string,
   ) => Promise<void>;
-  fetchPinnedMessages: (conversationId: string) => Promise<PinnedMessage[]>;
+  fetchPinnedMessages: (conversationId: string) => Promise<Message[]>;
   applyPinnedMessages: (
     conversationId: string,
     pinnedMessages: PinnedMessage[],
@@ -159,6 +159,8 @@ export interface ChatState {
   ) => void;
 
   togglePinConversation: (conversationId: string) => Promise<boolean>;
+  removeJoinRequest: (requestId: string) => void;
+  markAsRead: (conversationId: string) => Promise<void>;
 }
 
 export interface FriendUpdateEvent {

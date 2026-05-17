@@ -427,7 +427,11 @@ export const useChatStore = create<ChatState>()(
       },
       togglePinMessage: async (messageId, conversationId) => {
         try {
-          const { pinnedMessages } = await chatService.pinMessage(messageId);
+          // ✅ Truyền đúng thứ tự: conversationId trước, messageId sau
+          const pinnedMessages = await chatService.pinMessage(
+            conversationId,
+            messageId,
+          );
           get().applyPinnedMessages(conversationId, pinnedMessages);
         } catch (error) {
           console.error("Lỗi khi ghim/bỏ ghim:", error);
@@ -435,7 +439,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
       fetchPinnedMessages: async (conversationId) => {
-        const { pinnedMessages } =
+        const pinnedMessages =
           await chatService.fetchPinnedMessages(conversationId);
         get().applyPinnedMessages(conversationId, pinnedMessages);
         return pinnedMessages;
@@ -818,6 +822,32 @@ export const useChatStore = create<ChatState>()(
           }
           return { joinRequests: updated };
         });
+      },
+      markAsRead: async (conversationId: string) => {
+        const { user } = useAuthStore.getState();
+
+        if (!user?.userId) {
+          return;
+        }
+
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? {
+                  ...c,
+                  unreadCounts: {
+                    ...(c as any).unreadCounts,
+                    [user.userId]: 0,
+                  },
+                }
+              : c,
+          ),
+        }));
+        try {
+          await chatService.markAsRead(conversationId);
+        } catch (error) {
+          console.error("Lỗi markAsRead:", error);
+        }
       },
     }),
     {

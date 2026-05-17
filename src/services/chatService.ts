@@ -3,7 +3,6 @@ import type {
   ConversationResponse,
   Message,
   MessageReaction,
-  PinnedMessage,
 } from "@/types/chat";
 
 interface FetchMessageProps {
@@ -240,5 +239,9 @@ export const chatService = {
   togglePinConversation: async (conversationId: string) => {
     const res = await api.patch(`/conversations/${conversationId}/toggle-pin`);
     return res.data as { pinned: boolean; pinnedAt: string | null };
+  },
+
+  async markAsRead(conversationId: string): Promise<void> {
+    await api.patch(`/conversations/${conversationId}/read`);
   },
 };
