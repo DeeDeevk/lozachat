@@ -93,7 +93,7 @@ export interface ChatState {
   fetchPinnedMessages: (conversationId: string) => Promise<Message[]>;
   applyPinnedMessages: (
     conversationId: string,
-    pinnedMessages: PinnedMessage[],
+    pinnedMessages: Message[],
   ) => void;
   updateConversationTheme: (
     conversationId: string,
