@@ -234,7 +234,10 @@ export default function ConversationList({
               <div
                 key={conv._id}
                 className={`cl-conv-item ${conv._id === activeId ? "active" : ""}`}
-                onClick={() => onSelectConversation(conv._id)}
+                onClick={() => {
+                  onSelectConversation(conv._id);
+                  useChatStore.getState().markAsRead(conv._id);
+                }}
               >
                 {/* Avatar */}
                 <div

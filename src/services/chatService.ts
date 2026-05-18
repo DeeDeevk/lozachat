@@ -108,7 +108,7 @@ export const chatService = {
   async pinMessage(
     conversationId: string,
     messageId: string,
-  ): Promise<Message[]> {
+  ): Promise<PinnedMessage[]> {
     const res = await api.post(
       `/conversations/${conversationId}/pin/${messageId}`,
     );
@@ -119,7 +119,7 @@ export const chatService = {
     await api.delete(`/conversations/${conversationId}/pin/${messageId}`);
   },
 
-  async fetchPinnedMessages(conversationId: string): Promise<Message[]> {
+  async fetchPinnedMessages(conversationId: string): Promise<PinnedMessage[]> {
     const res = await api.get(`/conversations/${conversationId}/pins`);
     return res.data.pinnedMessages;
   },
@@ -245,5 +245,9 @@ export const chatService = {
   togglePinConversation: async (conversationId: string) => {
     const res = await api.patch(`/conversations/${conversationId}/toggle-pin`);
     return res.data as { pinned: boolean; pinnedAt: string | null };
+  },
+
+  async markAsRead(conversationId: string): Promise<void> {
+    await api.patch(`/conversations/${conversationId}/read`);
   },
 };

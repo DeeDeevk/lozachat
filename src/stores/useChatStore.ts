@@ -427,7 +427,11 @@ export const useChatStore = create<ChatState>()(
       },
       togglePinMessage: async (messageId, conversationId) => {
         try {
-          const { pinnedMessages } = await chatService.pinMessage(messageId);
+          // ✅ Truyền đúng thứ tự: conversationId trước, messageId sau
+          const pinnedMessages = await chatService.pinMessage(
+            conversationId,
+            messageId,
+          );
           get().applyPinnedMessages(conversationId, pinnedMessages);
         } catch (error) {
           console.error("Lỗi khi ghim/bỏ ghim:", error);
@@ -435,7 +439,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
       fetchPinnedMessages: async (conversationId) => {
-        const { pinnedMessages } =
+        const pinnedMessages =
           await chatService.fetchPinnedMessages(conversationId);
         get().applyPinnedMessages(conversationId, pinnedMessages);
         return pinnedMessages;
@@ -630,7 +634,7 @@ export const useChatStore = create<ChatState>()(
               ...state.pinnedMessages,
               [conversationId]: (
                 state.pinnedMessages[conversationId] ?? []
-              ).filter((m) => m._id !== messageId),
+              ).filter((m) => m.messageId !== messageId),
             },
           }));
         } catch (error) {
@@ -806,6 +810,43 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           console.error("Lỗi khi ghim hội thoại:", error);
           throw error;
+        }
+      },
+      removeJoinRequest: (requestId: string) => {
+        set((state) => {
+          const updated: typeof state.joinRequests = {};
+          for (const convId in state.joinRequests) {
+            updated[convId] = state.joinRequests[convId].filter(
+              (r) => r._id !== requestId,
+            );
+          }
+          return { joinRequests: updated };
+        });
+      },
+      markAsRead: async (conversationId: string) => {
+        const { user } = useAuthStore.getState();
+
+        if (!user?.userId) {
+          return;
+        }
+
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id === conversationId
+              ? {
+                  ...c,
+                  unreadCounts: {
+                    ...(c as any).unreadCounts,
+                    [user.userId]: 0,
+                  },
+                }
+              : c,
+          ),
+        }));
+        try {
+          await chatService.markAsRead(conversationId);
+        } catch (error) {
+          console.error("Lỗi markAsRead:", error);
         }
       },
     }),

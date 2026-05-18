@@ -249,16 +249,32 @@ export default function CreateGroupModal({
                     width: 20,
                     height: 20,
                     borderRadius: "50%",
-                    background: getAvatarColor(u.displayName || u.username),
+                    background: u.avatarUrl
+                      ? "transparent"
+                      : getAvatarColor(u.displayName || u.username),
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 9,
                     fontWeight: 700,
                     color: "#fff",
+                    overflow: "hidden",
+                    flexShrink: 0,
                   }}
                 >
-                  {getInitials(u.displayName || u.username)}
+                  {u.avatarUrl ? (
+                    <img
+                      src={u.avatarUrl}
+                      alt={u.displayName || u.username}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    getInitials(u.displayName || u.username)
+                  )}
                 </span>
                 {u.displayName || u.username}
                 <X

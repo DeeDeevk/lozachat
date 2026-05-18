@@ -198,34 +198,41 @@ export default function SearchUserModal({
 
   // Real-time socket listener for current result user's friend status
   useEffect(() => {
-  if (!socket || !result?._id) return;
+    if (!socket || !result?._id) return;
 
-  const handleFriendUpdate = async (update: any) => {
-    const involvedIds = [
-      update.targetUserId,
-      update.senderId,
-      update.receiverId,
-      update.fromUserId,
-      update.newFriend?._id,
-    ]
-      .filter(Boolean)
-      .map((id: string) => id.toString());
+    const handleFriendUpdate = async (update: any) => {
+      const involvedIds = [
+        update.targetUserId,
+        update.senderId,
+        update.receiverId,
+        update.fromUserId,
+        update.newFriend?._id,
+      ]
+        .filter(Boolean)
+        .map((id: string) => id.toString());
 
-    // ✅ Chỉ cần result._id có trong danh sách liên quan là update
-    if (involvedIds.includes(result._id.toString())) {
-      console.log("🔥 SearchUserModal real-time update:", result.username, "action:", update.action);
-      setIsUpdatingStatus(true);
-      try {
-        await updateFriendStatus(result._id);
-      } finally {
-        setIsUpdatingStatus(false);
+      // ✅ Chỉ cần result._id có trong danh sách liên quan là update
+      if (involvedIds.includes(result._id.toString())) {
+        console.log(
+          "🔥 SearchUserModal real-time update:",
+          result.username,
+          "action:",
+          update.action,
+        );
+        setIsUpdatingStatus(true);
+        try {
+          await updateFriendStatus(result._id);
+        } finally {
+          setIsUpdatingStatus(false);
+        }
       }
-    }
-  };
+    };
 
-  socket.on("friend_update", handleFriendUpdate);
-  return () => socket.off("friend_update", handleFriendUpdate);
-}, [socket, result?._id, updateFriendStatus]);
+    socket.on("friend_update", handleFriendUpdate);
+    return () => {
+      socket.off("friend_update", handleFriendUpdate);
+    };
+  }, [socket, result?._id, updateFriendStatus]);
 
   if (!isOpen) return null;
 
@@ -336,7 +343,6 @@ export default function SearchUserModal({
                     </div>
                     <div className="su-user-username">@{result.username}</div>
                   </div>
-                  
                 </div>
 
                 {showDetail && (

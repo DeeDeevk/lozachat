@@ -352,13 +352,17 @@ const registerSocketEvents = (
   );
 
   // Người được mời biết kết quả duyệt
-  socket.on("join-request-reviewed", ({ conversationId, status }) => {
-    if (status === "rejected") {
-      // Có thể toast thông báo bị từ chối ở đây
-      console.log(`Yêu cầu vào nhóm ${conversationId} bị từ chối`);
-    }
-    // Nếu approved thì "added-to-group" sẽ được emit tiếp theo
-  });
+  socket.on(
+    "join-request-reviewed",
+    ({ conversationId, requestId, status }) => {
+      // Dù approved hay rejected, đều xóa request khỏi danh sách chờ
+      useChatStore.getState().removeJoinRequest(requestId);
+
+      if (status === "rejected") {
+        console.log(`Yêu cầu vào nhóm ${conversationId} bị từ chối`);
+      }
+    },
+  );
 
   // Được thêm vào nhóm thành công
   socket.on("added-to-group", ({ conversation }) => {

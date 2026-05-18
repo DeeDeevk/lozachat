@@ -119,18 +119,8 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const errorMessage =
-            axiosError.response?.data?.message ||
-            "Đăng nhập thất bại";
-
-          const errorCode =
-            axiosError.response?.data?.code || null;
-
-          set({
-            loading: false,
-            error: errorMessage,
-            errorCode,
-          });
-
+            axiosError.response?.data?.message || "Đăng nhập thất bại";
+          set({ loading: false, error: errorMessage });
           toast.error(errorMessage);
           return { success: false };
         }

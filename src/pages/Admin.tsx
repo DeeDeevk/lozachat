@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, CSSProperties } from "react";
 import {
   AlertTriangle,
@@ -7,6 +7,7 @@ import {
   Clock,
   LayoutDashboard,
   Lock,
+  LogOut,
   MessageSquare,
   RefreshCw,
   Search,
@@ -85,8 +86,17 @@ const FILTERS: Array<{ value: RequestFilter; label: string }> = [
 ];
 
 const getAvatarColor = (seed: string) => {
-  const colors = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ef4444"];
-  const total = seed.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const colors = [
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#06b6d4",
+    "#ef4444",
+  ];
+  const total = seed
+    .split("")
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return colors[total % colors.length];
 };
 
@@ -148,7 +158,14 @@ const Avatar = ({ name, bg, size = 36 }: AvatarProps) => {
   );
 };
 
-const MetricCard = ({ icon: Icon, color, val, lbl, delta, up }: MetricCardProps) => (
+const MetricCard = ({
+  icon: Icon,
+  color,
+  val,
+  lbl,
+  delta,
+  up,
+}: MetricCardProps) => (
   <div className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-[18px] shadow-xl">
     <div
       className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl"
@@ -158,7 +175,9 @@ const MetricCard = ({ icon: Icon, color, val, lbl, delta, up }: MetricCardProps)
     </div>
     <div className="text-2xl font-extrabold text-white">{val}</div>
     <div className="text-xs text-slate-400">{lbl}</div>
-    <div className={`mt-1.5 flex items-center gap-1 text-[11px] ${up ? "text-emerald-400" : "text-red-400"}`}>
+    <div
+      className={`mt-1.5 flex items-center gap-1 text-[11px] ${up ? "text-emerald-400" : "text-red-400"}`}
+    >
       {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {delta}
     </div>
   </div>
@@ -171,14 +190,22 @@ export default function LozaAdmin() {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [filter, setFilter] = useState<RequestFilter>("pending");
   const [requests, setRequests] = useState<AccountLockRequest[]>([]);
-  const [unlockRequests, setUnlockRequests] = useState<AccountLockRequest[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<AccountLockRequest[]>([]);
+  const [unlockRequests, setUnlockRequests] = useState<AccountLockRequest[]>(
+    [],
+  );
+  const [pendingRequests, setPendingRequests] = useState<AccountLockRequest[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [confirmReview, setConfirmReview] = useState<ConfirmReviewState | null>(null);
+  const [confirmReview, setConfirmReview] = useState<ConfirmReviewState | null>(
+    null,
+  );
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = userProfile?.role === "admin";
 
@@ -193,19 +220,38 @@ export default function LozaAdmin() {
     try {
       const [res, pendingRes] = await Promise.all([
         userService.getAccountLockRequests(nextFilter),
-        nextFilter === "pending" ? Promise.resolve(null) : userService.getAccountLockRequests("pending"),
+        nextFilter === "pending"
+          ? Promise.resolve(null)
+          : userService.getAccountLockRequests("pending"),
       ]);
 
       setRequests(res.requests);
       setPendingRequests(
-        pendingRes?.requests || res.requests.filter((request) => request.status === "pending"),
+        pendingRes?.requests ||
+          res.requests.filter((request) => request.status === "pending"),
       );
     } catch (error) {
-      showToast(getErrorMessage(error, "Không thể tải yêu cầu khóa tài khoản"), "error");
+      showToast(
+        getErrorMessage(error, "Không thể tải yêu cầu khóa tài khoản"),
+        "error",
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowUserMenu(false);
+      }
+    };
+    if (showUserMenu) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showUserMenu]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -247,14 +293,15 @@ export default function LozaAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isAdmin, filter]);
 
-  const pendingCount = useMemo(
-    () => pendingRequests.length,
-    [pendingRequests],
-  );
+  const pendingCount = useMemo(() => pendingRequests.length, [pendingRequests]);
 
   const stats = useMemo(() => {
-    const approved = requests.filter((request) => request.status === "approved").length;
-    const rejected = requests.filter((request) => request.status === "rejected").length;
+    const approved = requests.filter(
+      (request) => request.status === "approved",
+    ).length;
+    const rejected = requests.filter(
+      (request) => request.status === "rejected",
+    ).length;
     return {
       total: requests.length,
       pending: pendingCount,
@@ -285,7 +332,10 @@ export default function LozaAdmin() {
     () =>
       requests
         .map(getRequestUser)
-        .filter((user, index, list) => list.findIndex((item) => item._id === user._id) === index)
+        .filter(
+          (user, index, list) =>
+            list.findIndex((item) => item._id === user._id) === index,
+        )
         .slice(0, 4),
     [requests],
   );
@@ -297,7 +347,7 @@ export default function LozaAdmin() {
     } catch (error) {
       showToast(
         getErrorMessage(error, "Không thể tải yêu cầu mở khóa"),
-        "error"
+        "error",
       );
     }
   };
@@ -312,12 +362,18 @@ export default function LozaAdmin() {
         confirmReview.action,
         adminNote.trim(),
       );
-      showToast(message, confirmReview.action === "approved" ? "error" : "success");
+      showToast(
+        message,
+        confirmReview.action === "approved" ? "error" : "success",
+      );
       setAdminNote("");
       setConfirmReview(null);
       await fetchRequests(filter);
     } catch (error) {
-      showToast(getErrorMessage(error, "Không thể xử lý yêu cầu khóa tài khoản"), "error");
+      showToast(
+        getErrorMessage(error, "Không thể xử lý yêu cầu khóa tài khoản"),
+        "error",
+      );
     } finally {
       setReviewingId(null);
     }
@@ -325,12 +381,12 @@ export default function LozaAdmin() {
 
   const handleReviewUnlock = async (
     requestId: string,
-    action: "approved" | "rejected"
+    action: "approved" | "rejected",
   ) => {
     try {
       const res = await userService.reviewAccountUnlockRequest(
         requestId,
-        action
+        action,
       );
 
       showToast(res.message, "success");
@@ -339,12 +395,15 @@ export default function LozaAdmin() {
     } catch (error) {
       showToast(
         getErrorMessage(error, "Không thể xử lý yêu cầu mở khóa"),
-        "error"
+        "error",
       );
     }
   };
 
-  const openReviewConfirm = (request: AccountLockRequest, action: ReviewAction) => {
+  const openReviewConfirm = (
+    request: AccountLockRequest,
+    action: ReviewAction,
+  ) => {
     setAdminNote("");
     setConfirmReview({ request, action });
   };
@@ -362,32 +421,161 @@ export default function LozaAdmin() {
             Loza <span className="text-blue-300">Admin</span>
           </span>
         </div>
-
         <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-          <NavItem active={false} onClick={() => navigate("/chat")} icon={MessageSquare} label="Về chat" />
+          <NavItem
+            active={false}
+            onClick={() => navigate("/chat")}
+            icon={MessageSquare}
+            label="Về chat"
+          />
 
-          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">Admin</div>
-          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">Tổng quan</div>
-          <NavItem active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} icon={LayoutDashboard} label="Dashboard" />
+          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            Admin
+          </div>
+          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            Tổng quan
+          </div>
+          <NavItem
+            active={activeTab === "dashboard"}
+            onClick={() => setActiveTab("dashboard")}
+            icon={LayoutDashboard}
+            label="Dashboard"
+          />
 
-          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">Quản lý</div>
-          <NavItem active={activeTab === "users"} onClick={() => setActiveTab("users")} icon={Users} label="Người dùng" />
-          <NavItem active={activeTab === "lock"} onClick={() => setActiveTab("lock")} icon={Lock} label="Khóa tài khoản" badge={pendingCount} />
+          <div className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            Quản lý
+          </div>
+          <NavItem
+            active={activeTab === "users"}
+            onClick={() => setActiveTab("users")}
+            icon={Users}
+            label="Người dùng"
+          />
+          <NavItem
+            active={activeTab === "lock"}
+            onClick={() => setActiveTab("lock")}
+            icon={Lock}
+            label="Khóa tài khoản"
+            badge={pendingCount}
+          />
           <NavItem
             active={activeTab === "unlock"}
             onClick={() => setActiveTab("unlock")}
             icon={Shield}
             label="Mở khóa tài khoản"
           />
-          <NavItem active={activeTab === "settings"} onClick={() => setActiveTab("settings")} icon={Settings} label="Cài đặt" />
+          <NavItem
+            active={activeTab === "settings"}
+            onClick={() => setActiveTab("settings")}
+            icon={Settings}
+            label="Cài đặt"
+          />
         </nav>
+        <div className="relative border-t border-white/5 p-4" ref={userMenuRef}>
+          <button
+            type="button"
+            onClick={() => setShowUserMenu((v) => !v)}
+            className="flex w-full items-center gap-3 rounded-xl p-1 transition-all hover:bg-white/5"
+          >
+            <div
+              className="relative shrink-0 overflow-hidden rounded-xl"
+              style={{ width: 34, height: 34 }}
+            >
+              {userProfile?.avatarUrl ? (
+                <img
+                  src={userProfile.avatarUrl}
+                  alt="avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Avatar
+                  name={userProfile?.displayName || "Admin Loza"}
+                  bg="#3b82f6"
+                  size={34}
+                />
+              )}
+              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-[#040c1a] bg-emerald-400" />
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-xs font-semibold text-white">
+                {userProfile?.displayName || "Admin Loza"}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {isAdmin ? "Admin" : "Không có quyền"}
+              </div>
+            </div>
+          </button>
 
-        <div className="flex items-center gap-3 border-t border-white/5 p-4">
-          <Avatar name={userProfile?.displayName || "Admin Loza"} bg="#3b82f6" size={34} />
-          <div className="min-w-0">
-            <div className="truncate text-xs font-semibold text-white">{userProfile?.displayName || "Admin Loza"}</div>
-            <div className="text-[10px] text-slate-500">{isAdmin ? "Superadmin" : "Không có quyền admin"}</div>
-          </div>
+          {showUserMenu && (
+            <div className="absolute bottom-full left-2 right-2 mb-2 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1526] shadow-2xl">
+              {/* Header */}
+              <div className="flex items-center gap-3 border-b border-white/5 bg-blue-500/5 p-4">
+                <div
+                  className="relative shrink-0 overflow-hidden rounded-xl"
+                  style={{ width: 44, height: 44 }}
+                >
+                  {userProfile?.avatarUrl ? (
+                    <img
+                      src={userProfile.avatarUrl}
+                      alt="avatar"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Avatar
+                      name={userProfile?.displayName || "Admin Loza"}
+                      bg="#3b82f6"
+                      size={44}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold text-white">
+                    {userProfile?.displayName || "Admin Loza"}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    @
+                    {userProfile?.username ||
+                      userProfile?.email?.split("@")[0] ||
+                      "admin"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate("/chat");
+                    setShowUserMenu(false);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-300 transition-all hover:bg-white/5"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/15">
+                    <MessageSquare size={14} className="text-blue-400" />
+                  </div>
+                  Về trang chat
+                </button>
+
+                <div className="my-1.5 h-px bg-white/5" />
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { signOut } = useAuthStore.getState();
+                    await signOut();
+                    navigate("/signin");
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-400 transition-all hover:bg-red-500/10"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10">
+                    <LogOut size={14} className="text-red-400" />
+                  </div>
+                  Đăng xuất
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -406,9 +594,14 @@ export default function LozaAdmin() {
               className="w-full border-none bg-transparent text-xs text-white outline-none"
             />
           </div>
-          <button className="relative rounded-xl bg-blue-500/10 p-2 text-blue-300 hover:bg-blue-500/20" type="button">
+          <button
+            className="relative rounded-xl bg-blue-500/10 p-2 text-blue-300 hover:bg-blue-500/20"
+            type="button"
+          >
             <Bell size={18} />
-            {pendingCount > 0 && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-red-500" />}
+            {pendingCount > 0 && (
+              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-red-500" />
+            )}
           </button>
         </header>
 
@@ -419,35 +612,81 @@ export default function LozaAdmin() {
                 <Shield size={18} />
                 Bạn không có quyền truy cập trang Admin
               </div>
-              <p className="text-sm text-red-200/80">Tài khoản hiện tại không có role admin nên không thể duyệt yêu cầu khóa tài khoản.</p>
+              <p className="text-sm text-red-200/80">
+                Tài khoản hiện tại không có role admin nên không thể duyệt yêu
+                cầu khóa tài khoản.
+              </p>
             </div>
           ) : (
             <>
               {activeTab === "dashboard" && (
                 <>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-                    <MetricCard icon={Lock} color="#f59e0b" val={pendingCount} lbl="Yêu cầu chờ duyệt" delta="Cần xử lý" up />
-                    <MetricCard icon={UserX} color="#ef4444" val={stats.approved} lbl="Tài khoản đã khóa" delta="Đã duyệt" up={false} />
-                    <MetricCard icon={X} color="#94a3b8" val={stats.rejected} lbl="Yêu cầu từ chối" delta="Đã xử lý" up />
-                    <MetricCard icon={Shield} color="#a5b4fc" val={stats.total} lbl="Tổng yêu cầu" delta="Theo bộ lọc" up />
+                    <MetricCard
+                      icon={Lock}
+                      color="#f59e0b"
+                      val={pendingCount}
+                      lbl="Yêu cầu chờ duyệt"
+                      delta="Cần xử lý"
+                      up
+                    />
+                    <MetricCard
+                      icon={UserX}
+                      color="#ef4444"
+                      val={stats.approved}
+                      lbl="Tài khoản đã khóa"
+                      delta="Đã duyệt"
+                      up={false}
+                    />
+                    <MetricCard
+                      icon={X}
+                      color="#94a3b8"
+                      val={stats.rejected}
+                      lbl="Yêu cầu từ chối"
+                      delta="Đã xử lý"
+                      up
+                    />
+                    <MetricCard
+                      icon={Shield}
+                      color="#a5b4fc"
+                      val={stats.total}
+                      lbl="Tổng yêu cầu"
+                      delta="Theo bộ lọc"
+                      up
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-5 shadow-xl">
                       <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
-                        <Users size={16} className="text-slate-500" /> Người dùng có yêu cầu gần đây
+                        <Users size={16} className="text-slate-500" /> Người
+                        dùng có yêu cầu gần đây
                       </h3>
                       {recentUsers.length === 0 ? (
                         <EmptyState text="Chưa có dữ liệu người dùng từ yêu cầu khóa." />
                       ) : (
                         recentUsers.map((user) => (
-                          <div key={user._id} className="flex items-center gap-3 border-b border-white/5 py-2.5 last:border-0">
-                            <Avatar name={user.displayName || user.username} bg={getAvatarColor(user._id)} size={36} />
+                          <div
+                            key={user._id}
+                            className="flex items-center gap-3 border-b border-white/5 py-2.5 last:border-0"
+                          >
+                            <Avatar
+                              name={user.displayName || user.username}
+                              bg={getAvatarColor(user._id)}
+                              size={36}
+                            />
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-semibold text-white">{user.displayName || user.username}</div>
-                              <div className="truncate text-[11px] text-slate-500">@{user.username} {user.email ? `- ${user.email}` : ""}</div>
+                              <div className="truncate text-sm font-semibold text-white">
+                                {user.displayName || user.username}
+                              </div>
+                              <div className="truncate text-[11px] text-slate-500">
+                                @{user.username}{" "}
+                                {user.email ? `- ${user.email}` : ""}
+                              </div>
                             </div>
-                            <div className={`h-2 w-2 rounded-full ${user.isLocked ? "bg-red-400" : "bg-cyan-400"}`} />
+                            <div
+                              className={`h-2 w-2 rounded-full ${user.isLocked ? "bg-red-400" : "bg-cyan-400"}`}
+                            />
                           </div>
                         ))
                       )}
@@ -456,7 +695,8 @@ export default function LozaAdmin() {
                     <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-5 shadow-xl">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 text-sm font-bold text-white">
-                          <Lock size={16} className="text-slate-500" /> Yêu cầu khóa đang chờ
+                          <Lock size={16} className="text-slate-500" /> Yêu cầu
+                          khóa đang chờ
                         </h3>
                         <button
                           type="button"
@@ -482,8 +722,13 @@ export default function LozaAdmin() {
                 <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] shadow-xl">
                   <div className="flex flex-wrap items-center gap-3 border-b border-white/5 p-5">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-white">Duyệt yêu cầu khóa tài khoản</h3>
-                      <p className="mt-1 text-xs text-slate-400">Khi duyệt, tài khoản sẽ bị khóa và session hiện tại của user sẽ bị xóa ở backend.</p>
+                      <h3 className="text-base font-bold text-white">
+                        Duyệt yêu cầu khóa tài khoản
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Khi duyệt, tài khoản sẽ bị khóa và session hiện tại của
+                        user sẽ bị xóa ở backend.
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -491,7 +736,10 @@ export default function LozaAdmin() {
                       disabled={loading}
                       className="inline-flex items-center gap-2 rounded-xl border border-blue-400/20 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                      <RefreshCw
+                        size={14}
+                        className={loading ? "animate-spin" : ""}
+                      />
                       Tải lại
                     </button>
                   </div>
@@ -533,7 +781,8 @@ export default function LozaAdmin() {
                     </h3>
 
                     <p className="mt-1 text-xs text-slate-400">
-                      Admin có thể duyệt yêu cầu mở khóa tài khoản từ người dùng.
+                      Admin có thể duyệt yêu cầu mở khóa tài khoản từ người
+                      dùng.
                     </p>
                   </div>
 
@@ -604,8 +853,20 @@ export default function LozaAdmin() {
                 </section>
               )}
 
-              {activeTab === "users" && <Placeholder icon={Users} title="Quản lý người dùng" text="Phần này có thể nối tiếp danh sách user, tìm kiếm và mở khóa tài khoản nếu backend bổ sung API unlock." />}
-              {activeTab === "settings" && <Placeholder icon={Settings} title="Cài đặt" text="Các cấu hình admin sẽ nằm ở đây." />}
+              {activeTab === "users" && (
+                <Placeholder
+                  icon={Users}
+                  title="Quản lý người dùng"
+                  text="Phần này có thể nối tiếp danh sách user, tìm kiếm và mở khóa tài khoản nếu backend bổ sung API unlock."
+                />
+              )}
+              {activeTab === "settings" && (
+                <Placeholder
+                  icon={Settings}
+                  title="Cài đặt"
+                  text="Các cấu hình admin sẽ nằm ở đây."
+                />
+              )}
             </>
           )}
         </div>
@@ -615,12 +876,20 @@ export default function LozaAdmin() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-blue-500/20 bg-[#0d1526] p-5 shadow-2xl">
             <div className="mb-3 flex items-start gap-3">
-              <div className={`rounded-xl p-2 ${confirmReview.action === "approved" ? "bg-red-500/15 text-red-300" : "bg-slate-500/15 text-slate-300"}`}>
-                {confirmReview.action === "approved" ? <AlertTriangle size={20} /> : <X size={20} />}
+              <div
+                className={`rounded-xl p-2 ${confirmReview.action === "approved" ? "bg-red-500/15 text-red-300" : "bg-slate-500/15 text-slate-300"}`}
+              >
+                {confirmReview.action === "approved" ? (
+                  <AlertTriangle size={20} />
+                ) : (
+                  <X size={20} />
+                )}
               </div>
               <div>
                 <h3 className="font-bold text-white">
-                  {confirmReview.action === "approved" ? "Xác nhận khóa tài khoản" : "Xác nhận từ chối yêu cầu"}
+                  {confirmReview.action === "approved"
+                    ? "Xác nhận khóa tài khoản"
+                    : "Xác nhận từ chối yêu cầu"}
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-slate-400">
                   {confirmReview.action === "approved"
@@ -631,11 +900,17 @@ export default function LozaAdmin() {
             </div>
 
             <div className="mb-4 rounded-xl border border-white/5 bg-white/[0.03] p-3">
-              <div className="text-sm font-semibold text-white">{getRequestUser(confirmReview.request).displayName}</div>
-              <div className="mt-1 text-xs text-slate-500">{confirmReview.request.reason || "Không nhập lý do"}</div>
+              <div className="text-sm font-semibold text-white">
+                {getRequestUser(confirmReview.request).displayName}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {confirmReview.request.reason || "Không nhập lý do"}
+              </div>
             </div>
 
-            <label className="mb-2 block text-xs font-semibold text-slate-300">Ghi chú admin</label>
+            <label className="mb-2 block text-xs font-semibold text-slate-300">
+              Ghi chú admin
+            </label>
             <textarea
               value={adminNote}
               onChange={(event) => setAdminNote(event.target.value)}
@@ -657,7 +932,9 @@ export default function LozaAdmin() {
                 onClick={() => void handleReview()}
                 disabled={reviewingId === confirmReview.request._id}
                 className={`rounded-xl px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-                  confirmReview.action === "approved" ? "bg-red-600 hover:bg-red-500" : "bg-slate-600 hover:bg-slate-500"
+                  confirmReview.action === "approved"
+                    ? "bg-red-600 hover:bg-red-500"
+                    : "bg-slate-600 hover:bg-slate-500"
                 }`}
               >
                 {reviewingId === confirmReview.request._id
@@ -721,13 +998,24 @@ function RequestList({
         const isPending = request.status === "pending";
 
         return (
-          <article key={request._id} className="rounded-xl border border-white/5 bg-[#111827] p-4">
+          <article
+            key={request._id}
+            className="rounded-xl border border-white/5 bg-[#111827] p-4"
+          >
             <div className="flex flex-wrap items-start gap-3">
-              <Avatar name={user.displayName || user.username} bg={getAvatarColor(user._id)} size={42} />
+              <Avatar
+                name={user.displayName || user.username}
+                bg={getAvatarColor(user._id)}
+                size={42}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="truncate text-sm font-bold text-white">{user.displayName || user.username}</h4>
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${STATUS_STYLE[request.status]}`}>
+                  <h4 className="truncate text-sm font-bold text-white">
+                    {user.displayName || user.username}
+                  </h4>
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${STATUS_STYLE[request.status]}`}
+                  >
                     {STATUS_LABEL[request.status]}
                   </span>
                   {user.isLocked && (
@@ -739,14 +1027,20 @@ function RequestList({
                 <div className="mt-1 truncate text-xs text-slate-500">
                   @{user.username} {user.email ? `- ${user.email}` : ""}
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-300">{request.reason || "Không nhập lý do"}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {request.reason || "Không nhập lý do"}
+                </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
                   <span className="inline-flex items-center gap-1">
                     <Clock size={12} />
                     Gửi lúc {formatDateTime(request.createdAt)}
                   </span>
-                  {showReviewedInfo && request.reviewedAt && <span>Duyệt lúc {formatDateTime(request.reviewedAt)}</span>}
-                  {showReviewedInfo && request.adminNote && <span>Ghi chú: {request.adminNote}</span>}
+                  {showReviewedInfo && request.reviewedAt && (
+                    <span>Duyệt lúc {formatDateTime(request.reviewedAt)}</span>
+                  )}
+                  {showReviewedInfo && request.adminNote && (
+                    <span>Ghi chú: {request.adminNote}</span>
+                  )}
                 </div>
               </div>
 
@@ -808,7 +1102,13 @@ function Placeholder({
   );
 }
 
-function NavItem({ active, icon: Icon, label, onClick, badge = 0 }: NavItemProps) {
+function NavItem({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+  badge = 0,
+}: NavItemProps) {
   return (
     <button
       type="button"

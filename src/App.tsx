@@ -16,7 +16,6 @@ import { useEffect } from "react";
 import PublicRoute from "./components/PublicRoute";
 import { useSyncAuthBetweenTabs } from "./hook/useSyncAuthBetweenTabs";
 import ForceLogoutDialog from "./components/ForceLogoutDialog"; // ← thêm import
-
 import LozaAdmin from "./pages/Admin";
 import AdminRoute from "./components/AdminRoute";
 function App() {
@@ -33,7 +32,7 @@ function App() {
     }
     return () => disconnectSocket();
   }, [accessToken]);
-  
+
   return (
     <>
       <Toaster position="top-right" richColors />

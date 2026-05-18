@@ -126,7 +126,7 @@ export interface ChatState {
     name?: string;
     memberIds: string[];
   }) => Promise<void>;
-  pinnedMessages: Record<string, Message[]>;
+  pinnedMessages: Record<string, PinnedMessage[]>;
   pinMessage: (conversationId: string, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: string, messageId: string) => Promise<void>;
   updateMemberRole: (
@@ -159,6 +159,8 @@ export interface ChatState {
   ) => void;
 
   togglePinConversation: (conversationId: string) => Promise<boolean>;
+  removeJoinRequest: (requestId: string) => void;
+  markAsRead: (conversationId: string) => Promise<void>;
 }
 
 export interface FriendUpdateEvent {
