@@ -13,6 +13,7 @@ import {
   useChatThemeStore,
 } from "@/stores/useChatThemeStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import { useQuickMessageStore } from "@/stores/useQuickMessageStore";
 import toast from "react-hot-toast";
 import type {
   ChatStructuredPayload,
@@ -28,6 +29,7 @@ import {
   getSafeMessagePreview,
 } from "@/utils/chatMessageCodec";
 import { lozaBotService } from "@/services/lozaBotService";
+import { quickMessageService } from "../components/QuickMessageModal";
 import { callService } from "@/services/callService";
 import { Room, RoomEvent, Track } from "livekit-client";
 import {
@@ -72,6 +74,7 @@ import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
 import api from "@/lib/axios";
+import type { QuickMessage } from "@/components/QuickMessageModal";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -644,6 +647,11 @@ export default function ChatPage() {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
+  const [showQuickPopup, setShowQuickPopup] = useState(false);
+  const [filteredQuickMessages, setFilteredQuickMessages] = useState<
+    QuickMessage[]
+  >([]);
+  const [selectedQuickIndex, setSelectedQuickIndex] = useState(0);
   const [voteViewer, setVoteViewer] = useState<{
     x: number;
     y: number;
@@ -723,6 +731,8 @@ export default function ChatPage() {
   const [searchToDate, setSearchToDate] = useState("");
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const quickMessages = useQuickMessageStore((s) => s.messages);
+const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
   const [searchHighlightIds, setSearchHighlightIds] = useState<Set<string>>(
     new Set(),
   );
@@ -994,6 +1004,9 @@ export default function ChatPage() {
     activeConversationId,
     setThemeForConversation,
   ]);
+  useEffect(() => {
+  fetchQuickMessages();
+}, []);
 
   const pinnedMessages = useMemo(
     () =>
@@ -2675,6 +2688,12 @@ export default function ChatPage() {
     }
   }, [editingMessage, activeConversationId, editInput, editMessage]);
 
+  const applyQuickMessage = (msg: QuickMessage) => {
+    setInput((prev) => prev.replace(/\/(\S*)$/, msg.content));
+
+    setShowQuickPopup(false);
+  };
+
   const renderLinks = useCallback((text: string) => {
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
@@ -4142,7 +4161,7 @@ export default function ChatPage() {
                                 : "0 8px 20px rgba(0,0,0,.25)",
                             overflow: "hidden",
                             outline: searchHighlightIds.has(message._id)
-                              ? "2px solid #facc15"
+                              ? "2px solid #ffffff"
                               : "none",
                             outlineOffset: 2,
                           }}
@@ -4939,13 +4958,35 @@ export default function ChatPage() {
                     <input
                       value={input}
                       onChange={(event) => {
-                        setInput(event.target.value);
+                        const value = event.target.value;
+
+                        setInput(value);
+
+                        // Detect quick message
+                        const match = value.match(/\/(\S*)$/);
+
+                        if (match) {
+                          const keyword = "/" + match[1].toLowerCase();
+
+                          const filtered = quickMessages.filter((m) =>
+                            m.shortcut.toLowerCase().startsWith(keyword),
+                          );
+
+                          setFilteredQuickMessages(filtered);
+                          setShowQuickPopup(filtered.length > 0);
+                          setSelectedQuickIndex(0);
+                        } else {
+                          setShowQuickPopup(false);
+                        }
+
                         if (socket?.connected && activeConversationId) {
                           socket.emit("typing", {
                             conversationId: activeConversationId,
                           });
+
                           if (typingTimeoutRef.current)
                             clearTimeout(typingTimeoutRef.current);
+
                           typingTimeoutRef.current = setTimeout(() => {
                             socket.emit("stop-typing", {
                               conversationId: activeConversationId,
@@ -4955,6 +4996,50 @@ export default function ChatPage() {
                       }}
                       placeholder="Nhập tin nhắn... hoặc @LozaBot <vấn đề>"
                       onKeyDown={(event) => {
+                        // QUICK MESSAGE NAVIGATION
+                        if (showQuickPopup) {
+                          if (event.key === "ArrowDown") {
+                            event.preventDefault();
+
+                            setSelectedQuickIndex((p) =>
+                              p + 1 >= filteredQuickMessages.length ? 0 : p + 1,
+                            );
+
+                            return;
+                          }
+
+                          if (event.key === "ArrowUp") {
+                            event.preventDefault();
+
+                            setSelectedQuickIndex((p) =>
+                              p - 1 < 0
+                                ? filteredQuickMessages.length - 1
+                                : p - 1,
+                            );
+
+                            return;
+                          }
+
+                          if (event.key === "Tab" || event.key === "Enter") {
+                            event.preventDefault();
+
+                            const selected =
+                              filteredQuickMessages[selectedQuickIndex];
+
+                            if (selected) {
+                              applyQuickMessage(selected);
+                            }
+
+                            return;
+                          }
+
+                          if (event.key === "Escape") {
+                            setShowQuickPopup(false);
+                            return;
+                          }
+                        }
+
+                        // SEND MESSAGE
                         if (event.key === "Enter") {
                           event.preventDefault();
                           void sendTextMessage();
@@ -4970,6 +5055,66 @@ export default function ChatPage() {
                         fontSize: 15,
                       }}
                     />
+                    {showQuickPopup && (
+  <div
+    style={{
+      position: "absolute",
+      left: 0,
+      bottom: 52,
+      width: 320,
+      background: "rgba(15,23,42,.98)",
+      border: "1px solid rgba(148,163,184,.18)",
+      borderRadius: 14,
+      padding: 6,
+      zIndex: 100,
+      boxShadow: "0 10px 40px rgba(0,0,0,.45)",
+      display: "grid",
+      gap: 4,
+    }}
+  >
+    {filteredQuickMessages.map((msg, index) => (
+      <button
+        key={msg._id}
+        onClick={() => applyQuickMessage(msg)}
+        style={{
+          border: "none",
+          textAlign: "left",
+          padding: "10px 12px",
+          borderRadius: 10,
+          cursor: "pointer",
+          background:
+            selectedQuickIndex === index
+              ? "rgba(37,99,235,.22)"
+              : "transparent",
+          color: "#e2e8f0",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#60a5fa",
+            marginBottom: 4,
+          }}
+        >
+          {msg.shortcut}
+        </div>
+
+        <div
+          style={{
+            fontSize: 13,
+            color: "#94a3b8",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {msg.content}
+        </div>
+      </button>
+    ))}
+  </div>
+)}
 
                     <div
                       style={{ position: "relative", display: "inline-flex" }}
