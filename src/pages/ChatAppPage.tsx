@@ -65,10 +65,13 @@ import {
   Maximize2,
   Minimize2,
   PictureInPicture2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { chatService } from "@/services/chatService";
 import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
+import api from "@/lib/axios";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -640,6 +643,7 @@ export default function ChatPage() {
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
   const [voteViewer, setVoteViewer] = useState<{
     x: number;
     y: number;
@@ -711,6 +715,17 @@ export default function ChatPage() {
   const ringtoneOscRef = useRef<OscillatorNode | null>(null);
   const ringtoneGainRef = useRef<GainNode | null>(null);
   const ringtoneIntervalRef = useRef<number | null>(null);
+  //search
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchSenderId, setSearchSenderId] = useState("");
+  const [searchFromDate, setSearchFromDate] = useState("");
+  const [searchToDate, setSearchToDate] = useState("");
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchHighlightIds, setSearchHighlightIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const startRingtone = useCallback(() => {
     try {
@@ -863,6 +878,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     setExpandedMessageKey(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    handleCloseSearch();
   }, [activeConversationId]);
 
   useEffect(() => {
@@ -1702,6 +1721,85 @@ export default function ChatPage() {
     }
     setIsCallMinimized(false);
   }, [closeVideoPiP]);
+
+  const handleSearch = useCallback(async () => {
+    if (!activeConversationId) return;
+    setSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("q", searchQuery.trim());
+      if (searchSenderId) params.set("senderId", searchSenderId);
+      if (searchFromDate) params.set("fromDate", searchFromDate);
+      if (searchToDate) params.set("toDate", searchToDate);
+
+      // THAY bằng:
+      const res = await api.get(
+        `/messages/${activeConversationId}/search?${params.toString()}`,
+      );
+      const found: Message[] = res.data.messages ?? [];
+
+      // Lọc FE: bỏ tin nhắn structured payload
+      const filtered = found.filter((m) => {
+        if (!m.content?.startsWith("__LZ_CHAT_JSON__::")) return true; // tin nhắn thuần text cũ
+        try {
+          const payload = JSON.parse(
+            m.content.slice("__LZ_CHAT_JSON__::".length),
+          );
+          return payload.kind === "text"; // chỉ giữ lại kind text
+        } catch {
+          return false;
+        }
+      });
+      setSearchResults(filtered);
+      setSearchHighlightIds(new Set(filtered.map((m) => m._id)));
+      setSearchCurrentIndex(0);
+    } catch {
+      toast.error("Không thể tìm kiếm tin nhắn");
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [
+    activeConversationId,
+    searchQuery,
+    searchSenderId,
+    searchFromDate,
+    searchToDate,
+  ]);
+  const navigateSearchResult = useCallback(
+    (direction: "prev" | "next") => {
+      if (searchResults.length === 0) return;
+
+      const nextIndex =
+        direction === "next"
+          ? (searchCurrentIndex + 1) % searchResults.length
+          : (searchCurrentIndex - 1 + searchResults.length) %
+            searchResults.length;
+
+      setSearchCurrentIndex(nextIndex);
+
+      // searchResults được sort createdAt: -1 từ BE (mới nhất trước)
+      const target = searchResults[nextIndex];
+      if (!target?._id) return;
+
+      const el = document.getElementById(`msg-${target._id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Flash highlight để user thấy rõ đang ở đâu
+      }
+    },
+    [searchResults, searchCurrentIndex],
+  );
+
+  const handleCloseSearch = useCallback(() => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    setSearchSenderId("");
+    setSearchFromDate("");
+    setSearchToDate("");
+    setSearchResults([]);
+    setSearchHighlightIds(new Set());
+    setSearchCurrentIndex(0);
+  }, []);
 
   useEffect(() => {
     if (localVideoRef.current) {
@@ -3592,25 +3690,37 @@ export default function ChatPage() {
                       <UserPlus size={18} />
                     </button>
                   )}
-                  <button
-                    title="Gọi"
-                    onClick={() => startCall("voice")}
-                    style={{ ...actionIconStyle, width: 36, height: 36 }}
-                    className="action-btn"
-                  >
-                    <Phone size={18} />
-                  </button>
-                  <button
-                    title="Gọi video"
-                    onClick={() => startCall("video")}
-                    style={{ ...actionIconStyle, width: 36, height: 36 }}
-                    className="action-btn"
-                  >
-                    <Video size={18} />
-                  </button>
+                  {/* Ẩn nút call nếu là chat 1-1 với người lạ chưa kết bạn */}
+                  {(!activeConversation.isStranger ||
+                    activeConversation.group) && (
+                    <>
+                      <button
+                        title="Gọi"
+                        onClick={() => startCall("voice")}
+                        style={{ ...actionIconStyle, width: 36, height: 36 }}
+                        className="action-btn"
+                      >
+                        <Phone size={18} />
+                      </button>
+                      <button
+                        title="Gọi video"
+                        onClick={() => startCall("video")}
+                        style={{ ...actionIconStyle, width: 36, height: 36 }}
+                        className="action-btn"
+                      >
+                        <Video size={18} />
+                      </button>
+                    </>
+                  )}
                   <button
                     title="Tìm kiếm"
-                    style={{ ...actionIconStyle, width: 36, height: 36 }}
+                    onClick={() => setIsSearchOpen((prev) => !prev)}
+                    style={{
+                      ...actionIconStyle,
+                      width: 36,
+                      height: 36,
+                      color: isSearchOpen ? "#60a5fa" : "#94a3b8",
+                    }}
                     className="action-btn"
                   >
                     <Search size={18} />
@@ -3634,7 +3744,176 @@ export default function ChatPage() {
                   </button>
                 </div>
               </div>
+              {/* ── Search bar ── */}
+              {isSearchOpen && (
+                <div
+                  style={{
+                    padding: "10px 16px",
+                    borderBottom: "1px solid rgba(148,163,184,.15)",
+                    background: "rgba(7,16,36,.6)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {/* Row 1: input từ khoá + nút tìm + nút đóng */}
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <input
+                      autoFocus
+                      placeholder="Tìm tin nhắn..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && void handleSearch()
+                      }
+                      style={{
+                        flex: 1,
+                        background: "rgba(255,255,255,.07)",
+                        border: "1px solid rgba(148,163,184,.2)",
+                        borderRadius: 10,
+                        padding: "7px 12px",
+                        color: "#f1f5f9",
+                        fontSize: 13,
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      onClick={() => void handleSearch()}
+                      disabled={searchLoading}
+                      style={{
+                        ...miniButtonPrimaryStyle,
+                        padding: "7px 14px",
+                        borderRadius: 10,
+                      }}
+                    >
+                      {searchLoading ? "..." : "Tìm"}
+                    </button>
+                    <button
+                      onClick={handleCloseSearch}
+                      style={{
+                        ...actionIconStyle,
+                        width: 32,
+                        height: 32,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
 
+                  {/* Row 2: filter người gửi + khoảng ngày */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <select
+                      value={searchSenderId}
+                      onChange={(e) => setSearchSenderId(e.target.value)}
+                      style={{
+                        background: "#0f172a",
+                        border: "1px solid rgba(148,163,184,.2)",
+                        borderRadius: 10,
+                        padding: "6px 10px",
+                        color: "#f1f5f9",
+                        fontSize: 12,
+                        outline: "none",
+                        minWidth: 130,
+                        colorScheme: "dark",
+                      }}
+                    >
+                      <option
+                        value=""
+                        style={{ background: "#0f172a", color: "#f1f5f9" }}
+                      >
+                        Tất cả thành viên
+                      </option>
+                      {activeConversation?.participants.map((p) => (
+                        <option
+                          key={p._id}
+                          value={p._id}
+                          style={{ background: "#0f172a", color: "#f1f5f9" }}
+                        >
+                          {p.displayName}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={searchFromDate}
+                      onChange={(e) => setSearchFromDate(e.target.value)}
+                      style={{
+                        background: "#0f172a",
+                        border: "1px solid rgba(148,163,184,.2)",
+                        borderRadius: 10,
+                        padding: "6px 10px",
+                        color: "#f1f5f9",
+                        fontSize: 12,
+                        outline: "none",
+                        colorScheme: "dark",
+                      }}
+                    />
+                    <span
+                      style={{
+                        color: "#64748b",
+                        alignSelf: "center",
+                        fontSize: 12,
+                      }}
+                    >
+                      →
+                    </span>
+                    <input
+                      type="date"
+                      value={searchToDate}
+                      onChange={(e) => setSearchToDate(e.target.value)}
+                      style={{
+                        background: "#0f172a",
+                        border: "1px solid rgba(148,163,184,.2)",
+                        borderRadius: 10,
+                        padding: "6px 10px",
+                        color: "#f1f5f9",
+                        fontSize: 12,
+                        outline: "none",
+                        colorScheme: "dark",
+                      }}
+                    />
+                  </div>
+
+                  {/* Row 3: kết quả */}
+                  {searchResults.length > 0 && (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span style={{ fontSize: 12, color: "#64748b" }}>
+                        {searchCurrentIndex + 1} / {searchResults.length} kết
+                        quả
+                      </span>
+                      <button
+                        onClick={() => navigateSearchResult("next")}
+                        title="Kết quả trước (mới hơn)"
+                        style={{ ...actionIconStyle, width: 28, height: 28 }}
+                        className="action-btn"
+                      >
+                        <ChevronUp size={15} />
+                      </button>
+                      <button
+                        onClick={() => navigateSearchResult("prev")}
+                        title="Kết quả tiếp (cũ hơn)"
+                        style={{ ...actionIconStyle, width: 28, height: 28 }}
+                        className="action-btn"
+                      >
+                        <ChevronDown size={15} />
+                      </button>
+                    </div>
+                  )}
+                  {searchResults.length === 0 &&
+                    !searchLoading &&
+                    searchHighlightIds.size === 0 &&
+                    searchQuery && (
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        Không tìm thấy kết quả
+                      </div>
+                    )}
+                </div>
+              )}
               {/* Pinned messages banner */}
               {pinnedMessages.length > 0 && (
                 <div
@@ -3862,6 +4141,10 @@ export default function ChatPage() {
                                 ? "none"
                                 : "0 8px 20px rgba(0,0,0,.25)",
                             overflow: "hidden",
+                            outline: searchHighlightIds.has(message._id)
+                              ? "2px solid #facc15"
+                              : "none",
+                            outlineOffset: 2,
                           }}
                         >
                           {renderStructuredMessage(message)}
