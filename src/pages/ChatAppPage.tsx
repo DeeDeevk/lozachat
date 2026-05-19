@@ -75,6 +75,8 @@ import AddMemberModal from "@/components/AddMemberModal";
 import EditGroupModal from "@/components/EditGroupModal";
 import api from "@/lib/axios";
 import type { QuickMessage } from "@/components/QuickMessageModal";
+import InputAreaGuard from "@/components/InputAreaGuard";
+import FriendActionButton from "@/components/FriendActionButton";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -733,10 +735,11 @@ export default function ChatPage() {
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const quickMessages = useQuickMessageStore((s) => s.messages);
-const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
+  const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
   const [searchHighlightIds, setSearchHighlightIds] = useState<Set<string>>(
     new Set(),
   );
+  const today = new Date().toISOString().split("T")[0];
 
   const startRingtone = useCallback(() => {
     try {
@@ -1006,8 +1009,8 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
     setThemeForConversation,
   ]);
   useEffect(() => {
-  fetchQuickMessages();
-}, []);
+    fetchQuickMessages();
+  }, []);
 
   const pinnedMessages = useMemo(
     () =>
@@ -1739,6 +1742,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
   const handleSearch = useCallback(async () => {
     if (!activeConversationId) return;
     setSearchLoading(true);
+
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
@@ -1746,28 +1750,49 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
       if (searchFromDate) params.set("fromDate", searchFromDate);
       if (searchToDate) params.set("toDate", searchToDate);
 
-      // THAY bằng:
       const res = await api.get(
         `/messages/${activeConversationId}/search?${params.toString()}`,
       );
-      const found: Message[] = res.data.messages ?? [];
 
-      // Lọc FE: bỏ tin nhắn structured payload
-      const filtered = found.filter((m) => {
-        if (!m.content?.startsWith("__LZ_CHAT_JSON__::")) return true; // tin nhắn thuần text cũ
-        try {
-          const payload = JSON.parse(
-            m.content.slice("__LZ_CHAT_JSON__::".length),
-          );
-          return payload.kind === "text"; // chỉ giữ lại kind text
-        } catch {
-          return false;
-        }
+      let found: Message[] = res.data.messages ?? [];
+
+      // ==================== FILTER CHÍNH XÁC ====================
+      const filtered = found.filter((message) => {
+        const content = message.content || "";
+
+        // Loại bỏ tất cả system messages
+        if (content.startsWith("{{system}}")) return false;
+
+        // Loại bỏ tin nhắn thu hồi (nếu không muốn search)
+        if (message.isRecalled) return false;
+
+        // Decode payload để kiểm tra loại tin nhắn
+        const payload = decodeChatPayload(content);
+
+        // Nếu không decode được → coi là tin nhắn cũ hoặc lạ → cho qua (an toàn)
+        if (!payload) return true;
+
+        // Chỉ cho phép các loại tin nhắn người dùng thật sự
+        const userMessageKinds = [
+          "text",
+          "reply",
+          "image",
+          "file",
+          "audio",
+          "sticker",
+          "poll",
+          "emoji",
+        ];
+
+        return userMessageKinds.includes(payload.kind);
       });
+      // =======================================================
+
       setSearchResults(filtered);
       setSearchHighlightIds(new Set(filtered.map((m) => m._id)));
       setSearchCurrentIndex(0);
-    } catch {
+    } catch (error) {
+      console.error(error);
       toast.error("Không thể tìm kiếm tin nhắn");
     } finally {
       setSearchLoading(false);
@@ -3336,7 +3361,11 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
         @media (max-width: 768px) { .conversation-list-responsive { display: none !important; } }
       `}</style>
 
-      <SideNav onNewMessage={() => undefined} onHelpClick={startTutorial} data-tour="sidenav" />
+      <SideNav
+        onNewMessage={() => undefined}
+        onHelpClick={startTutorial}
+        data-tour="sidenav"
+      />
 
       <ConversationList
         conversations={conversationListItems}
@@ -3360,14 +3389,14 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
         onClose={() => undefined}
       />
 
-      <div style={{ display: "flex", flex: 1, position: "relative",  }}>
+      <div style={{ display: "flex", flex: 1, position: "relative" }}>
         {/* Chat Area */}
         <div style={chatAreaStyle}>
           {activeConversation ? (
             <>
               {/* Header */}
               <div
-              data-tour="chat-header"
+                data-tour="chat-header"
                 style={{
                   padding: "12px 16px",
                   borderBottom: "1px solid rgba(255,255,255,.08)",
@@ -3576,7 +3605,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div ref={themeMenuRef} style={{ position: "relative" }}>
                     <button
-                    data-tour="theme-area"
+                      data-tour="theme-area"
                       title="Đổi giao diện chat"
                       onClick={() => setShowThemePicker((prev) => !prev)}
                       style={{
@@ -3704,7 +3733,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
 
                   {activeConversation.group && (
                     <button
-                    data-tour="add-member-area"
+                      data-tour="add-member-area"
                       title="Thêm thành viên"
                       onClick={() => setShowAddMemberModal(true)}
                       style={{ ...actionIconStyle, width: 36, height: 36 }}
@@ -3736,7 +3765,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     </div>
                   )}
                   <button
-                  data-tour="search-button"
+                    data-tour="search-button"
                     title="Tìm kiếm"
                     onClick={() => setIsSearchOpen((prev) => !prev)}
                     style={{
@@ -3750,7 +3779,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     <Search size={18} />
                   </button>
                   <button
-                  data-tour="toggle-info-panel"
+                    data-tour="toggle-info-panel"
                     onClick={() => setShowInfoPanel(!showInfoPanel)}
                     title={showInfoPanel ? "Ẩn thông tin" : "Hiện thông tin"}
                     style={{
@@ -3864,7 +3893,20 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     <input
                       type="date"
                       value={searchFromDate}
-                      onChange={(e) => setSearchFromDate(e.target.value)}
+                      max={today}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        // Không cho lớn hơn ngày kết thúc
+                        if (searchToDate && value > searchToDate) {
+                          toast.error(
+                            '"Từ ngày" phải nhỏ hơn hoặc bằng "Đến ngày"',
+                          );
+                          return;
+                        }
+
+                        setSearchFromDate(value);
+                      }}
                       style={{
                         background: "#0f172a",
                         border: "1px solid rgba(148,163,184,.2)",
@@ -3888,7 +3930,21 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     <input
                       type="date"
                       value={searchToDate}
-                      onChange={(e) => setSearchToDate(e.target.value)}
+                      min={searchFromDate || undefined}
+                      max={today}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        // Không cho nhỏ hơn ngày bắt đầu
+                        if (searchFromDate && value < searchFromDate) {
+                          toast.error(
+                            '"Đến ngày" phải lớn hơn hoặc bằng "Từ ngày"',
+                          );
+                          return;
+                        }
+
+                        setSearchToDate(value);
+                      }}
                       style={{
                         background: "#0f172a",
                         border: "1px solid rgba(148,163,184,.2)",
@@ -3939,6 +3995,14 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     )}
                 </div>
               )}
+              {!activeConversation.group &&
+                activeConversation.isStranger &&
+                otherUser?._id && (
+                  <FriendActionButton
+                    userId={otherUser._id}
+                    displayName={otherUser.displayName}
+                  />
+                )}
               {/* Pinned messages banner */}
               {pinnedMessages.length > 0 && (
                 <div
@@ -3991,7 +4055,11 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
               )}
 
               {/* Messages */}
-              <div ref={messagesContainerRef} style={messagesAreaStyle} data-tour="messages-area">
+              <div
+                ref={messagesContainerRef}
+                style={messagesAreaStyle}
+                data-tour="messages-area"
+              >
                 {displayMessages.map((message, index) => {
                   const isMine = message.senderId === user?.userId;
                   const isGroup = !!activeConversation.group;
@@ -4126,7 +4194,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         )}
 
                         <div
-                        data-tour={isMine ? "my-message" : "other-message"}
+                          data-tour={isMine ? "my-message" : "other-message"}
                           onClick={() =>
                             setExpandedMessageKey((prev) =>
                               prev === messageKey ? null : messageKey,
@@ -4516,745 +4584,760 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
 
               {/* Input area */}
               <div
-              data-tour="input-area"
+                data-tour="input-area"
                 style={{
                   padding: "10px 14px 14px",
                   borderTop: "1px solid rgba(255,255,255,.08)",
                 }}
               >
-                {replyingTo && (
-                  <div
-                    style={{
-                      marginBottom: 8,
-                      background: "rgba(30,64,175,.22)",
-                      border: "1px solid rgba(96,165,250,.4)",
-                      borderRadius: 12,
-                      padding: "8px 10px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          color: "#bfdbfe",
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Đang trả lời{" "}
-                        {getSenderName(
-                          replyingTo,
-                          user?.userId,
-                          activeConversation.participants,
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          color: "#cbd5e1",
-                          fontSize: 12,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {getSafeMessagePreview(replyingTo.content)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setReplyingTo(null)}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: "#e2e8f0",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                )}
-
-                {editingMessage && (
-                  <div
-                    style={{
-                      marginBottom: 8,
-                      background: "rgba(234,179,8,.1)",
-                      border: "1px solid rgba(234,179,8,.35)",
-                      borderRadius: 12,
-                      padding: "8px 10px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
+                <InputAreaGuard
+                  activeConversation={activeConversation}
+                  user={user}
+                >
+                  {replyingTo && (
                     <div
                       style={{
+                        marginBottom: 8,
+                        background: "rgba(30,64,175,.22)",
+                        border: "1px solid rgba(96,165,250,.4)",
+                        borderRadius: 12,
+                        padding: "8px 10px",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        gap: 10,
                       }}
                     >
-                      <span
-                        style={{
-                          color: "#fde047",
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        ✏️ Đang chỉnh sửa tin nhắn
-                      </span>
-                      <button
-                        onClick={() => {
-                          setEditingMessage(null);
-                          setEditInput("");
-                        }}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: "#94a3b8",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        value={editInput}
-                        onChange={(e) => setEditInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void handleEdit();
-                          }
-                        }}
-                        autoFocus
-                        style={{
-                          flex: 1,
-                          border: "0.5px solid rgba(234,179,8,.4)",
-                          background: "rgba(234,179,8,.05)",
-                          color: "#f1f5f9",
-                          borderRadius: 10,
-                          padding: "7px 10px",
-                          outline: "none",
-                          fontSize: 14,
-                        }}
-                      />
-                      <button
-                        onClick={() => void handleEdit()}
-                        disabled={!editInput.trim()}
-                        style={{
-                          border: "none",
-                          borderRadius: 10,
-                          padding: "7px 14px",
-                          background: editInput.trim() ? "#ca8a04" : "#334155",
-                          color: "white",
-                          cursor: editInput.trim() ? "pointer" : "not-allowed",
-                          fontWeight: 600,
-                          fontSize: 13,
-                        }}
-                      >
-                        Lưu
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ position: "relative" }} ref={popupRef}>
-                  {activePopup === "media" && (
-                    <div style={popupBoxStyle}>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          marginBottom: 10,
-                          color: "#f1f5f9",
-                        }}
-                      >
-                        Gửi tệp hoặc hình ảnh
-                      </div>
-                      <div style={{ display: "grid", gap: 8 }}>
-                        <button
-                          style={popupActionStyle}
-                          className="menu-item"
-                          onClick={() => imageInputRef.current?.click()}
-                        >
-                          <ImagePlus size={16} /> Chọn ảnh
-                        </button>
-                        <button
-                          style={popupActionStyle}
-                          className="menu-item"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <FileUp size={16} /> Chọn tệp
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {activePopup === "audio" && (
-                    <div style={popupBoxStyle}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 8,
-                          marginBottom: 12,
-                        }}
-                      >
-                        <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
-                          Ghi âm
-                        </div>
+                      <div style={{ minWidth: 0 }}>
                         <div
                           style={{
-                            fontSize: 12,
-                            color: isRecording ? "#fca5a5" : "#64748b",
-                            background: isRecording
-                              ? "rgba(252,165,165,.1)"
-                              : "rgba(100,116,139,.1)",
-                            border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
-                            borderRadius: 20,
-                            padding: "4px 10px",
-                          }}
-                        >
-                          {isRecording
-                            ? `● ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")}`
-                            : "Sẵn sàng"}
-                        </div>
-                      </div>
-                      <div style={{ display: "grid", gap: 8 }}>
-                        {!isRecording ? (
-                          <button
-                            style={{
-                              ...popupActionStyle,
-                              borderColor: "rgba(37,99,235,.45)",
-                              background: "rgba(37,99,235,.1)",
-                            }}
-                            onClick={() => void startRecording()}
-                          >
-                            <Mic size={16} /> Bắt đầu ghi âm
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              style={{
-                                ...popupActionStyle,
-                                borderColor: "rgba(248,113,113,.45)",
-                                background: "rgba(248,113,113,.15)",
-                              }}
-                              onClick={() => stopRecording()}
-                            >
-                              <Mic size={16} /> Dừng và gửi
-                            </button>
-                            <button
-                              style={{
-                                ...popupActionStyle,
-                                borderColor: "rgba(148,163,184,.35)",
-                                background: "rgba(15,23,42,.45)",
-                              }}
-                              onClick={() => cancelRecording()}
-                            >
-                              <X size={16} /> Hủy ghi âm
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {activePopup === "sticker" && (
-                    <div style={{ ...popupBoxStyle, width: 340 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 12,
-                        }}
-                      >
-                        <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
-                        <a
-                          href="https://chatsticker.com"
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            color: "#3b82f6",
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Xem thêm
-                        </a>
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(3, 1fr)",
-                          gap: 10,
-                        }}
-                      >
-                        {CHAT_STICKER_LIST.map((stickerUrl, index) => (
-                          <button
-                            key={`sticker-${index}`}
-                            className="sticker-btn"
-                            onClick={() => {
-                              void sendStructuredMessage({
-                                version: 1,
-                                kind: "sticker",
-                                stickerUrl,
-                              });
-                              setActivePopup(null);
-                            }}
-                            style={{
-                              border: "0.5px solid rgba(148,163,184,.15)",
-                              background: "rgba(255,255,255,.03)",
-                              borderRadius: 12,
-                              padding: 6,
-                              cursor: "pointer",
-                              transition: "all .2s ease",
-                            }}
-                          >
-                            <img
-                              src={stickerUrl}
-                              alt="sticker"
-                              style={{
-                                width: "100%",
-                                height: 80,
-                                objectFit: "contain",
-                              }}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activePopup === "poll" && (
-                    <div style={{ ...popupBoxStyle, width: 340 }}>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          marginBottom: 12,
-                          color: "#f1f5f9",
-                        }}
-                      >
-                        Tạo cuộc thăm dò
-                      </div>
-                      <input
-                        value={pollQuestion}
-                        onChange={(e) => setPollQuestion(e.target.value)}
-                        placeholder="Câu hỏi bình chọn"
-                        style={pollInputStyle}
-                      />
-                      {pollOptions.map((option, index) => (
-                        <input
-                          key={`poll-opt-${index}`}
-                          value={option}
-                          onChange={(e) => {
-                            const next = [...pollOptions];
-                            next[index] = e.target.value;
-                            setPollOptions(next);
-                          }}
-                          placeholder={`Lựa chọn ${index + 1}`}
-                          style={pollInputStyle}
-                        />
-                      ))}
-                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                        <button
-                          onClick={() => setPollOptions((p) => [...p, ""])}
-                          style={miniButtonStyle}
-                        >
-                          + Thêm
-                        </button>
-                        <button
-                          onClick={() => void handleCreatePoll()}
-                          style={miniButtonPrimaryStyle}
-                        >
-                          Tạo bình chọn
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    hidden
-                    onChange={handleSelectImages}
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    hidden
-                    onChange={handleSelectFiles}
-                  />
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      border: "1px solid rgba(148,163,184,.25)",
-                      background: "rgba(8,15,35,.85)",
-                      borderRadius: 16,
-                      padding: "6px 10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 2,
-                        paddingRight: 4,
-                        borderRight: "1px solid rgba(148,163,184,.12)",
-                      }}
-                    >
-                      <button
-                      data-tour="attachment-button"
-                        title="Ảnh / Tệp"
-                        style={actionIconStyle}
-                        className="action-btn"
-                        onClick={() =>
-                          setActivePopup((p) =>
-                            p === "media" ? null : "media",
-                          )
-                        }
-                      >
-                        <ImagePlus size={18} />
-                      </button>
-                      <button
-                      data-tour="sticker-button"
-                        title="Nhãn dán"
-                        style={actionIconStyle}
-                        className="action-btn"
-                        onClick={() =>
-                          setActivePopup((p) =>
-                            p === "sticker" ? null : "sticker",
-                          )
-                        }
-                      >
-                        <Sticker size={18} />
-                      </button>
-                      <button
-                      data-tour="voice-record-button"
-                        title="Ghi âm"
-                        style={actionIconStyle}
-                        className="action-btn"
-                        onClick={() =>
-                          setActivePopup((p) =>
-                            p === "audio" ? null : "audio",
-                          )
-                        }
-                      >
-                        <Mic size={18} />
-                      </button>
-                      <button
-                      data-tour="poll-button"
-                        title="Thăm dò"
-                        style={actionIconStyle}
-                        className="action-btn"
-                        onClick={() =>
-                          setActivePopup((p) => (p === "poll" ? null : "poll"))
-                        }
-                      >
-                        <BarChart3 size={18} />
-                      </button>
-                    </div>
-
-                    <input
-                      value={input}
-                      onChange={(event) => {
-                        const value = event.target.value;
-
-                        setInput(value);
-
-                        // Detect quick message
-                        const match = value.match(/\/(\S*)$/);
-
-                        if (match) {
-                          const keyword = "/" + match[1].toLowerCase();
-
-                          const filtered = quickMessages.filter((m) =>
-                            m.shortcut.toLowerCase().startsWith(keyword),
-                          );
-
-                          setFilteredQuickMessages(filtered);
-                          setShowQuickPopup(filtered.length > 0);
-                          setSelectedQuickIndex(0);
-                        } else {
-                          setShowQuickPopup(false);
-                        }
-
-                        if (socket?.connected && activeConversationId) {
-                          socket.emit("typing", {
-                            conversationId: activeConversationId,
-                          });
-
-                          if (typingTimeoutRef.current)
-                            clearTimeout(typingTimeoutRef.current);
-
-                          typingTimeoutRef.current = setTimeout(() => {
-                            socket.emit("stop-typing", {
-                              conversationId: activeConversationId,
-                            });
-                          }, 1200);
-                        }
-                      }}
-                      placeholder="Nhập tin nhắn... hoặc @LozaBot <vấn đề>"
-                      onKeyDown={(event) => {
-                        // QUICK MESSAGE NAVIGATION
-                        if (showQuickPopup) {
-                          if (event.key === "ArrowDown") {
-                            event.preventDefault();
-
-                            setSelectedQuickIndex((p) =>
-                              p + 1 >= filteredQuickMessages.length ? 0 : p + 1,
-                            );
-
-                            return;
-                          }
-
-                          if (event.key === "ArrowUp") {
-                            event.preventDefault();
-
-                            setSelectedQuickIndex((p) =>
-                              p - 1 < 0
-                                ? filteredQuickMessages.length - 1
-                                : p - 1,
-                            );
-
-                            return;
-                          }
-
-                          if (event.key === "Tab" || event.key === "Enter") {
-                            event.preventDefault();
-
-                            const selected =
-                              filteredQuickMessages[selectedQuickIndex];
-
-                            if (selected) {
-                              applyQuickMessage(selected);
-                            }
-
-                            return;
-                          }
-
-                          if (event.key === "Escape") {
-                            setShowQuickPopup(false);
-                            return;
-                          }
-                        }
-
-                        // SEND MESSAGE
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void sendTextMessage();
-                        }
-                      }}
-                      style={{
-                        flex: 1,
-                        border: "none",
-                        outline: "none",
-                        background: "transparent",
-                        color: "#f8fafc",
-                        padding: "0 8px",
-                        fontSize: 15,
-                      }}
-                    />
-                    {showQuickPopup && (
-  <div
-    style={{
-      position: "absolute",
-      left: 0,
-      bottom: 52,
-      width: 320,
-      background: "rgba(15,23,42,.98)",
-      border: "1px solid rgba(148,163,184,.18)",
-      borderRadius: 14,
-      padding: 6,
-      zIndex: 100,
-      boxShadow: "0 10px 40px rgba(0,0,0,.45)",
-      display: "grid",
-      gap: 4,
-    }}
-  >
-    {filteredQuickMessages.map((msg, index) => (
-      <button
-        key={msg._id}
-        onClick={() => applyQuickMessage(msg)}
-        style={{
-          border: "none",
-          textAlign: "left",
-          padding: "10px 12px",
-          borderRadius: 10,
-          cursor: "pointer",
-          background:
-            selectedQuickIndex === index
-              ? "rgba(37,99,235,.22)"
-              : "transparent",
-          color: "#e2e8f0",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: "#60a5fa",
-            marginBottom: 4,
-          }}
-        >
-          {msg.shortcut}
-        </div>
-
-        <div
-          style={{
-            fontSize: 13,
-            color: "#94a3b8",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {msg.content}
-        </div>
-      </button>
-    ))}
-  </div>
-)}
-
-                    <div
-                      style={{ position: "relative", display: "inline-flex" }}
-                    >
-                      {activePopup === "emoji" && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            right: 0,
-                            bottom: 46,
-                            zIndex: 40,
-                          }}
-                        >
-                          <Picker
-                            data={data}
-                            theme="dark"
-                            onEmojiSelect={(emoji: EmojiSelectEvent) => {
-                              if (!emoji.native) return;
-                              setInput((prev) => prev + emoji.native);
-                            }}
-                            previewPosition="none"
-                            skinTonePosition="none"
-                          />
-                        </div>
-                      )}
-                      <button
-                      data-tour="emoji-button"
-                        title="Emoji"
-                        style={actionIconStyle}
-                        className="action-btn"
-                        onClick={() =>
-                          setActivePopup((p) =>
-                            p === "emoji" ? null : "emoji",
-                          )
-                        }
-                      >
-                        <Smile size={18} />
-                      </button>
-                    </div>
-
-                    <button
-                    data-tour="send-button"
-                      onClick={() => void sendTextMessage()}
-                      disabled={sending || !input.trim()}
-                      style={{
-                        border: "none",
-                        borderRadius: 12,
-                        width: 38,
-                        height: 38,
-                        background:
-                          sending || !input.trim() ? "#334155" : "#2563eb",
-                        color: "white",
-                        cursor:
-                          sending || !input.trim() ? "not-allowed" : "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "transform .15s, background .15s",
-                      }}
-                      title="Gửi"
-                    >
-                      <Send size={18} />
-                    </button>
-                  </div>
-
-                  {showLozaBotSuggestions && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        marginTop: 8,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {LOZA_BOT_SUGGESTIONS.map((suggestion) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          onClick={() =>
-                            setInput(`@${LOZA_BOT_NAME} ${suggestion}`)
-                          }
-                          style={{
-                            border: "1px solid rgba(96,165,250,.45)",
-                            background: "rgba(37,99,235,.12)",
                             color: "#bfdbfe",
-                            borderRadius: 999,
-                            padding: "6px 10px",
                             fontSize: 12,
-                            cursor: "pointer",
+                            fontWeight: 600,
                           }}
                         >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {mentionDraft && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 8,
-                        border: "1px solid rgba(148,163,184,.3)",
-                        background: "rgba(15,23,42,.92)",
-                        borderRadius: 10,
-                        padding: "6px 10px",
-                      }}
-                    >
+                          Đang trả lời{" "}
+                          {getSenderName(
+                            replyingTo,
+                            user?.userId,
+                            activeConversation.participants,
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            color: "#cbd5e1",
+                            fontSize: 12,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {getSafeMessagePreview(replyingTo.content)}
+                        </div>
+                      </div>
                       <button
-                        type="button"
-                        onClick={applyLozaBotMention}
+                        onClick={() => setReplyingTo(null)}
                         style={{
                           border: "none",
                           background: "transparent",
                           color: "#e2e8f0",
                           cursor: "pointer",
-                          fontSize: 13,
-                          padding: 0,
                         }}
                       >
-                        @{LOZA_BOT_NAME}
+                        <X size={16} />
                       </button>
                     </div>
                   )}
-                </div>
+
+                  {editingMessage && (
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        background: "rgba(234,179,8,.1)",
+                        border: "1px solid rgba(234,179,8,.35)",
+                        borderRadius: 12,
+                        padding: "8px 10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#fde047",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          ✏️ Đang chỉnh sửa tin nhắn
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditingMessage(null);
+                            setEditInput("");
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#94a3b8",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          value={editInput}
+                          onChange={(e) => setEditInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleEdit();
+                            }
+                          }}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            border: "0.5px solid rgba(234,179,8,.4)",
+                            background: "rgba(234,179,8,.05)",
+                            color: "#f1f5f9",
+                            borderRadius: 10,
+                            padding: "7px 10px",
+                            outline: "none",
+                            fontSize: 14,
+                          }}
+                        />
+                        <button
+                          onClick={() => void handleEdit()}
+                          disabled={!editInput.trim()}
+                          style={{
+                            border: "none",
+                            borderRadius: 10,
+                            padding: "7px 14px",
+                            background: editInput.trim()
+                              ? "#ca8a04"
+                              : "#334155",
+                            color: "white",
+                            cursor: editInput.trim()
+                              ? "pointer"
+                              : "not-allowed",
+                            fontWeight: 600,
+                            fontSize: 13,
+                          }}
+                        >
+                          Lưu
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ position: "relative" }} ref={popupRef}>
+                    {activePopup === "media" && (
+                      <div style={popupBoxStyle}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 10,
+                            color: "#f1f5f9",
+                          }}
+                        >
+                          Gửi tệp hoặc hình ảnh
+                        </div>
+                        <div style={{ display: "grid", gap: 8 }}>
+                          <button
+                            style={popupActionStyle}
+                            className="menu-item"
+                            onClick={() => imageInputRef.current?.click()}
+                          >
+                            <ImagePlus size={16} /> Chọn ảnh
+                          </button>
+                          <button
+                            style={popupActionStyle}
+                            className="menu-item"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <FileUp size={16} /> Chọn tệp
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {activePopup === "audio" && (
+                      <div style={popupBoxStyle}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: "#f1f5f9" }}>
+                            Ghi âm
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: isRecording ? "#fca5a5" : "#64748b",
+                              background: isRecording
+                                ? "rgba(252,165,165,.1)"
+                                : "rgba(100,116,139,.1)",
+                              border: `0.5px solid ${isRecording ? "rgba(252,165,165,.25)" : "rgba(100,116,139,.2)"}`,
+                              borderRadius: 20,
+                              padding: "4px 10px",
+                            }}
+                          >
+                            {isRecording
+                              ? `● ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")}`
+                              : "Sẵn sàng"}
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gap: 8 }}>
+                          {!isRecording ? (
+                            <button
+                              style={{
+                                ...popupActionStyle,
+                                borderColor: "rgba(37,99,235,.45)",
+                                background: "rgba(37,99,235,.1)",
+                              }}
+                              onClick={() => void startRecording()}
+                            >
+                              <Mic size={16} /> Bắt đầu ghi âm
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                style={{
+                                  ...popupActionStyle,
+                                  borderColor: "rgba(248,113,113,.45)",
+                                  background: "rgba(248,113,113,.15)",
+                                }}
+                                onClick={() => stopRecording()}
+                              >
+                                <Mic size={16} /> Dừng và gửi
+                              </button>
+                              <button
+                                style={{
+                                  ...popupActionStyle,
+                                  borderColor: "rgba(148,163,184,.35)",
+                                  background: "rgba(15,23,42,.45)",
+                                }}
+                                onClick={() => cancelRecording()}
+                              >
+                                <X size={16} /> Hủy ghi âm
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {activePopup === "sticker" && (
+                      <div style={{ ...popupBoxStyle, width: 340 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 12,
+                          }}
+                        >
+                          <strong style={{ color: "#f1f5f9" }}>Nhãn dán</strong>
+                          <a
+                            href="https://chatsticker.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              color: "#3b82f6",
+                              fontSize: 12,
+                              fontWeight: 500,
+                            }}
+                          >
+                            Xem thêm
+                          </a>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, 1fr)",
+                            gap: 10,
+                          }}
+                        >
+                          {CHAT_STICKER_LIST.map((stickerUrl, index) => (
+                            <button
+                              key={`sticker-${index}`}
+                              className="sticker-btn"
+                              onClick={() => {
+                                void sendStructuredMessage({
+                                  version: 1,
+                                  kind: "sticker",
+                                  stickerUrl,
+                                });
+                                setActivePopup(null);
+                              }}
+                              style={{
+                                border: "0.5px solid rgba(148,163,184,.15)",
+                                background: "rgba(255,255,255,.03)",
+                                borderRadius: 12,
+                                padding: 6,
+                                cursor: "pointer",
+                                transition: "all .2s ease",
+                              }}
+                            >
+                              <img
+                                src={stickerUrl}
+                                alt="sticker"
+                                style={{
+                                  width: "100%",
+                                  height: 80,
+                                  objectFit: "contain",
+                                }}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {activePopup === "poll" && (
+                      <div style={{ ...popupBoxStyle, width: 340 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 12,
+                            color: "#f1f5f9",
+                          }}
+                        >
+                          Tạo cuộc thăm dò
+                        </div>
+                        <input
+                          value={pollQuestion}
+                          onChange={(e) => setPollQuestion(e.target.value)}
+                          placeholder="Câu hỏi bình chọn"
+                          style={pollInputStyle}
+                        />
+                        {pollOptions.map((option, index) => (
+                          <input
+                            key={`poll-opt-${index}`}
+                            value={option}
+                            onChange={(e) => {
+                              const next = [...pollOptions];
+                              next[index] = e.target.value;
+                              setPollOptions(next);
+                            }}
+                            placeholder={`Lựa chọn ${index + 1}`}
+                            style={pollInputStyle}
+                          />
+                        ))}
+                        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                          <button
+                            onClick={() => setPollOptions((p) => [...p, ""])}
+                            style={miniButtonStyle}
+                          >
+                            + Thêm
+                          </button>
+                          <button
+                            onClick={() => void handleCreatePoll()}
+                            style={miniButtonPrimaryStyle}
+                          >
+                            Tạo bình chọn
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      hidden
+                      onChange={handleSelectImages}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      hidden
+                      onChange={handleSelectFiles}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        border: "1px solid rgba(148,163,184,.25)",
+                        background: "rgba(8,15,35,.85)",
+                        borderRadius: 16,
+                        padding: "6px 10px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                          paddingRight: 4,
+                          borderRight: "1px solid rgba(148,163,184,.12)",
+                        }}
+                      >
+                        <button
+                          data-tour="attachment-button"
+                          title="Ảnh / Tệp"
+                          style={actionIconStyle}
+                          className="action-btn"
+                          onClick={() =>
+                            setActivePopup((p) =>
+                              p === "media" ? null : "media",
+                            )
+                          }
+                        >
+                          <ImagePlus size={18} />
+                        </button>
+                        <button
+                          data-tour="sticker-button"
+                          title="Nhãn dán"
+                          style={actionIconStyle}
+                          className="action-btn"
+                          onClick={() =>
+                            setActivePopup((p) =>
+                              p === "sticker" ? null : "sticker",
+                            )
+                          }
+                        >
+                          <Sticker size={18} />
+                        </button>
+                        <button
+                          data-tour="voice-record-button"
+                          title="Ghi âm"
+                          style={actionIconStyle}
+                          className="action-btn"
+                          onClick={() =>
+                            setActivePopup((p) =>
+                              p === "audio" ? null : "audio",
+                            )
+                          }
+                        >
+                          <Mic size={18} />
+                        </button>
+                        <button
+                          data-tour="poll-button"
+                          title="Thăm dò"
+                          style={actionIconStyle}
+                          className="action-btn"
+                          onClick={() =>
+                            setActivePopup((p) =>
+                              p === "poll" ? null : "poll",
+                            )
+                          }
+                        >
+                          <BarChart3 size={18} />
+                        </button>
+                      </div>
+
+                      <input
+                        value={input}
+                        onChange={(event) => {
+                          const value = event.target.value;
+
+                          setInput(value);
+
+                          // Detect quick message
+                          const match = value.match(/\/(\S*)$/);
+
+                          if (match) {
+                            const keyword = "/" + match[1].toLowerCase();
+
+                            const filtered = quickMessages.filter((m) =>
+                              m.shortcut.toLowerCase().startsWith(keyword),
+                            );
+
+                            setFilteredQuickMessages(filtered);
+                            setShowQuickPopup(filtered.length > 0);
+                            setSelectedQuickIndex(0);
+                          } else {
+                            setShowQuickPopup(false);
+                          }
+
+                          if (socket?.connected && activeConversationId) {
+                            socket.emit("typing", {
+                              conversationId: activeConversationId,
+                            });
+
+                            if (typingTimeoutRef.current)
+                              clearTimeout(typingTimeoutRef.current);
+
+                            typingTimeoutRef.current = setTimeout(() => {
+                              socket.emit("stop-typing", {
+                                conversationId: activeConversationId,
+                              });
+                            }, 1200);
+                          }
+                        }}
+                        placeholder="Nhập tin nhắn... hoặc @LozaBot <vấn đề>"
+                        onKeyDown={(event) => {
+                          // QUICK MESSAGE NAVIGATION
+                          if (showQuickPopup) {
+                            if (event.key === "ArrowDown") {
+                              event.preventDefault();
+
+                              setSelectedQuickIndex((p) =>
+                                p + 1 >= filteredQuickMessages.length
+                                  ? 0
+                                  : p + 1,
+                              );
+
+                              return;
+                            }
+
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault();
+
+                              setSelectedQuickIndex((p) =>
+                                p - 1 < 0
+                                  ? filteredQuickMessages.length - 1
+                                  : p - 1,
+                              );
+
+                              return;
+                            }
+
+                            if (event.key === "Tab" || event.key === "Enter") {
+                              event.preventDefault();
+
+                              const selected =
+                                filteredQuickMessages[selectedQuickIndex];
+
+                              if (selected) {
+                                applyQuickMessage(selected);
+                              }
+
+                              return;
+                            }
+
+                            if (event.key === "Escape") {
+                              setShowQuickPopup(false);
+                              return;
+                            }
+                          }
+
+                          // SEND MESSAGE
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void sendTextMessage();
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          border: "none",
+                          outline: "none",
+                          background: "transparent",
+                          color: "#f8fafc",
+                          padding: "0 8px",
+                          fontSize: 15,
+                        }}
+                      />
+                      {showQuickPopup && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            bottom: 52,
+                            width: 320,
+                            background: "rgba(15,23,42,.98)",
+                            border: "1px solid rgba(148,163,184,.18)",
+                            borderRadius: 14,
+                            padding: 6,
+                            zIndex: 100,
+                            boxShadow: "0 10px 40px rgba(0,0,0,.45)",
+                            display: "grid",
+                            gap: 4,
+                          }}
+                        >
+                          {filteredQuickMessages.map((msg, index) => (
+                            <button
+                              key={msg._id}
+                              onClick={() => applyQuickMessage(msg)}
+                              style={{
+                                border: "none",
+                                textAlign: "left",
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                cursor: "pointer",
+                                background:
+                                  selectedQuickIndex === index
+                                    ? "rgba(37,99,235,.22)"
+                                    : "transparent",
+                                color: "#e2e8f0",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#60a5fa",
+                                  marginBottom: 4,
+                                }}
+                              >
+                                {msg.shortcut}
+                              </div>
+
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "#94a3b8",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {msg.content}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div
+                        style={{ position: "relative", display: "inline-flex" }}
+                      >
+                        {activePopup === "emoji" && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              right: 0,
+                              bottom: 46,
+                              zIndex: 40,
+                            }}
+                          >
+                            <Picker
+                              data={data}
+                              theme="dark"
+                              onEmojiSelect={(emoji: EmojiSelectEvent) => {
+                                if (!emoji.native) return;
+                                setInput((prev) => prev + emoji.native);
+                              }}
+                              previewPosition="none"
+                              skinTonePosition="none"
+                            />
+                          </div>
+                        )}
+                        <button
+                          data-tour="emoji-button"
+                          title="Emoji"
+                          style={actionIconStyle}
+                          className="action-btn"
+                          onClick={() =>
+                            setActivePopup((p) =>
+                              p === "emoji" ? null : "emoji",
+                            )
+                          }
+                        >
+                          <Smile size={18} />
+                        </button>
+                      </div>
+
+                      <button
+                        data-tour="send-button"
+                        onClick={() => void sendTextMessage()}
+                        disabled={sending || !input.trim()}
+                        style={{
+                          border: "none",
+                          borderRadius: 12,
+                          width: 38,
+                          height: 38,
+                          background:
+                            sending || !input.trim() ? "#334155" : "#2563eb",
+                          color: "white",
+                          cursor:
+                            sending || !input.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "transform .15s, background .15s",
+                        }}
+                        title="Gửi"
+                      >
+                        <Send size={18} />
+                      </button>
+                    </div>
+
+                    {showLozaBotSuggestions && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginTop: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {LOZA_BOT_SUGGESTIONS.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() =>
+                              setInput(`@${LOZA_BOT_NAME} ${suggestion}`)
+                            }
+                            style={{
+                              border: "1px solid rgba(96,165,250,.45)",
+                              background: "rgba(37,99,235,.12)",
+                              color: "#bfdbfe",
+                              borderRadius: 999,
+                              padding: "6px 10px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {mentionDraft && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          border: "1px solid rgba(148,163,184,.3)",
+                          background: "rgba(15,23,42,.92)",
+                          borderRadius: 10,
+                          padding: "6px 10px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={applyLozaBotMention}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#e2e8f0",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            padding: 0,
+                          }}
+                        >
+                          @{LOZA_BOT_NAME}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </InputAreaGuard>
               </div>
             </>
           ) : (
@@ -5273,125 +5356,128 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
           )}
         </div>
 
-       {/* Right Info Panel */}
-{activeConversation &&
-  showInfoPanel &&
-  (activeConversation.group ? (
-    <GroupConversationInfoPanel
-      conversation={activeConversation}
-      messages={displayMessages}
-      currentUserId={user?.userId}
-      isAdminOrOwner={isAdminOrOwner}
-      pendingRequests={
-        activeConversationId
-          ? (joinRequests[activeConversationId] ?? [])
-          : []
-      }
-      onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-      onManageGroup={() => setShowEditModal(true)}
-      onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
-      onDissolveGroup={() => setShowDissolveConfirm(true)}
-      onUpdateMemberRole={async (targetUserId, role) => {
-        if (!activeConversationId) return;
+        {/* Right Info Panel */}
+        {activeConversation &&
+          showInfoPanel &&
+          (activeConversation.group ? (
+            <GroupConversationInfoPanel
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              isAdminOrOwner={isAdminOrOwner}
+              pendingRequests={
+                activeConversationId
+                  ? (joinRequests[activeConversationId] ?? [])
+                  : []
+              }
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              onManageGroup={() => setShowEditModal(true)}
+              onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
+              onDissolveGroup={() => setShowDissolveConfirm(true)}
+              onUpdateMemberRole={async (targetUserId, role) => {
+                if (!activeConversationId) return;
 
-        try {
-          await chatService.updateMemberRole(
-            activeConversationId,
-            targetUserId,
-            role,
-          );
-        } catch (error) {
-          console.error("Lỗi khi cập nhật role:", error);
-          alert("Không thể cập nhật quyền thành viên");
-        }
-      }}
-      onRemoveMember={async (targetUserId) => {
-        if (!activeConversationId) return;
+                try {
+                  await chatService.updateMemberRole(
+                    activeConversationId,
+                    targetUserId,
+                    role,
+                  );
+                } catch (error) {
+                  console.error("Lỗi khi cập nhật role:", error);
+                  alert("Không thể cập nhật quyền thành viên");
+                }
+              }}
+              onRemoveMember={async (targetUserId) => {
+                if (!activeConversationId) return;
 
-        try {
-          await chatService.removeMember(
-            activeConversationId,
-            targetUserId,
-          );
-        } catch (error: any) {
-          toast.error(
-            error?.response?.data?.message ||
-              "Không thể xóa thành viên",
-          );
-        }
-      }}
-      onAddMember={async (targetUserId: string) => {
-        if (!activeConversationId) return;
+                try {
+                  await chatService.removeMember(
+                    activeConversationId,
+                    targetUserId,
+                  );
+                } catch (error: any) {
+                  toast.error(
+                    error?.response?.data?.message ||
+                      "Không thể xóa thành viên",
+                  );
+                }
+              }}
+              onAddMember={async (targetUserId: string) => {
+                if (!activeConversationId) return;
 
-        try {
-          const result = await addMemberToGroup(
-            activeConversationId,
-            targetUserId,
-          );
+                try {
+                  const result = await addMemberToGroup(
+                    activeConversationId,
+                    targetUserId,
+                  );
 
-          if (result.needsApproval) {
-            toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
-          } else {
-            toast.success("Đã thêm thành viên vào nhóm");
-          }
-        } catch {
-          toast.error("Không thể thêm thành viên");
-        }
-      }}
-      onReviewRequest={async (requestId, action) => {
-        if (!activeConversationId) return;
+                  if (result.needsApproval) {
+                    toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+                  } else {
+                    toast.success("Đã thêm thành viên vào nhóm");
+                  }
+                } catch {
+                  toast.error("Không thể thêm thành viên");
+                }
+              }}
+              onReviewRequest={async (requestId, action) => {
+                if (!activeConversationId) return;
 
-        try {
-          await reviewJoinRequest(
-            activeConversationId,
-            requestId,
-            action,
-          );
+                try {
+                  await reviewJoinRequest(
+                    activeConversationId,
+                    requestId,
+                    action,
+                  );
 
-          toast.success(
-            action === "approved"
-              ? "Đã duyệt thành viên"
-              : "Đã từ chối",
-          );
-        } catch {
-          toast.error("Không thể xử lý yêu cầu");
-        }
-      }}
-      onUpdateSettings={async (settings) => {
-        if (!activeConversationId) return;
+                  toast.success(
+                    action === "approved"
+                      ? "Đã duyệt thành viên"
+                      : "Đã từ chối",
+                  );
+                } catch {
+                  toast.error("Không thể xử lý yêu cầu");
+                }
+              }}
+              onUpdateSettings={async (settings) => {
+                if (!activeConversationId) return;
 
-        try {
-          await chatService.updateGroupSettings(
-            activeConversationId,
-            settings,
-          );
+                try {
+                  await chatService.updateGroupSettings(
+                    activeConversationId,
+                    settings,
+                  );
 
-          toast.success("Đã cập nhật cài đặt nhóm");
-        } catch {
-          toast.error("Không thể cập nhật cài đặt nhóm");
-        }
-      }}
-      isPinned={!!(activeConv as any)?.pinnedAt}
-      onTogglePin={async () => {
-        if (!activeConversationId) return;
+                  toast.success("Đã cập nhật cài đặt nhóm");
+                } catch {
+                  toast.error("Không thể cập nhật cài đặt nhóm");
+                }
+              }}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
 
-        await togglePinConversation(activeConversationId);
-      }}
-    />
-  ) : (
-    <ConversationInfoPanel
-      conversation={activeConversation}
-      messages={displayMessages}
-      currentUserId={user?.userId}
-      onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-      isPinned={!!(activeConv as any)?.pinnedAt}
-      onTogglePin={async () => {
-        if (!activeConversationId) return;
+                await togglePinConversation(activeConversationId);
+              }}
+            />
+          ) : (
+            <ConversationInfoPanel
+              ref={(el) => {
+                if (el) el.setAttribute("data-tour", "info-panel");
+              }}
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
 
-        await togglePinConversation(activeConversationId);
-      }}
-    />
-  ))}
+                await togglePinConversation(activeConversationId);
+              }}
+            />
+          ))}
 
         {showEditModal && activeConversation && (
           <EditGroupModal

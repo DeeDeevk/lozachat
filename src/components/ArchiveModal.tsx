@@ -126,7 +126,7 @@ export default function ArchiveModal({
         </div>
 
         {/* Filters */}
-        <div
+        {/* <div
           style={{
             padding: "16px 24px",
             borderBottom: "1px solid rgba(148,163,184,0.15)",
@@ -159,7 +159,7 @@ export default function ArchiveModal({
               <option value="date">Ngày gửi</option>
             </select>
           )}
-        </div>
+        </div> */}
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>

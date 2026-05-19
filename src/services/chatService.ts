@@ -228,12 +228,17 @@ export const chatService = {
   },
   async updateGroupSettings(
     conversationId: string,
-    settings: { requireApprovalToJoin?: boolean },
+    settings: {
+      requireApprovalToJoin?: boolean;
+      whoCanEditGroup?: "all" | "admin";
+      whoCanSendMessages?: "all" | "admin";
+    },
   ) {
     const res = await api.patch(
       `/conversations/${conversationId}/settings`,
       settings,
     );
+    console.log("API response:", res.data);
     return res.data;
   },
 
