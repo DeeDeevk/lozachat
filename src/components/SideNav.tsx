@@ -24,8 +24,13 @@ const getInitials = (name: string) =>
 
 const randomColor = (str: string) => {
   const colors = [
-    "#3b82f6", "#10b981", "#8b5cf6",
-    "#f59e0b", "#ef4444", "#06b6d4", "#ec4899",
+    "#3b82f6",
+    "#10b981",
+    "#8b5cf6",
+    "#f59e0b",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
   ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
@@ -39,7 +44,7 @@ interface SideNavProps {
 }
 
 export default function SideNav({
-  onNewMessage,
+  // onNewMessage,
   onHelpClick,
 }: SideNavProps) {
   const navigate = useNavigate();
@@ -67,11 +72,33 @@ export default function SideNav({
   const isAdminPage = location.pathname === "/admin";
 
   const navItems = [
-    { icon: <MessageSquare size={22} />, label: "Tin nhắn",    path: "/chat",    active: isChat },
-    { icon: <Users size={22} />,         label: "Bạn bè",      path: "/friends", active: isFriends },
-    { icon: <Rss size={22} />,           label: "Mạng xã hội", path: "/social",  active: isFeed },
+    {
+      icon: <MessageSquare size={22} />,
+      label: "Tin nhắn",
+      path: "/chat",
+      active: isChat,
+    },
+    {
+      icon: <Users size={22} />,
+      label: "Bạn bè",
+      path: "/friends",
+      active: isFriends,
+    },
+    {
+      icon: <Rss size={22} />,
+      label: "Mạng xã hội",
+      path: "/social",
+      active: isFeed,
+    },
     ...(isAdmin
-      ? [{ icon: <Shield size={22} />, label: "Admin", path: "/admin", active: isAdminPage }]
+      ? [
+          {
+            icon: <Shield size={22} />,
+            label: "Admin",
+            path: "/admin",
+            active: isAdminPage,
+          },
+        ]
       : []),
   ];
 
@@ -346,10 +373,10 @@ export default function SideNav({
           </button>
 
           <button
-  className="sidenav-item"
-  aria-label="Trợ giúp"
-  onClick={onHelpClick}
->
+            className="sidenav-item"
+            aria-label="Trợ giúp"
+            onClick={onHelpClick}
+          >
             <HelpCircle size={20} />
             <span className="sidenav-tooltip">Trợ giúp</span>
           </button>
@@ -374,7 +401,11 @@ export default function SideNav({
                   <img
                     src={userProfile.avatarUrl}
                     alt="avatar"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
                   />
                 ) : (
                   myInitials
@@ -389,8 +420,13 @@ export default function SideNav({
                   <div
                     className="sidenav-avatar-btn"
                     style={{
-                      background: userProfile?.avatarUrl ? "transparent" : myColor,
-                      width: 44, height: 44, fontSize: 16, flexShrink: 0,
+                      background: userProfile?.avatarUrl
+                        ? "transparent"
+                        : myColor,
+                      width: 44,
+                      height: 44,
+                      fontSize: 16,
+                      flexShrink: 0,
                       boxShadow: `0 4px 14px ${myColor}55`,
                     }}
                   >
@@ -399,14 +435,19 @@ export default function SideNav({
                         src={userProfile.avatarUrl}
                         alt="avatar"
                         style={{
-                          width: "100%", height: "100%",
-                          objectFit: "cover", borderRadius: "20%",
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          borderRadius: "20%",
                         }}
                       />
                     ) : (
                       <span>{myInitials}</span>
                     )}
-                    <div className="sidenav-online-dot" style={{ width: 12, height: 12 }} />
+                    <div
+                      className="sidenav-online-dot"
+                      style={{ width: 12, height: 12 }}
+                    />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="avatar-modal-name">{myName}</div>
@@ -417,8 +458,14 @@ export default function SideNav({
                 <div className="avatar-modal-body">
                   <div className="avatar-modal-label">Tài khoản của tôi</div>
 
-                  <button className="avatar-modal-item" onClick={() => setOpenProfile(true)}>
-                    <div className="avatar-modal-icon" style={{ background: "rgba(59,130,246,.12)" }}>
+                  <button
+                    className="avatar-modal-item"
+                    onClick={() => setOpenProfile(true)}
+                  >
+                    <div
+                      className="avatar-modal-icon"
+                      style={{ background: "rgba(59,130,246,.12)" }}
+                    >
                       <User size={15} color="#60a5fa" />
                     </div>
                     Thông tin cá nhân
@@ -438,9 +485,15 @@ export default function SideNav({
 
                   <button
                     className="avatar-modal-item danger"
-                    onClick={async () => { await signOut(); navigate("/signin"); }}
+                    onClick={async () => {
+                      await signOut();
+                      navigate("/signin");
+                    }}
                   >
-                    <div className="avatar-modal-icon" style={{ background: "rgba(239,68,68,.1)" }}>
+                    <div
+                      className="avatar-modal-icon"
+                      style={{ background: "rgba(239,68,68,.1)" }}
+                    >
                       <LogOut size={15} color="#f87171" />
                     </div>
                     Đăng xuất
@@ -453,7 +506,7 @@ export default function SideNav({
       </nav>
 
       {/* ── QuickMessageModal (portal-like, rendered outside nav flow) ── */}
-      {openQuickMsg && (  
+      {openQuickMsg && (
         <QuickMessageModal onClose={() => setOpenQuickMsg(false)} />
       )}
     </>
