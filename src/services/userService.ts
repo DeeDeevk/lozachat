@@ -1,5 +1,5 @@
 import api from "@/lib/axios";
-import type { AdminUser, User } from "@/types/user";
+import type { AdminUser } from "@/types/user";
 
 interface UserProfile {
   _id: string;
