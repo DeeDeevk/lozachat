@@ -27,7 +27,6 @@ interface QuickMessageModalProps {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-
 export const quickMessageService = {
   async getAll(): Promise<QuickMessage[]> {
     const res = await api.get("/messages/quick-messages");
@@ -47,7 +46,7 @@ export const quickMessageService = {
     payload: {
       shortcut?: string;
       content?: string;
-    }
+    },
   ): Promise<QuickMessage> {
     const res = await api.put(`/messages/quick-messages/${id}`, payload);
     return res.data.quickMessage;
@@ -293,8 +292,10 @@ function Row({
   };
 
   useEffect(
-    () => () => { if (timer.current) clearTimeout(timer.current); },
-    []
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
   );
 
   return (
@@ -303,7 +304,11 @@ function Row({
       <p className="qm-row-txt">{msg.content}</p>
 
       <div className="qm-row-acts">
-        <button className="qm-abtn e" title="Chỉnh sửa" onClick={() => onEdit(msg)}>
+        <button
+          className="qm-abtn e"
+          title="Chỉnh sửa"
+          onClick={() => onEdit(msg)}
+        >
           <Pencil size={12} color="#93c5fd" />
         </button>
         <button
@@ -311,9 +316,11 @@ function Row({
           title={confirm ? "Nhấn lần nữa để xác nhận xoá" : "Xoá"}
           onClick={handleDel}
         >
-          {confirm
-            ? <AlertTriangle size={12} color="#f87171" />
-            : <Trash2 size={12} color="#f87171" />}
+          {confirm ? (
+            <AlertTriangle size={12} color="#f87171" />
+          ) : (
+            <Trash2 size={12} color="#f87171" />
+          )}
         </button>
       </div>
     </div>
@@ -342,7 +349,8 @@ function Form({
     else setShortcut(v);
   };
 
-  const canSave = shortcut.trim().length > 1 && content.trim().length > 0 && !loading;
+  const canSave =
+    shortcut.trim().length > 1 && content.trim().length > 0 && !loading;
 
   return (
     <div className="qm-form">
@@ -374,16 +382,24 @@ function Form({
       </div>
 
       <div className="qm-acts">
-        <button className="qm-cancel" onClick={onCancel}>Huỷ</button>
+        <button className="qm-cancel" onClick={onCancel}>
+          Huỷ
+        </button>
         <button
           className="qm-save"
           disabled={!canSave}
-          onClick={() => onSave({ shortcut: shortcut.trim(), content: content.trim() })}
+          onClick={() =>
+            onSave({ shortcut: shortcut.trim(), content: content.trim() })
+          }
         >
           {loading ? (
-            <><Loader2 size={13} className="qm-spin" /> Đang lưu...</>
+            <>
+              <Loader2 size={13} className="qm-spin" /> Đang lưu...
+            </>
           ) : (
-            <><Check size={13} /> {initial ? "Lưu thay đổi" : "Tạo mới"}</>
+            <>
+              <Check size={13} /> {initial ? "Lưu thay đổi" : "Tạo mới"}
+            </>
           )}
         </button>
       </div>
@@ -400,54 +416,66 @@ export default function QuickMessageModal({ onClose }: QuickMessageModalProps) {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
   const messages = useQuickMessageStore((s) => s.messages);
-const fetchLoading = useQuickMessageStore((s) => s.loading);
+  const fetchLoading = useQuickMessageStore((s) => s.loading);
 
-const fetchMessages = useQuickMessageStore((s) => s.fetchMessages);
-const updateMessageStore = useQuickMessageStore((s) => s.updateMessage);
-const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
+  const fetchMessages = useQuickMessageStore((s) => s.fetchMessages);
+  // const updateMessageStore = useQuickMessageStore((s) => s.updateMessage);
+  // const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
 
   useEffect(() => {
-  fetchMessages();
-}, []);
+    fetchMessages();
+  }, []);
 
-  const goCreate = () => { setFormError(""); setEditTarget(null); setView("create"); };
-  const goEdit = (m: QuickMessage) => { setFormError(""); setEditTarget(m); setView("edit"); };
-  const goList = () => { setView("list"); setEditTarget(null); setFormError(""); };
+  const goCreate = () => {
+    setFormError("");
+    setEditTarget(null);
+    setView("create");
+  };
+  const goEdit = (m: QuickMessage) => {
+    setFormError("");
+    setEditTarget(m);
+    setView("edit");
+  };
+  const goList = () => {
+    setView("list");
+    setEditTarget(null);
+    setFormError("");
+  };
 
   const handleCreate = async (d: { shortcut: string; content: string }) => {
-    setFormLoading(true); setFormError("");
+    setFormLoading(true);
+    setFormError("");
     try {
       await quickMessageService.create(d);
       goList();
     } catch (e: any) {
-  setFormError(
-    e?.response?.data?.message || "Có lỗi xảy ra"
-  );
-}
-    finally { setFormLoading(false); }
+      setFormError(e?.response?.data?.message || "Có lỗi xảy ra");
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleUpdate = async (d: { shortcut: string; content: string }) => {
+  const handleUpdate = async () => {
     if (!editTarget) return;
-    setFormLoading(true); setFormError("");
+    setFormLoading(true);
+    setFormError("");
     try {
-      const item = await quickMessageService.update(editTarget._id, d);
+      // const item = await quickMessageService.update(editTarget._id, d);
       goList();
     } catch (e: any) {
-  setFormError(
-    e?.response?.data?.message || "Có lỗi xảy ra"
-  );
-}
-    finally { setFormLoading(false); }
+      setFormError(e?.response?.data?.message || "Có lỗi xảy ra");
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
-  try {
-    await quickMessageService.delete(id);
-  } catch (error) {
-    console.error(error);
-  }
-};
+    try {
+      await quickMessageService.delete(id);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const TITLE: Record<View, string> = {
     list: "Tin nhắn nhanh",
@@ -464,7 +492,6 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
         onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       >
         <div className="qm-modal">
-
           {/* Header */}
           <div className="qm-hdr">
             <div className="qm-hdr-l">
@@ -484,20 +511,23 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
           {view === "list" && (
             <>
               <div className="qm-topbar">
-                <span className="qm-count">Tin nhắn nhanh ({messages.length})</span>
+                <span className="qm-count">
+                  Tin nhắn nhanh ({messages.length})
+                </span>
                 <button className="qm-new" onClick={goCreate}>
                   <Plus size={13} /> Tạo mới
                 </button>
               </div>
               <p className="qm-desc">
-                Tạo, chỉnh sửa và quản lý phím tắt cho những tin nhắn thường sử dụng trong hội thoại
+                Tạo, chỉnh sửa và quản lý phím tắt cho những tin nhắn thường sử
+                dụng trong hội thoại
               </p>
               <div className="qm-body">
                 {fetchLoading ? (
                   <>
                     <div className="qm-sk" />
-                    <div className="qm-sk" style={{ opacity: .6 }} />
-                    <div className="qm-sk" style={{ opacity: .35 }} />
+                    <div className="qm-sk" style={{ opacity: 0.6 }} />
+                    <div className="qm-sk" style={{ opacity: 0.35 }} />
                   </>
                 ) : messages.length === 0 ? (
                   <div className="qm-empty">
@@ -505,7 +535,8 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
                       <Zap size={22} color="#3b82f6" />
                     </div>
                     <p className="qm-empty-tx">
-                      Chưa có tin nhắn nhanh nào<br />
+                      Chưa có tin nhắn nhanh nào
+                      <br />
                       <span style={{ color: "#334155" }}>
                         Nhấn "Tạo mới" để thêm phím tắt đầu tiên
                       </span>
@@ -513,7 +544,12 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
                   </div>
                 ) : (
                   messages.map((m) => (
-                    <Row key={m._id} msg={m} onEdit={goEdit} onDelete={handleDelete} />
+                    <Row
+                      key={m._id}
+                      msg={m}
+                      onEdit={goEdit}
+                      onDelete={handleDelete}
+                    />
                   ))
                 )}
               </div>
@@ -530,7 +566,6 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
               loading={formLoading}
             />
           )}
-
         </div>
       </div>
     </>

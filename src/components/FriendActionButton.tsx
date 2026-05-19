@@ -77,7 +77,7 @@ export default function FriendActionButton({
     };
 
     socket.on("friend_update", handleFriendUpdate);
-    return () => socket.off("friend_update", handleFriendUpdate);
+    return () => {socket.off("friend_update", handleFriendUpdate);}
   }, [socket, userId, updateFriendStatus]);
 
   const handleSendRequest = async () => {
