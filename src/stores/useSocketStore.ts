@@ -4,6 +4,7 @@ import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
 import { useFriendStore } from "./useFriendStore";
+import { useQuickMessageStore } from "./useQuickMessageStore";
 import { getDeviceId } from "@/utils/device";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
@@ -118,6 +119,9 @@ const registerSocketEvents = (
   socket.off("conversation:theme-updated");
   socket.off("account:locked");
   socket.off("force-logout");
+  socket.off("quick-message-created");
+  socket.off("quick-message-updated");
+  socket.off("quick-message-deleted");
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -154,6 +158,19 @@ const registerSocketEvents = (
   socket.on("online-users", (userIds) => {
     set({ onlineUsers: userIds });
   });
+
+  socket.on("quick-message-created", ({ quickMessage }) => {
+    useQuickMessageStore.getState().addMessage(quickMessage);
+  });
+
+  socket.on("quick-message-updated", ({ quickMessage }) => {
+    useQuickMessageStore.getState().updateMessage(quickMessage);
+  });
+
+  socket.on("quick-message-deleted", ({ quickMessageId }) => {
+    useQuickMessageStore.getState().deleteMessage(quickMessageId);
+  });
+
   socket.on("user-typing", (payload) => {
     console.log("🔥 typing event:", payload);
     useChatStore
