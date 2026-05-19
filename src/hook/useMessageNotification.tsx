@@ -68,7 +68,7 @@ export function useMessageNotification({
           : msg.senderAvatar || null;
 
       toast.custom(
-        (t) => (
+        () => (
           <div
             style={{
               display: "flex",

@@ -1,4 +1,3 @@
-import api from "@/lib/axios";
 import { userService } from "@/services/userService";
 import type { AdminUser } from "@/types/user";
 import { create } from "zustand";
