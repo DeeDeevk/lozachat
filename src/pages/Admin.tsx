@@ -28,6 +28,7 @@ import type {
 } from "@/services/userService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import UsersTab from "@/components/admin/UserTab";
 
 type AdminTab = "dashboard" | "users" | "lock" | "settings" | "unlock";
 type RequestFilter = AccountLockRequestStatus | "all";
@@ -854,11 +855,21 @@ export default function LozaAdmin() {
               )}
 
               {activeTab === "users" && (
-                <Placeholder
-                  icon={Users}
-                  title="Quản lý người dùng"
-                  text="Phần này có thể nối tiếp danh sách user, tìm kiếm và mở khóa tài khoản nếu backend bổ sung API unlock."
-                />
+                <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-5 shadow-xl">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        Danh sách người dùng
+                      </h3>
+
+                      <p className="mt-1 text-xs text-slate-400">
+                        Quản lý tài khoản người dùng trong hệ thống
+                      </p>
+                    </div>
+                  </div>
+
+                  <UsersTab />
+                </section>
               )}
               {activeTab === "settings" && (
                 <Placeholder

@@ -4,6 +4,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { getSafeMessagePreview } from "@/utils/chatMessageCodec";
+import MiniAvatar from "@/components/MiniAvatar";
 
 interface NotificationMessage {
   _id: string;
@@ -84,47 +85,26 @@ export function useMessageNotification({
             }}
           >
             {/* Avatar */}
-            {avatarUrl ? (
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  flexShrink: 0,
-                  border: "2px solid rgba(96,165,250,.4)",
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                overflow: "hidden",
+                flexShrink: 0,
+                border: "2px solid rgba(96,165,250,.35)",
+                boxShadow:
+                  "0 4px 12px rgba(59,130,246,.25), inset 0 0 0 1px rgba(255,255,255,.05)",
+              }}
+            >
+              <MiniAvatar
+                p={{
+                  displayName: senderName,
+                  avatarUrl: avatarUrl || undefined,
                 }}
-              >
-                <img
-                  src={avatarUrl}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
-              </div>
-            ) : (
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontWeight: 800,
-                  fontSize: 16,
-                  flexShrink: 0,
-                  border: "2px solid rgba(96,165,250,.4)",
-                }}
-              >
-                {(senderName[0] || "?").toUpperCase()}
-              </div>
-            )}
+                fontSize={15}
+              />
+            </div>
 
             {/* Text - Thêm flex: 1 và padding để ép 2 bên (avatar & dot) ra mép */}
             <div
@@ -207,7 +187,7 @@ export function useMessageNotification({
   }, [conversations]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !socket.connected) return;
 
     const handleNewMessage = (data: {
       message: NotificationMessage;
@@ -259,5 +239,11 @@ export function useMessageNotification({
     return () => {
       socket.off("new-message", handleNewMessage);
     };
-  }, [socket, user?.userId, showToastNotification, showBrowserNotification]);
+  }, [
+    socket,
+    socket?.connected,
+    user?.userId,
+    showToastNotification,
+    showBrowserNotification,
+  ]);
 }

@@ -7,6 +7,7 @@ interface InputAreaGuardProps {
     group?: {
       settings?: {
         whoCanSendMessages?: string;
+        requireApprovalToJoin?: boolean;
       };
     };
     participants?: {

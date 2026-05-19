@@ -15,7 +15,6 @@ const registerSocketEvents = (
 ) => {
   socket.off("connect");
   socket.off("online-users");
-  socket.off("new-message");
   socket.off("message-recalled");
   socket.off("message-read");
   socket.off("message-edited");
@@ -34,6 +33,7 @@ const registerSocketEvents = (
   socket.off("member-left");
   socket.off("removed-from-group");
   socket.off("force-logout");
+  socket.off("conversation_stranger_updated");
   socket.on("removed-from-group", ({ conversationId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.filter(
@@ -417,6 +417,16 @@ const registerSocketEvents = (
       ),
     }));
   });
+  socket.on(
+    "conversation_stranger_updated",
+    ({ conversationId, isStranger, strangerStatus }) => {
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.map((c) =>
+          c._id === conversationId ? { ...c, isStranger, strangerStatus } : c,
+        ),
+      }));
+    },
+  );
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({
