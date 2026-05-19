@@ -232,6 +232,7 @@ export default function ConversationList({
 
             return (
               <div
+               data-tour="conversation-list"
                 key={conv._id}
                 className={`cl-conv-item ${conv._id === activeId ? "active" : ""}`}
                 onClick={() => {

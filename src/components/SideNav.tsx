@@ -35,9 +35,13 @@ const randomColor = (str: string) => {
 
 interface SideNavProps {
   onNewMessage?: () => void;
+  onHelpClick?: () => void;
 }
 
-export default function SideNav({ onNewMessage }: SideNavProps) {
+export default function SideNav({
+  onNewMessage,
+  onHelpClick,
+}: SideNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const userProfile = useAuthStore((s) => s.userProfile);
@@ -309,7 +313,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
         }
       `}</style>
 
-      <nav className="sidenav">
+      <nav className="sidenav" data-tour="sidenav">
         <div className="sidenav-logo">
           <img src="/logo.png" alt="Loza" />
         </div>
@@ -341,7 +345,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
             <span className="sidenav-tooltip">Tin nhắn nhanh</span>
           </button>
 
-          <button className="sidenav-item" aria-label="Trợ giúp">
+          <button
+  className="sidenav-item"
+  aria-label="Trợ giúp"
+  onClick={onHelpClick}
+>
             <HelpCircle size={20} />
             <span className="sidenav-tooltip">Trợ giúp</span>
           </button>
@@ -445,7 +453,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
       </nav>
 
       {/* ── QuickMessageModal (portal-like, rendered outside nav flow) ── */}
-      {openQuickMsg && (
+      {openQuickMsg && (  
         <QuickMessageModal onClose={() => setOpenQuickMsg(false)} />
       )}
     </>

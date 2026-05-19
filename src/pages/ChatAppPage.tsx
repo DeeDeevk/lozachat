@@ -7,6 +7,7 @@ import ConversationInfoPanel from "@/components/ConversationInfoPanel";
 import GroupConversationInfoPanel from "@/components/GroupConversationInfoPanel";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
+import useChatTutorial from "@/components/ChatTutorial";
 import {
   CHAT_THEME_OPTIONS,
   getChatThemeById,
@@ -29,7 +30,6 @@ import {
   getSafeMessagePreview,
 } from "@/utils/chatMessageCodec";
 import { lozaBotService } from "@/services/lozaBotService";
-import { quickMessageService } from "../components/QuickMessageModal";
 import { callService } from "@/services/callService";
 import { Room, RoomEvent, Track } from "livekit-client";
 import {
@@ -632,6 +632,7 @@ export default function ChatPage() {
   const activeConv = conversations.find((c) => c._id === activeConversationId);
 
   const socketStore = useSocketStore();
+  const { startTutorial } = useChatTutorial();
 
   const [input, setInput] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -3335,7 +3336,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
         @media (max-width: 768px) { .conversation-list-responsive { display: none !important; } }
       `}</style>
 
-      <SideNav onNewMessage={() => undefined} />
+      <SideNav onNewMessage={() => undefined} onHelpClick={startTutorial} data-tour="sidenav" />
 
       <ConversationList
         conversations={conversationListItems}
@@ -3359,13 +3360,14 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
         onClose={() => undefined}
       />
 
-      <div style={{ display: "flex", flex: 1, position: "relative" }}>
+      <div style={{ display: "flex", flex: 1, position: "relative",  }}>
         {/* Chat Area */}
         <div style={chatAreaStyle}>
           {activeConversation ? (
             <>
               {/* Header */}
               <div
+              data-tour="chat-header"
                 style={{
                   padding: "12px 16px",
                   borderBottom: "1px solid rgba(255,255,255,.08)",
@@ -3574,6 +3576,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div ref={themeMenuRef} style={{ position: "relative" }}>
                     <button
+                    data-tour="theme-area"
                       title="Đổi giao diện chat"
                       onClick={() => setShowThemePicker((prev) => !prev)}
                       style={{
@@ -3701,6 +3704,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
 
                   {activeConversation.group && (
                     <button
+                    data-tour="add-member-area"
                       title="Thêm thành viên"
                       onClick={() => setShowAddMemberModal(true)}
                       style={{ ...actionIconStyle, width: 36, height: 36 }}
@@ -3712,7 +3716,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                   {/* Ẩn nút call nếu là chat 1-1 với người lạ chưa kết bạn */}
                   {(!activeConversation.isStranger ||
                     activeConversation.group) && (
-                    <>
+                    <div data-tour="call-buttons">
                       <button
                         title="Gọi"
                         onClick={() => startCall("voice")}
@@ -3729,9 +3733,10 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                       >
                         <Video size={18} />
                       </button>
-                    </>
+                    </div>
                   )}
                   <button
+                  data-tour="search-button"
                     title="Tìm kiếm"
                     onClick={() => setIsSearchOpen((prev) => !prev)}
                     style={{
@@ -3745,6 +3750,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     <Search size={18} />
                   </button>
                   <button
+                  data-tour="toggle-info-panel"
                     onClick={() => setShowInfoPanel(!showInfoPanel)}
                     title={showInfoPanel ? "Ẩn thông tin" : "Hiện thông tin"}
                     style={{
@@ -3985,7 +3991,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
               )}
 
               {/* Messages */}
-              <div ref={messagesContainerRef} style={messagesAreaStyle}>
+              <div ref={messagesContainerRef} style={messagesAreaStyle} data-tour="messages-area">
                 {displayMessages.map((message, index) => {
                   const isMine = message.senderId === user?.userId;
                   const isGroup = !!activeConversation.group;
@@ -4120,6 +4126,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         )}
 
                         <div
+                        data-tour={isMine ? "my-message" : "other-message"}
                           onClick={() =>
                             setExpandedMessageKey((prev) =>
                               prev === messageKey ? null : messageKey,
@@ -4509,6 +4516,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
 
               {/* Input area */}
               <div
+              data-tour="input-area"
                 style={{
                   padding: "10px 14px 14px",
                   borderTop: "1px solid rgba(255,255,255,.08)",
@@ -4908,6 +4916,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                       }}
                     >
                       <button
+                      data-tour="attachment-button"
                         title="Ảnh / Tệp"
                         style={actionIconStyle}
                         className="action-btn"
@@ -4920,6 +4929,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         <ImagePlus size={18} />
                       </button>
                       <button
+                      data-tour="sticker-button"
                         title="Nhãn dán"
                         style={actionIconStyle}
                         className="action-btn"
@@ -4932,6 +4942,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         <Sticker size={18} />
                       </button>
                       <button
+                      data-tour="voice-record-button"
                         title="Ghi âm"
                         style={actionIconStyle}
                         className="action-btn"
@@ -4944,6 +4955,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         <Mic size={18} />
                       </button>
                       <button
+                      data-tour="poll-button"
                         title="Thăm dò"
                         style={actionIconStyle}
                         className="action-btn"
@@ -5141,6 +5153,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                         </div>
                       )}
                       <button
+                      data-tour="emoji-button"
                         title="Emoji"
                         style={actionIconStyle}
                         className="action-btn"
@@ -5155,6 +5168,7 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
                     </div>
 
                     <button
+                    data-tour="send-button"
                       onClick={() => void sendTextMessage()}
                       disabled={sending || !input.trim()}
                       style={{
@@ -5259,115 +5273,117 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
           )}
         </div>
 
-        {/* Right Info Panel */}
-        {activeConversation &&
-          showInfoPanel &&
-          (activeConversation.group ? (
-            <GroupConversationInfoPanel
-              conversation={activeConversation}
-              messages={displayMessages}
-              currentUserId={user?.userId}
-              isAdminOrOwner={isAdminOrOwner}
-              pendingRequests={
-                activeConversationId
-                  ? (joinRequests[activeConversationId] ?? [])
-                  : []
-              }
-              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-              onManageGroup={() => setShowEditModal(true)}
-              onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
-              onDissolveGroup={() => setShowDissolveConfirm(true)}
-              onUpdateMemberRole={async (targetUserId, role) => {
-                if (!activeConversationId) return;
-                try {
-                  await chatService.updateMemberRole(
-                    activeConversationId,
-                    targetUserId,
-                    role,
-                  );
-                } catch (error) {
-                  console.error("Lỗi khi cập nhật role:", error);
-                  alert("Không thể cập nhật quyền thành viên");
-                }
-              }}
-              onRemoveMember={async (targetUserId) => {
-                if (!activeConversationId) return;
-                try {
-                  await chatService.removeMember(
-                    activeConversationId,
-                    targetUserId,
-                  );
-                } catch (error: any) {
-                  toast.error(
-                    error?.response?.data?.message ||
-                      "Không thể xóa thành viên",
-                  );
-                }
-              }}
-              onAddMember={async (targetUserId: string) => {
-                if (!activeConversationId) return;
-                try {
-                  const result = await addMemberToGroup(
-                    activeConversationId,
-                    targetUserId,
-                  );
-                  if (result.needsApproval) {
-                    toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
-                  } else {
-                    toast.success("Đã thêm thành viên vào nhóm");
-                  }
-                } catch {
-                  toast.error("Không thể thêm thành viên");
-                }
-              }}
-              onReviewRequest={async (requestId, action) => {
-                if (!activeConversationId) return;
-                try {
-                  await reviewJoinRequest(
-                    activeConversationId,
-                    requestId,
-                    action,
-                  );
-                  toast.success(
-                    action === "approved"
-                      ? "Đã duyệt thành viên"
-                      : "Đã từ chối",
-                  );
-                } catch {
-                  toast.error("Không thể xử lý yêu cầu");
-                }
-              }}
-              onUpdateSettings={async (settings) => {
-                if (!activeConversationId) return;
-                try {
-                  await chatService.updateGroupSettings(
-                    activeConversationId,
-                    settings,
-                  );
-                  toast.success("Đã cập nhật cài đặt nhóm");
-                } catch {
-                  toast.error("Không thể cập nhật cài đặt");
-                }
-              }}
-              isPinned={!!(activeConv as any)?.pinnedAt}
-              onTogglePin={async () => {
-                if (!activeConversationId) return;
-                await togglePinConversation(activeConversationId);
-              }}
-            />
-          ) : (
-            <ConversationInfoPanel
-              conversation={activeConversation}
-              messages={displayMessages}
-              currentUserId={user?.userId}
-              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-              isPinned={!!(activeConv as any)?.pinnedAt}
-              onTogglePin={async () => {
-                if (!activeConversationId) return;
-                await togglePinConversation(activeConversationId);
-              }}
-            />
-          ))}
+       {/* Right Info Panel */}
+{activeConversation && showInfoPanel && (
+  <div data-tour="info-panel">
+    {activeConversation.group ? (
+      <GroupConversationInfoPanel
+        conversation={activeConversation}
+        messages={displayMessages}
+        currentUserId={user?.userId}
+        isAdminOrOwner={isAdminOrOwner}
+        pendingRequests={
+          activeConversationId
+            ? (joinRequests[activeConversationId] ?? [])
+            : []
+        }
+        onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+        onManageGroup={() => setShowEditModal(true)}
+        onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
+        onDissolveGroup={() => setShowDissolveConfirm(true)}
+        onUpdateMemberRole={async (targetUserId, role) => {
+          if (!activeConversationId) return;
+          try {
+            await chatService.updateMemberRole(
+              activeConversationId,
+              targetUserId,
+              role,
+            );
+          } catch (error) {
+            console.error("Lỗi khi cập nhật role:", error);
+            alert("Không thể cập nhật quyền thành viên");
+          }
+        }}
+        onRemoveMember={async (targetUserId) => {
+          if (!activeConversationId) return;
+          try {
+            await chatService.removeMember(
+              activeConversationId,
+              targetUserId,
+            );
+          } catch (error: any) {
+            toast.error(
+              error?.response?.data?.message ||
+                "Không thể xóa thành viên",
+            );
+          }
+        }}
+        onAddMember={async (targetUserId: string) => {
+          if (!activeConversationId) return;
+          try {
+            const result = await addMemberToGroup(
+              activeConversationId,
+              targetUserId,
+            );
+            if (result.needsApproval) {
+              toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+            } else {
+              toast.success("Đã thêm thành viên vào nhóm");
+            }
+          } catch {
+            toast.error("Không thể thêm thành viên");
+          }
+        }}
+        onReviewRequest={async (requestId, action) => {
+          if (!activeConversationId) return;
+          try {
+            await reviewJoinRequest(
+              activeConversationId,
+              requestId,
+              action,
+            );
+            toast.success(
+              action === "approved"
+                ? "Đã duyệt thành viên"
+                : "Đã từ chối",
+            );
+          } catch {
+            toast.error("Không thể xử lý yêu cầu");
+          }
+        }}
+        onUpdateSettings={async (settings) => {
+          if (!activeConversationId) return;
+          try {
+            await chatService.updateGroupSettings(
+              activeConversationId,
+              settings,
+            );
+            toast.success("Đã cập nhật cài đặt nhóm");
+          } catch {
+            toast.error("Không thể cập nhật cài đặt");
+          }
+        }}
+        isPinned={!!(activeConv as any)?.pinnedAt}
+        onTogglePin={async () => {
+          if (!activeConversationId) return;
+          await togglePinConversation(activeConversationId);
+        }}
+      />
+    ) : (
+      <ConversationInfoPanel
+        conversation={activeConversation}
+        messages={displayMessages}
+        currentUserId={user?.userId}
+        onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+        isPinned={!!(activeConv as any)?.pinnedAt}
+        onTogglePin={async () => {
+          if (!activeConversationId) return;
+          await togglePinConversation(activeConversationId);
+        }}
+      />
+    )}
+  </div>
+)}
 
         {showEditModal && activeConversation && (
           <EditGroupModal

@@ -36,17 +36,37 @@ export const useQuickMessageStore = create<QuickMessageState>((set) => ({
     }
   },
 
-  addMessage: (msg) =>
-    set((state) => ({
-      messages: [msg, ...state.messages],
-    })),
+ addMessage: (msg) =>
+  set((state) => {
+    const exists = state.messages.some(
+      (m) => m._id === msg._id
+    );
 
-  updateMessage: (msg) =>
-    set((state) => ({
+    if (exists) return state;
+
+    return {
+      messages: [msg, ...state.messages],
+    };
+  }),
+
+ updateMessage: (msg) =>
+  set((state) => {
+    const exists = state.messages.some(
+      (m) => m._id === msg._id
+    );
+
+    if (!exists) {
+      return {
+        messages: [msg, ...state.messages],
+      };
+    }
+
+    return {
       messages: state.messages.map((m) =>
         m._id === msg._id ? msg : m
       ),
-    })),
+    };
+  }),
 
   deleteMessage: (id) =>
     set((state) => ({

@@ -403,7 +403,6 @@ export default function QuickMessageModal({ onClose }: QuickMessageModalProps) {
 const fetchLoading = useQuickMessageStore((s) => s.loading);
 
 const fetchMessages = useQuickMessageStore((s) => s.fetchMessages);
-const addMessage = useQuickMessageStore((s) => s.addMessage);
 const updateMessageStore = useQuickMessageStore((s) => s.updateMessage);
 const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
 
@@ -418,10 +417,13 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
   const handleCreate = async (d: { shortcut: string; content: string }) => {
     setFormLoading(true); setFormError("");
     try {
-      const item = await quickMessageService.create(d);
-      addMessage(item);
+      await quickMessageService.create(d);
       goList();
-    } catch (e: any) { setFormError(e.message); }
+    } catch (e: any) {
+  setFormError(
+    e?.response?.data?.message || "Có lỗi xảy ra"
+  );
+}
     finally { setFormLoading(false); }
   };
 
@@ -430,17 +432,18 @@ const deleteMessageStore = useQuickMessageStore((s) => s.deleteMessage);
     setFormLoading(true); setFormError("");
     try {
       const item = await quickMessageService.update(editTarget._id, d);
-      updateMessageStore(item);
       goList();
-    } catch (e: any) { setFormError(e.message); }
+    } catch (e: any) {
+  setFormError(
+    e?.response?.data?.message || "Có lỗi xảy ra"
+  );
+}
     finally { setFormLoading(false); }
   };
 
   const handleDelete = async (id: string) => {
   try {
     await quickMessageService.delete(id);
-
-    deleteMessageStore(id);
   } catch (error) {
     console.error(error);
   }
