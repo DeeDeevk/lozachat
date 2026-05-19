@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, forwardRef } from "react";
 import {
   ChevronDown,
   File,
@@ -120,24 +120,28 @@ function ExpandableSection({
   );
 }
 
-export default function ConversationInfoPanel({
-  conversation,
-  messages,
-  currentUserId,
-  onDeleteConversation,
-  isPinned,
-  onTogglePin,
-}: ConversationInfoPanelProps) {
-  const [expandedSections, setExpandedSections] = useState<
-    Record<string, boolean>
-  >({
-    media: true,
-    files: true,
-    links: true,
-  });
-  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelProps>(
+  (
+    {
+      conversation,
+      messages,
+      currentUserId,
+      onDeleteConversation,
+      isPinned,
+      onTogglePin,
+    },
+    ref  // <-- thêm ref parameter
+  ) => {
+    const [expandedSections, setExpandedSections] = useState
+      <Record<string, boolean>
+    >({
+      media: true,
+      files: true,
+      links: true,
+    });
+    const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
   const otherUser = useMemo(
     () => conversation.participants.find((p) => p._id !== currentUserId),
@@ -296,7 +300,7 @@ export default function ConversationInfoPanel({
   };
 
   return (
-    <div
+    <div ref={ref}
       style={{
         width: "320px",
         background: "linear-gradient(180deg, #0f172a 0%, #1a1f3a 100%)",
@@ -785,3 +789,6 @@ export default function ConversationInfoPanel({
     </div>
   );
 }
+);
+export default ConversationInfoPanel;
+

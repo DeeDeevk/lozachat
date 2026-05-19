@@ -740,6 +740,7 @@ export default function ChatPage() {
   const [searchHighlightIds, setSearchHighlightIds] = useState<Set<string>>(
     new Set(),
   );
+  const today = new Date().toISOString().split("T")[0];
 
   const startRingtone = useCallback(() => {
     try {
@@ -1743,6 +1744,7 @@ export default function ChatPage() {
   const handleSearch = useCallback(async () => {
     if (!activeConversationId) return;
     setSearchLoading(true);
+
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
@@ -1750,28 +1752,49 @@ export default function ChatPage() {
       if (searchFromDate) params.set("fromDate", searchFromDate);
       if (searchToDate) params.set("toDate", searchToDate);
 
-      // THAY bằng:
       const res = await api.get(
         `/messages/${activeConversationId}/search?${params.toString()}`,
       );
-      const found: Message[] = res.data.messages ?? [];
 
-      // Lọc FE: bỏ tin nhắn structured payload
-      const filtered = found.filter((m) => {
-        if (!m.content?.startsWith("__LZ_CHAT_JSON__::")) return true; // tin nhắn thuần text cũ
-        try {
-          const payload = JSON.parse(
-            m.content.slice("__LZ_CHAT_JSON__::".length),
-          );
-          return payload.kind === "text"; // chỉ giữ lại kind text
-        } catch {
-          return false;
-        }
+      let found: Message[] = res.data.messages ?? [];
+
+      // ==================== FILTER CHÍNH XÁC ====================
+      const filtered = found.filter((message) => {
+        const content = message.content || "";
+
+        // Loại bỏ tất cả system messages
+        if (content.startsWith("{{system}}")) return false;
+
+        // Loại bỏ tin nhắn thu hồi (nếu không muốn search)
+        if (message.isRecalled) return false;
+
+        // Decode payload để kiểm tra loại tin nhắn
+        const payload = decodeChatPayload(content);
+
+        // Nếu không decode được → coi là tin nhắn cũ hoặc lạ → cho qua (an toàn)
+        if (!payload) return true;
+
+        // Chỉ cho phép các loại tin nhắn người dùng thật sự
+        const userMessageKinds = [
+          "text",
+          "reply",
+          "image",
+          "file",
+          "audio",
+          "sticker",
+          "poll",
+          "emoji",
+        ];
+
+        return userMessageKinds.includes(payload.kind);
       });
+      // =======================================================
+
       setSearchResults(filtered);
       setSearchHighlightIds(new Set(filtered.map((m) => m._id)));
       setSearchCurrentIndex(0);
-    } catch {
+    } catch (error) {
+      console.error(error);
       toast.error("Không thể tìm kiếm tin nhắn");
     } finally {
       setSearchLoading(false);
@@ -3872,7 +3895,20 @@ export default function ChatPage() {
                     <input
                       type="date"
                       value={searchFromDate}
-                      onChange={(e) => setSearchFromDate(e.target.value)}
+                      max={today}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        // Không cho lớn hơn ngày kết thúc
+                        if (searchToDate && value > searchToDate) {
+                          toast.error(
+                            '"Từ ngày" phải nhỏ hơn hoặc bằng "Đến ngày"',
+                          );
+                          return;
+                        }
+
+                        setSearchFromDate(value);
+                      }}
                       style={{
                         background: "#0f172a",
                         border: "1px solid rgba(148,163,184,.2)",
@@ -3896,7 +3932,21 @@ export default function ChatPage() {
                     <input
                       type="date"
                       value={searchToDate}
-                      onChange={(e) => setSearchToDate(e.target.value)}
+                      min={searchFromDate || undefined}
+                      max={today}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        // Không cho nhỏ hơn ngày bắt đầu
+                        if (searchFromDate && value < searchFromDate) {
+                          toast.error(
+                            '"Đến ngày" phải lớn hơn hoặc bằng "Từ ngày"',
+                          );
+                          return;
+                        }
+
+                        setSearchToDate(value);
+                      }}
                       style={{
                         background: "#0f172a",
                         border: "1px solid rgba(148,163,184,.2)",
@@ -5309,116 +5359,127 @@ export default function ChatPage() {
         </div>
 
         {/* Right Info Panel */}
-        {activeConversation && showInfoPanel && (
-          <div data-tour="info-panel">
-            {activeConversation.group ? (
-              <GroupConversationInfoPanel
-                conversation={activeConversation}
-                messages={displayMessages}
-                currentUserId={user?.userId}
-                isAdminOrOwner={isAdminOrOwner}
-                pendingRequests={
-                  activeConversationId
-                    ? (joinRequests[activeConversationId] ?? [])
-                    : []
+        {activeConversation &&
+          showInfoPanel &&
+          (activeConversation.group ? (
+            <GroupConversationInfoPanel
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              isAdminOrOwner={isAdminOrOwner}
+              pendingRequests={
+                activeConversationId
+                  ? (joinRequests[activeConversationId] ?? [])
+                  : []
+              }
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              onManageGroup={() => setShowEditModal(true)}
+              onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
+              onDissolveGroup={() => setShowDissolveConfirm(true)}
+              onUpdateMemberRole={async (targetUserId, role) => {
+                if (!activeConversationId) return;
+
+                try {
+                  await chatService.updateMemberRole(
+                    activeConversationId,
+                    targetUserId,
+                    role,
+                  );
+                } catch (error) {
+                  console.error("Lỗi khi cập nhật role:", error);
+                  alert("Không thể cập nhật quyền thành viên");
                 }
-                onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-                onManageGroup={() => setShowEditModal(true)}
-                onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
-                onDissolveGroup={() => setShowDissolveConfirm(true)}
-                onUpdateMemberRole={async (targetUserId, role) => {
-                  if (!activeConversationId) return;
-                  try {
-                    await chatService.updateMemberRole(
-                      activeConversationId,
-                      targetUserId,
-                      role,
-                    );
-                  } catch (error) {
-                    console.error("Lỗi khi cập nhật role:", error);
-                    alert("Không thể cập nhật quyền thành viên");
+              }}
+              onRemoveMember={async (targetUserId) => {
+                if (!activeConversationId) return;
+
+                try {
+                  await chatService.removeMember(
+                    activeConversationId,
+                    targetUserId,
+                  );
+                } catch (error: any) {
+                  toast.error(
+                    error?.response?.data?.message ||
+                      "Không thể xóa thành viên",
+                  );
+                }
+              }}
+              onAddMember={async (targetUserId: string) => {
+                if (!activeConversationId) return;
+
+                try {
+                  const result = await addMemberToGroup(
+                    activeConversationId,
+                    targetUserId,
+                  );
+
+                  if (result.needsApproval) {
+                    toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+                  } else {
+                    toast.success("Đã thêm thành viên vào nhóm");
                   }
-                }}
-                onRemoveMember={async (targetUserId) => {
-                  if (!activeConversationId) return;
-                  try {
-                    await chatService.removeMember(
-                      activeConversationId,
-                      targetUserId,
-                    );
-                  } catch (error: any) {
-                    toast.error(
-                      error?.response?.data?.message ||
-                        "Không thể xóa thành viên",
-                    );
-                  }
-                }}
-                onAddMember={async (targetUserId: string) => {
-                  if (!activeConversationId) return;
-                  try {
-                    const result = await addMemberToGroup(
-                      activeConversationId,
-                      targetUserId,
-                    );
-                    if (result.needsApproval) {
-                      toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
-                    } else {
-                      toast.success("Đã thêm thành viên vào nhóm");
-                    }
-                  } catch {
-                    toast.error("Không thể thêm thành viên");
-                  }
-                }}
-                onReviewRequest={async (requestId, action) => {
-                  if (!activeConversationId) return;
-                  try {
-                    await reviewJoinRequest(
-                      activeConversationId,
-                      requestId,
-                      action,
-                    );
-                    toast.success(
-                      action === "approved"
-                        ? "Đã duyệt thành viên"
-                        : "Đã từ chối",
-                    );
-                  } catch {
-                    toast.error("Không thể xử lý yêu cầu");
-                  }
-                }}
-                onUpdateSettings={async (settings) => {
-                  if (!activeConversationId) return;
-                  try {
-                    await chatService.updateGroupSettings(
-                      activeConversationId,
-                      settings,
-                    );
-                    toast.success("Đã cập nhật cài đặt nhóm");
-                  } catch {
-                    toast.error("Không thể cập nhật cài đặt");
-                  }
-                }}
-                isPinned={!!(activeConv as any)?.pinnedAt}
-                onTogglePin={async () => {
-                  if (!activeConversationId) return;
-                  await togglePinConversation(activeConversationId);
-                }}
-              />
-            ) : (
-              <ConversationInfoPanel
-                conversation={activeConversation}
-                messages={displayMessages}
-                currentUserId={user?.userId}
-                onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-                isPinned={!!(activeConv as any)?.pinnedAt}
-                onTogglePin={async () => {
-                  if (!activeConversationId) return;
-                  await togglePinConversation(activeConversationId);
-                }}
-              />
-            )}
-          </div>
-        )}
+                } catch {
+                  toast.error("Không thể thêm thành viên");
+                }
+              }}
+              onReviewRequest={async (requestId, action) => {
+                if (!activeConversationId) return;
+
+                try {
+                  await reviewJoinRequest(
+                    activeConversationId,
+                    requestId,
+                    action,
+                  );
+
+                  toast.success(
+                    action === "approved"
+                      ? "Đã duyệt thành viên"
+                      : "Đã từ chối",
+                  );
+                } catch {
+                  toast.error("Không thể xử lý yêu cầu");
+                }
+              }}
+              onUpdateSettings={async (settings) => {
+                if (!activeConversationId) return;
+
+                try {
+                  await chatService.updateGroupSettings(
+                    activeConversationId,
+                    settings,
+                  );
+
+                  toast.success("Đã cập nhật cài đặt nhóm");
+                } catch {
+                  toast.error("Không thể cập nhật cài đặt nhóm");
+                }
+              }}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
+
+                await togglePinConversation(activeConversationId);
+              }}
+            />
+          ) : (
+            <ConversationInfoPanel
+              ref={(el) => {
+                if (el) el.setAttribute("data-tour", "info-panel");
+              }}
+              conversation={activeConversation}
+              messages={displayMessages}
+              currentUserId={user?.userId}
+              onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+              isPinned={!!(activeConv as any)?.pinnedAt}
+              onTogglePin={async () => {
+                if (!activeConversationId) return;
+
+                await togglePinConversation(activeConversationId);
+              }}
+            />
+          ))}
 
         {showEditModal && activeConversation && (
           <EditGroupModal
