@@ -272,7 +272,7 @@ export default function SearchUserModal({
                 <input
                   ref={inputRef}
                   className="su-input"
-                  placeholder="Nhập username để tìm kiếm..."
+                  placeholder="Nhập username hoặc email để tìm kiếm..."
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);

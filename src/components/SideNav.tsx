@@ -11,6 +11,7 @@ import {
   Shield,
 } from "lucide-react";
 import ProfileModal from "./ProfileModal";
+import QuickMessageModal from "./QuickMessageModal"; // 👈 import thêm
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const getInitials = (name: string) =>
@@ -23,13 +24,8 @@ const getInitials = (name: string) =>
 
 const randomColor = (str: string) => {
   const colors = [
-    "#3b82f6",
-    "#10b981",
-    "#8b5cf6",
-    "#f59e0b",
-    "#ef4444",
-    "#06b6d4",
-    "#ec4899",
+    "#3b82f6", "#10b981", "#8b5cf6",
+    "#f59e0b", "#ef4444", "#06b6d4", "#ec4899",
   ];
   let hash = 0;
   for (let i = 0; i < str.length; i++)
@@ -39,9 +35,13 @@ const randomColor = (str: string) => {
 
 interface SideNavProps {
   onNewMessage?: () => void;
+  onHelpClick?: () => void;
 }
 
-export default function SideNav({ onNewMessage }: SideNavProps) {
+export default function SideNav({
+  onNewMessage,
+  onHelpClick,
+}: SideNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const userProfile = useAuthStore((s) => s.userProfile);
@@ -57,7 +57,8 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const myColor = randomColor(myName);
 
   const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [openProfile, setOpenProfile] = useState(false);
+  const [openQuickMsg, setOpenQuickMsg] = useState(false); // 👈 state mới
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isChat = location.pathname === "/chat";
@@ -66,33 +67,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
   const isAdminPage = location.pathname === "/admin";
 
   const navItems = [
-    {
-      icon: <MessageSquare size={22} />,
-      label: "Tin nhắn",
-      path: "/chat",
-      active: isChat,
-    },
-    {
-      icon: <Users size={22} />,
-      label: "Bạn bè",
-      path: "/friends",
-      active: isFriends,
-    },
-    {
-      icon: <Rss size={22} />,
-      label: "Mạng xã hội",
-      path: "/social",
-      active: isFeed,
-    },
+    { icon: <MessageSquare size={22} />, label: "Tin nhắn",    path: "/chat",    active: isChat },
+    { icon: <Users size={22} />,         label: "Bạn bè",      path: "/friends", active: isFriends },
+    { icon: <Rss size={22} />,           label: "Mạng xã hội", path: "/social",  active: isFeed },
     ...(isAdmin
-      ? [
-          {
-            icon: <Shield size={22} />,
-            label: "Admin",
-            path: "/admin",
-            active: isAdminPage,
-          },
-        ]
+      ? [{ icon: <Shield size={22} />, label: "Admin", path: "/admin", active: isAdminPage }]
       : []),
   ];
 
@@ -116,14 +95,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           flex-direction: column;
           align-items: center;
           background: #040c1a;
-          /* no full border-right; use pseudo-element for 90% height separator */
           border-right: none;
           padding: 0;
           position: relative;
           z-index: 30;
         }
-
-        /* Centered vertical separator — 90% height, visually distinct */
         .sidenav::after {
           content: "";
           position: absolute;
@@ -135,7 +111,6 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           background: rgba(59,130,246,.35);
           pointer-events: none;
         }
-
         .sidenav-logo {
           width: 64px;
           height: 64px;
@@ -143,10 +118,8 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          border-bottom: 1x solid rgba(255,255,255,.04);
           margin-bottom: 6px;
         }
-
         .sidenav-logo img {
           width: 40px;
           height: 40px;
@@ -158,14 +131,12 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
             0 4px 16px rgba(0,0,0,.5);
           transition: box-shadow .3s ease;
         }
-
         .sidenav-logo img:hover {
           box-shadow:
             0 0 20px rgba(59,130,246,.75),
             0 0 48px rgba(59,130,246,.35),
             0 4px 20px rgba(0,0,0,.6);
         }
-
         .sidenav-items {
           flex: 1;
           display: flex;
@@ -175,7 +146,6 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           padding: 6px 0;
           width: 100%;
         }
-
         .sidenav-item {
           position: relative;
           width: 48px;
@@ -190,18 +160,15 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           color: #475569;
           transition: all .18s cubic-bezier(.22,1,.36,1);
         }
-
         .sidenav-item:hover {
           background: rgba(59,130,246,.1);
           color: #93c5fd;
           transform: scale(1.05);
         }
-
         .sidenav-item.active {
           background: rgba(59,130,246,.18);
           color: #60a5fa;
         }
-
         .sidenav-item.active::after {
           content: "";
           position: absolute;
@@ -212,14 +179,17 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           border-radius: 3px 0 0 3px;
           background: linear-gradient(180deg, #60a5fa, #2563eb);
         }
-
+        /* Nút tùy chỉnh đang active */
+        .sidenav-item.qm-active {
+          background: rgba(59,130,246,.18);
+          color: #60a5fa;
+        }
         .sidenav-item svg {
           display: block;
           stroke: currentColor;
           fill: none;
           flex-shrink: 0;
         }
-
         .sidenav-tooltip {
           position: absolute;
           left: calc(100% + 14px);
@@ -240,18 +210,13 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           font-family: 'Segoe UI', system-ui, sans-serif;
           box-shadow: 0 4px 16px rgba(0,0,0,.5);
         }
-
-        .sidenav-item:hover .sidenav-tooltip {
-          opacity: 1;
-        }
-
+        .sidenav-item:hover .sidenav-tooltip { opacity: 1; }
         .sidenav-divider {
           width: 32px;
           height: 1px;
           background: rgba(255,255,255,.06);
           margin: 4px 0;
         }
-
         .sidenav-bottom {
           display: flex;
           flex-direction: column;
@@ -260,7 +225,6 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           padding-bottom: 14px;
           width: 100%;
         }
-
         .sidenav-avatar-btn {
           width: 38px;
           height: 38px;
@@ -278,9 +242,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           flex-shrink: 0;
           font-family: 'Segoe UI', system-ui, sans-serif;
         }
-
         .sidenav-avatar-btn:hover { transform: scale(1.08); filter: brightness(1.12); }
-
         .sidenav-online-dot {
           position: absolute;
           bottom: -1px;
@@ -291,12 +253,10 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           background: #10b981;
           border: 2px solid #040c1a;
         }
-
         @keyframes modalPop {
           from { opacity:0; transform: translateX(-6px) scale(.97); }
           to   { opacity:1; transform: translateX(0) scale(1); }
         }
-
         .avatar-modal {
           position: absolute;
           bottom: 0;
@@ -311,7 +271,6 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           animation: modalPop .2s cubic-bezier(.22,1,.36,1);
           font-family: 'Segoe UI', system-ui, sans-serif;
         }
-
         .avatar-modal-header {
           display: flex;
           align-items: center;
@@ -320,73 +279,30 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           background: rgba(59,130,246,.07);
           border-bottom: 1px solid rgba(255,255,255,.06);
         }
-
-        .avatar-modal-name {
-          font-weight: 700;
-          font-size: 14px;
-          color: white;
-          line-height: 1.3;
-        }
-
-        .avatar-modal-username {
-          font-size: 12px;
-          color: #64748b;
-          margin-top: 2px;
-        }
-
-        .avatar-modal-body {
-          padding: 8px;
-        }
-
+        .avatar-modal-name { font-weight: 700; font-size: 14px; color: white; line-height: 1.3; }
+        .avatar-modal-username { font-size: 12px; color: #64748b; margin-top: 2px; }
+        .avatar-modal-body { padding: 8px; }
         .avatar-modal-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: #475569;
-          text-transform: uppercase;
-          letter-spacing: 0.7px;
-          padding: 6px 8px 4px;
+          font-size: 10px; font-weight: 700; color: #475569;
+          text-transform: uppercase; letter-spacing: 0.7px; padding: 6px 8px 4px;
         }
-
         .avatar-modal-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 9px 10px;
-          border-radius: 10px;
-          border: none;
-          background: transparent;
-          color: #cbd5e1;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          width: 100%;
-          transition: background .15s;
-          font-family: 'Segoe UI', system-ui, sans-serif;
+          display: flex; align-items: center; gap: 10px;
+          padding: 9px 10px; border-radius: 10px; border: none;
+          background: transparent; color: #cbd5e1; font-size: 13px;
+          font-weight: 500; cursor: pointer; width: 100%;
+          transition: background .15s; font-family: 'Segoe UI', system-ui, sans-serif;
           text-align: left;
         }
-
         .avatar-modal-item:hover { background: rgba(255,255,255,.06); }
-
         .avatar-modal-item.danger { color: #f87171; }
         .avatar-modal-item.danger:hover { background: rgba(239,68,68,.1); }
-
         .avatar-modal-item svg { stroke: currentColor; fill: none; flex-shrink: 0; }
-
         .avatar-modal-icon {
-          width: 30px;
-          height: 30px;
-          border-radius: 9px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+          width: 30px; height: 30px; border-radius: 9px;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
-
-        .avatar-modal-divider {
-          height: 1px;
-          background: rgba(255,255,255,.05);
-          margin: 4px 8px;
-        }
+        .avatar-modal-divider { height: 1px; background: rgba(255,255,255,.05); margin: 4px 8px; }
 
         @media (max-width: 767px) {
           .sidenav { width: 56px; }
@@ -397,7 +313,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
         }
       `}</style>
 
-      <nav className="sidenav">
+      <nav className="sidenav" data-tour="sidenav">
         <div className="sidenav-logo">
           <img src="/logo.png" alt="Loza" />
         </div>
@@ -419,16 +335,21 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
         <div className="sidenav-bottom">
           <div className="sidenav-divider" />
 
+          {/* ── Nút Tùy chỉnh → mở QuickMessageModal ── */}
           <button
-            className="sidenav-item"
-            onClick={onNewMessage}
-            aria-label="Soạn tin nhắn mới"
+            className={`sidenav-item ${openQuickMsg ? "qm-active" : ""}`}
+            onClick={() => setOpenQuickMsg(true)}
+            aria-label="Tin nhắn nhanh"
           >
             <Edit3 size={20} />
-            <span className="sidenav-tooltip">Tùy chỉnh</span>
+            <span className="sidenav-tooltip">Tin nhắn nhanh</span>
           </button>
 
-          <button className="sidenav-item" aria-label="Trợ giúp">
+          <button
+  className="sidenav-item"
+  aria-label="Trợ giúp"
+  onClick={onHelpClick}
+>
             <HelpCircle size={20} />
             <span className="sidenav-tooltip">Trợ giúp</span>
           </button>
@@ -453,11 +374,7 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                   <img
                     src={userProfile.avatarUrl}
                     alt="avatar"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 ) : (
                   myInitials
@@ -468,18 +385,12 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
             {showAvatarModal && (
               <div className="avatar-modal">
-                {/* Header */}
                 <div className="avatar-modal-header">
                   <div
                     className="sidenav-avatar-btn"
                     style={{
-                      background: userProfile?.avatarUrl
-                        ? "transparent"
-                        : myColor,
-                      width: 44,
-                      height: 44,
-                      fontSize: 16,
-                      flexShrink: 0,
+                      background: userProfile?.avatarUrl ? "transparent" : myColor,
+                      width: 44, height: 44, fontSize: 16, flexShrink: 0,
                       boxShadow: `0 4px 14px ${myColor}55`,
                     }}
                   >
@@ -488,19 +399,14 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                         src={userProfile.avatarUrl}
                         alt="avatar"
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          borderRadius: "20%",
+                          width: "100%", height: "100%",
+                          objectFit: "cover", borderRadius: "20%",
                         }}
                       />
                     ) : (
                       <span>{myInitials}</span>
                     )}
-                    <div
-                      className="sidenav-online-dot"
-                      style={{ width: 12, height: 12 }}
-                    />
+                    <div className="sidenav-online-dot" style={{ width: 12, height: 12 }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="avatar-modal-name">{myName}</div>
@@ -508,28 +414,21 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
                   </div>
                 </div>
 
-                {/* Body */}
                 <div className="avatar-modal-body">
                   <div className="avatar-modal-label">Tài khoản của tôi</div>
 
-                  <button
-                    className="avatar-modal-item"
-                    onClick={() => setOpen(true)}
-                  >
-                    <div
-                      className="avatar-modal-icon"
-                      style={{ background: "rgba(59,130,246,.12)" }}
-                    >
+                  <button className="avatar-modal-item" onClick={() => setOpenProfile(true)}>
+                    <div className="avatar-modal-icon" style={{ background: "rgba(59,130,246,.12)" }}>
                       <User size={15} color="#60a5fa" />
                     </div>
                     Thông tin cá nhân
                   </button>
 
-                  {open && (
+                  {openProfile && (
                     <ProfileModal
                       userProfile={userProfile}
                       setUserProfile={setUserProfile}
-                      onClose={() => setOpen(false)}
+                      onClose={() => setOpenProfile(false)}
                       myColor={myColor}
                       myName={myName}
                     />
@@ -539,15 +438,9 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
 
                   <button
                     className="avatar-modal-item danger"
-                    onClick={async () => {
-                      await signOut();
-                      navigate("/signin");
-                    }}
+                    onClick={async () => { await signOut(); navigate("/signin"); }}
                   >
-                    <div
-                      className="avatar-modal-icon"
-                      style={{ background: "rgba(239,68,68,.1)" }}
-                    >
+                    <div className="avatar-modal-icon" style={{ background: "rgba(239,68,68,.1)" }}>
                       <LogOut size={15} color="#f87171" />
                     </div>
                     Đăng xuất
@@ -558,6 +451,11 @@ export default function SideNav({ onNewMessage }: SideNavProps) {
           </div>
         </div>
       </nav>
+
+      {/* ── QuickMessageModal (portal-like, rendered outside nav flow) ── */}
+      {openQuickMsg && (  
+        <QuickMessageModal onClose={() => setOpenQuickMsg(false)} />
+      )}
     </>
   );
 }
