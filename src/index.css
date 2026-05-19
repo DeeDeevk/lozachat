@@ -52,18 +52,18 @@
   --sidebar-ring: oklch(0.708 0 0);
 
   /* ── Loza brand tokens ── */
-  --loza-bg-base:      #080d1a;
-  --loza-bg-card:      #0e1628;
-  --loza-bg-elevated:  #131d35;
-  --loza-bg-hover:     #1a2640;
-  --loza-border:       rgba(99, 140, 255, 0.12);
-  --loza-border-bright:rgba(99, 140, 255, 0.28);
-  --loza-accent:       #3d6fff;
+  --loza-bg-base: #080d1a;
+  --loza-bg-card: #0e1628;
+  --loza-bg-elevated: #131d35;
+  --loza-bg-hover: #1a2640;
+  --loza-border: rgba(99, 140, 255, 0.12);
+  --loza-border-bright: rgba(99, 140, 255, 0.28);
+  --loza-accent: #3d6fff;
   --loza-accent-light: #5c87ff;
-  --loza-accent-glow:  rgba(61, 111, 255, 0.28);
-  --loza-text:         #e8eeff;
-  --loza-sub:          #8a9bc7;
-  --loza-muted:        #4d5f8a;
+  --loza-accent-glow: rgba(61, 111, 255, 0.28);
+  --loza-text: #e8eeff;
+  --loza-sub: #8a9bc7;
+  --loza-muted: #4d5f8a;
 }
 
 a {
@@ -71,18 +71,30 @@ a {
   color: #646cff;
   text-decoration: inherit;
 }
-a:hover { color: #535bf2; }
+a:hover {
+  color: #535bf2;
+}
 
-body { margin: 0; }
+body {
+  margin: 0;
+}
 
-h1 { font-size: 3.2em; line-height: 1.1; }
-
-
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
 
 @media (prefers-color-scheme: light) {
-  :root { color: #213547; background-color: #ffffff; }
-  a:hover { color: #747bff; }
-  button { background-color: #101c3c; }
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #101c3c;
+  }
 }
 
 .dark {
@@ -92,7 +104,7 @@ h1 { font-size: 3.2em; line-height: 1.1; }
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.87 0.00 0);
+  --primary: oklch(0.87 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -120,7 +132,7 @@ h1 { font-size: 3.2em; line-height: 1.1; }
 }
 
 @theme inline {
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -161,15 +173,15 @@ h1 { font-size: 3.2em; line-height: 1.1; }
   --radius-4xl: calc(var(--radius) * 2.6);
 
   /* ── Loza brand colors exposed to Tailwind v4 ── */
-  --color-loza-bg-base:      var(--loza-bg-base);
-  --color-loza-bg-card:      var(--loza-bg-card);
-  --color-loza-bg-elevated:  var(--loza-bg-elevated);
-  --color-loza-bg-hover:     var(--loza-bg-hover);
-  --color-loza-accent:       var(--loza-accent);
+  --color-loza-bg-base: var(--loza-bg-base);
+  --color-loza-bg-card: var(--loza-bg-card);
+  --color-loza-bg-elevated: var(--loza-bg-elevated);
+  --color-loza-bg-hover: var(--loza-bg-hover);
+  --color-loza-accent: var(--loza-accent);
   --color-loza-accent-light: var(--loza-accent-light);
-  --color-loza-text:         var(--loza-text);
-  --color-loza-sub:          var(--loza-sub);
-  --color-loza-muted:        var(--loza-muted);
+  --color-loza-text: var(--loza-text);
+  --color-loza-sub: var(--loza-sub);
+  --color-loza-muted: var(--loza-muted);
 }
 
 @layer base {
@@ -182,8 +194,12 @@ h1 { font-size: 3.2em; line-height: 1.1; }
   html {
     @apply font-sans;
   }
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
   ::-webkit-scrollbar-thumb {
     background: var(--loza-border-bright);
     border-radius: 4px;
@@ -250,23 +266,64 @@ h1 { font-size: 3.2em; line-height: 1.1; }
     animation: lozaSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes lozaSlideUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .loza-pop {
     animation: lozaPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
   @keyframes lozaPop {
-    from { transform: scale(0.8); opacity: 0; }
-    to   { transform: scale(1);   opacity: 1; }
+    from {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
 
   .loza-bounce {
     animation: lozaBounce 1.2s infinite ease-in-out both;
   }
   @keyframes lozaBounce {
-    0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-    40%           { transform: scale(1); opacity: 1; }
+    0%,
+    80%,
+    100% {
+      transform: scale(0);
+      opacity: 0.3;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(60px);
   }
 }

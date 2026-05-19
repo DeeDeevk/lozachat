@@ -18,6 +18,7 @@ import { useSyncAuthBetweenTabs } from "./hook/useSyncAuthBetweenTabs";
 import ForceLogoutDialog from "./components/ForceLogoutDialog"; // ← thêm import
 import LozaAdmin from "./pages/Admin";
 import AdminRoute from "./components/AdminRoute";
+import { Toaster as HotToaster } from "react-hot-toast";
 function App() {
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
@@ -36,6 +37,7 @@ function App() {
   return (
     <>
       <Toaster position="top-right" richColors />
+      <HotToaster />
       <BrowserRouter>
         <ForceLogoutDialog /> {/* ← thay ForceLogoutHandler bằng cái này */}
         <Routes>

@@ -77,6 +77,7 @@ import api from "@/lib/axios";
 import type { QuickMessage } from "@/components/QuickMessageModal";
 import InputAreaGuard from "@/components/InputAreaGuard";
 import FriendActionButton from "@/components/FriendActionButton";
+import { useMessageNotification } from "@/hook/useMessageNotification";
 
 type PopupType = "emoji" | "media" | "sticker" | "audio" | "poll" | null;
 
@@ -820,6 +821,7 @@ export default function ChatPage() {
   const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(
     null,
   );
+  useMessageNotification({ activeConversationId });
 
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const roomRef = useRef<Room | null>(null);
