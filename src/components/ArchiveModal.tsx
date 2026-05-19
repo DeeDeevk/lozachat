@@ -23,12 +23,12 @@ export default function ArchiveModal({
   const [activeTab, setActiveTab] = useState<"media" | "files" | "links">(
     "media",
   );
-  const [mediaFilter, setMediaFilter] = useState<"all" | "sender" | "date">(
-    "all",
-  );
-  const [fileFilter, setFileFilter] = useState<"all" | "sender" | "date">(
-    "all",
-  );
+  // const [mediaFilter, setMediaFilter] = useState<"all" | "sender" | "date">(
+  //   "all",
+  // );
+  // const [fileFilter, setFileFilter] = useState<"all" | "sender" | "date">(
+  //   "all",
+  // );
 
   if (!isOpen) return null;
 
