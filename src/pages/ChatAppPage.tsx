@@ -5274,116 +5274,124 @@ const fetchQuickMessages = useQuickMessageStore((s) => s.fetchMessages);
         </div>
 
        {/* Right Info Panel */}
-{activeConversation && showInfoPanel && (
-  <div data-tour="info-panel">
-    {activeConversation.group ? (
-      <GroupConversationInfoPanel
-        conversation={activeConversation}
-        messages={displayMessages}
-        currentUserId={user?.userId}
-        isAdminOrOwner={isAdminOrOwner}
-        pendingRequests={
-          activeConversationId
-            ? (joinRequests[activeConversationId] ?? [])
-            : []
+{activeConversation &&
+  showInfoPanel &&
+  (activeConversation.group ? (
+    <GroupConversationInfoPanel
+      conversation={activeConversation}
+      messages={displayMessages}
+      currentUserId={user?.userId}
+      isAdminOrOwner={isAdminOrOwner}
+      pendingRequests={
+        activeConversationId
+          ? (joinRequests[activeConversationId] ?? [])
+          : []
+      }
+      onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+      onManageGroup={() => setShowEditModal(true)}
+      onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
+      onDissolveGroup={() => setShowDissolveConfirm(true)}
+      onUpdateMemberRole={async (targetUserId, role) => {
+        if (!activeConversationId) return;
+
+        try {
+          await chatService.updateMemberRole(
+            activeConversationId,
+            targetUserId,
+            role,
+          );
+        } catch (error) {
+          console.error("Lỗi khi cập nhật role:", error);
+          alert("Không thể cập nhật quyền thành viên");
         }
-        onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-        onManageGroup={() => setShowEditModal(true)}
-        onLeaveGroup={() => setShowLeaveGroupConfirm(true)}
-        onDissolveGroup={() => setShowDissolveConfirm(true)}
-        onUpdateMemberRole={async (targetUserId, role) => {
-          if (!activeConversationId) return;
-          try {
-            await chatService.updateMemberRole(
-              activeConversationId,
-              targetUserId,
-              role,
-            );
-          } catch (error) {
-            console.error("Lỗi khi cập nhật role:", error);
-            alert("Không thể cập nhật quyền thành viên");
+      }}
+      onRemoveMember={async (targetUserId) => {
+        if (!activeConversationId) return;
+
+        try {
+          await chatService.removeMember(
+            activeConversationId,
+            targetUserId,
+          );
+        } catch (error: any) {
+          toast.error(
+            error?.response?.data?.message ||
+              "Không thể xóa thành viên",
+          );
+        }
+      }}
+      onAddMember={async (targetUserId: string) => {
+        if (!activeConversationId) return;
+
+        try {
+          const result = await addMemberToGroup(
+            activeConversationId,
+            targetUserId,
+          );
+
+          if (result.needsApproval) {
+            toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
+          } else {
+            toast.success("Đã thêm thành viên vào nhóm");
           }
-        }}
-        onRemoveMember={async (targetUserId) => {
-          if (!activeConversationId) return;
-          try {
-            await chatService.removeMember(
-              activeConversationId,
-              targetUserId,
-            );
-          } catch (error: any) {
-            toast.error(
-              error?.response?.data?.message ||
-                "Không thể xóa thành viên",
-            );
-          }
-        }}
-        onAddMember={async (targetUserId: string) => {
-          if (!activeConversationId) return;
-          try {
-            const result = await addMemberToGroup(
-              activeConversationId,
-              targetUserId,
-            );
-            if (result.needsApproval) {
-              toast("Yêu cầu đã gửi, chờ trưởng/phó nhóm duyệt");
-            } else {
-              toast.success("Đã thêm thành viên vào nhóm");
-            }
-          } catch {
-            toast.error("Không thể thêm thành viên");
-          }
-        }}
-        onReviewRequest={async (requestId, action) => {
-          if (!activeConversationId) return;
-          try {
-            await reviewJoinRequest(
-              activeConversationId,
-              requestId,
-              action,
-            );
-            toast.success(
-              action === "approved"
-                ? "Đã duyệt thành viên"
-                : "Đã từ chối",
-            );
-          } catch {
-            toast.error("Không thể xử lý yêu cầu");
-          }
-        }}
-        onUpdateSettings={async (settings) => {
-          if (!activeConversationId) return;
-          try {
-            await chatService.updateGroupSettings(
-              activeConversationId,
-              settings,
-            );
-            toast.success("Đã cập nhật cài đặt nhóm");
-          } catch {
-            toast.error("Không thể cập nhật cài đặt");
-          }
-        }}
-        isPinned={!!(activeConv as any)?.pinnedAt}
-        onTogglePin={async () => {
-          if (!activeConversationId) return;
-          await togglePinConversation(activeConversationId);
-        }}
-      />
-    ) : (
-      <ConversationInfoPanel
-        conversation={activeConversation}
-        messages={displayMessages}
-        currentUserId={user?.userId}
-        onDeleteConversation={() => setShowDeleteConvConfirm(true)}
-        isPinned={!!(activeConv as any)?.pinnedAt}
-        onTogglePin={async () => {
-          if (!activeConversationId) return;
-          await togglePinConversation(activeConversationId);
-        }}
-      />
-    )}
-  </div>
-)}
+        } catch {
+          toast.error("Không thể thêm thành viên");
+        }
+      }}
+      onReviewRequest={async (requestId, action) => {
+        if (!activeConversationId) return;
+
+        try {
+          await reviewJoinRequest(
+            activeConversationId,
+            requestId,
+            action,
+          );
+
+          toast.success(
+            action === "approved"
+              ? "Đã duyệt thành viên"
+              : "Đã từ chối",
+          );
+        } catch {
+          toast.error("Không thể xử lý yêu cầu");
+        }
+      }}
+      onUpdateSettings={async (settings) => {
+        if (!activeConversationId) return;
+
+        try {
+          await chatService.updateGroupSettings(
+            activeConversationId,
+            settings,
+          );
+
+          toast.success("Đã cập nhật cài đặt nhóm");
+        } catch {
+          toast.error("Không thể cập nhật cài đặt nhóm");
+        }
+      }}
+      isPinned={!!(activeConv as any)?.pinnedAt}
+      onTogglePin={async () => {
+        if (!activeConversationId) return;
+
+        await togglePinConversation(activeConversationId);
+      }}
+    />
+  ) : (
+    <ConversationInfoPanel
+      conversation={activeConversation}
+      messages={displayMessages}
+      currentUserId={user?.userId}
+      onDeleteConversation={() => setShowDeleteConvConfirm(true)}
+      isPinned={!!(activeConv as any)?.pinnedAt}
+      onTogglePin={async () => {
+        if (!activeConversationId) return;
+
+        await togglePinConversation(activeConversationId);
+      }}
+    />
+  ))}
 
         {showEditModal && activeConversation && (
           <EditGroupModal
