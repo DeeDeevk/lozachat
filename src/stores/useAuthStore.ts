@@ -52,6 +52,7 @@ interface AuthState {
   setAccessToken: (accessToken: string) => void;
   setUserProfile: (user: UserProfile) => void;
   initFromBroadcast: (accessToken: string) => Promise<void>;
+  verifyPassword: (password: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -124,6 +125,10 @@ export const useAuthStore = create<AuthState>()(
           toast.error(errorMessage);
           return { success: false };
         }
+      },
+
+      verifyPassword: async (inputPassword: string) => {
+        await authService.verifyPassword(inputPassword);
       },
 
       fetchMe: async () => {

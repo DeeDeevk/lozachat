@@ -22,6 +22,8 @@ interface UserStore {
   page: number;
   totalPages: number;
   total: number;
+  lockUser: (targetUserId: string, reason: string) => Promise<void>;
+  unlockUser: (targetUserId: string) => Promise<void>;
   getUsers: (page?: number, limit?: number) => Promise<void>;
 }
 
@@ -49,6 +51,15 @@ export const useUserStore = create<UserStore>((set) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  // implementation
+  lockUser: async (targetUserId, reason) => {
+    await userService.adminLockAccount(targetUserId, reason);
+  },
+
+  unlockUser: async (targetUserId) => {
+    await userService.adminUnlockAccount(targetUserId);
   },
 }));
 
