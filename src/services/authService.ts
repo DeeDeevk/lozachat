@@ -71,4 +71,9 @@ export const authService = {
     const res = await api.get("/users/me", { withCredentials: true });
     return res.data.user;
   },
+
+  verifyPassword: async (password: string) => {
+    const res = await api.post("/auth/verify-password", { password });
+    return res.data;
+  },
 };

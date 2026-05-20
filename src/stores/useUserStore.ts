@@ -22,7 +22,9 @@ interface UserStore {
   page: number;
   totalPages: number;
   total: number;
-  getUsers: (page?: number, limit?: number) => Promise<void>;
+  lockUser: (targetUserId: string, reason: string) => Promise<void>;
+  unlockUser: (targetUserId: string) => Promise<void>;
+  getUsers: (page?: number, limit?: number, search?: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserStore>((set) => ({
@@ -32,11 +34,11 @@ export const useUserStore = create<UserStore>((set) => ({
   totalPages: 1,
   total: 0,
 
-  getUsers: async (page = 1, limit = 10) => {
+  getUsers: async (page = 1, limit = 10, search) => {
     try {
       set({ loading: true });
 
-      const res = await userService.getUsers(page, limit);
+      const res = await userService.getUsers(page, limit, search);
 
       set({
         users: res.users,
@@ -49,6 +51,15 @@ export const useUserStore = create<UserStore>((set) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  // implementation
+  lockUser: async (targetUserId, reason) => {
+    await userService.adminLockAccount(targetUserId, reason);
+  },
+
+  unlockUser: async (targetUserId) => {
+    await userService.adminUnlockAccount(targetUserId);
   },
 }));
 
