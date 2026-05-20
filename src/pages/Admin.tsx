@@ -1119,25 +1119,25 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function Placeholder({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: ComponentType<{ size?: number; className?: string }>;
-  title: string;
-  text: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-6 shadow-xl">
-      <div className="mb-2 flex items-center gap-2 font-bold text-white">
-        <Icon size={18} className="text-blue-300" />
-        {title}
-      </div>
-      <p className="text-sm text-slate-400">{text}</p>
-    </section>
-  );
-}
+// function Placeholder({
+//   icon: Icon,
+//   title,
+//   text,
+// }: {
+//   icon: ComponentType<{ size?: number; className?: string }>;
+//   title: string;
+//   text: string;
+// }) {
+//   return (
+//     <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-6 shadow-xl">
+//       <div className="mb-2 flex items-center gap-2 font-bold text-white">
+//         <Icon size={18} className="text-blue-300" />
+//         {title}
+//       </div>
+//       <p className="text-sm text-slate-400">{text}</p>
+//     </section>
+//   );
+// }
 
 function NavItem({
   active,
