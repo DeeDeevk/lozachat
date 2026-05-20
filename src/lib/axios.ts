@@ -27,6 +27,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // ← thêm: xử lý tài khoản bị khóa
+    if (error.response?.status === 403) {
+      const message = error.response?.data?.message || "";
+      if (message.includes("khóa")) {
+        useAuthStore.getState().clearState();
+        return Promise.reject(error);
+      }
+    }
+
     // những api không cần check
     const ignoredRefreshRoutes = [
       "/auth/signin",

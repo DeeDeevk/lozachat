@@ -168,4 +168,14 @@ export const userService = {
     });
     return res.data;
   },
+
+  adminLockAccount: async (targetUserId: string, reason: string) => {
+    const res = await api.post(`/users/${targetUserId}/lock`, { reason });
+    return res.data;
+  },
+
+  adminUnlockAccount: async (targetUserId: string) => {
+    const res = await api.post(`/users/${targetUserId}/unlock`);
+    return res.data;
+  },
 };
