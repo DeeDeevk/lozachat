@@ -151,6 +151,7 @@ export const userService = {
   getUsers: async (
     page = 1,
     limit = 10,
+    search = "",
   ): Promise<{
     users: AdminUser[];
     pagination: {
@@ -164,6 +165,7 @@ export const userService = {
       params: {
         page,
         limit,
+        search,
       },
     });
     return res.data;
@@ -176,6 +178,22 @@ export const userService = {
 
   adminUnlockAccount: async (targetUserId: string) => {
     const res = await api.post(`/users/${targetUserId}/unlock`);
+    return res.data;
+  },
+  getActivityStats: async (
+    period: "7d" | "30d" | "12m",
+    date?: string,
+  ): Promise<{
+    data: Array<{ _id: string; count: number }>;
+    period: string;
+  }> => {
+    const params = new URLSearchParams();
+    if (date) {
+      params.set("date", date);
+    } else {
+      params.set("period", period);
+    }
+    const res = await api.get(`/admin/stats/activity?${params.toString()}`);
     return res.data;
   },
 };

@@ -15,6 +15,7 @@ export interface AdminUser extends User {
   isLocked?: boolean;
   lockedAt?: string;
   lockedReason?: string;
+  lastLoginAt?: string;
 }
 
 export interface Friend {

@@ -24,7 +24,7 @@ interface UserStore {
   total: number;
   lockUser: (targetUserId: string, reason: string) => Promise<void>;
   unlockUser: (targetUserId: string) => Promise<void>;
-  getUsers: (page?: number, limit?: number) => Promise<void>;
+  getUsers: (page?: number, limit?: number, search?: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserStore>((set) => ({
@@ -34,11 +34,11 @@ export const useUserStore = create<UserStore>((set) => ({
   totalPages: 1,
   total: 0,
 
-  getUsers: async (page = 1, limit = 10) => {
+  getUsers: async (page = 1, limit = 10, search) => {
     try {
       set({ loading: true });
 
-      const res = await userService.getUsers(page, limit);
+      const res = await userService.getUsers(page, limit, search);
 
       set({
         users: res.users,
