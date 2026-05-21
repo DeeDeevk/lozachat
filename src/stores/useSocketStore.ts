@@ -6,6 +6,12 @@ import { useChatStore } from "./useChatStore";
 import { useFriendStore } from "./useFriendStore";
 import { useQuickMessageStore } from "./useQuickMessageStore";
 import { getDeviceId } from "@/utils/device";
+import { normalizeNotification } from "@/utils/normalizeNotification";
+import {
+  getNotifMessage,
+  NOTIF_TOAST_ICON,
+} from "@/utils/notificationMessage";
+import toast from "react-hot-toast";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
@@ -122,6 +128,19 @@ const registerSocketEvents = (
   socket.off("quick-message-created");
   socket.off("quick-message-updated");
   socket.off("quick-message-deleted");
+  socket.off("notification");
+
+  // ── Thông báo Social realtime (share, comment, reply, react, react_comment) ──
+  socket.on("notification", (raw) => {
+    const notif = normalizeNotification(raw);
+    window.dispatchEvent(
+      new CustomEvent("loza:notification", { detail: notif }),
+    );
+    toast(getNotifMessage(notif), {
+      icon: NOTIF_TOAST_ICON[notif.type] || "🔔",
+      duration: 4500,
+    });
+  });
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Post, PostImage, Visibility, ReactionType, Comment } from "../types/post";
 import { postService } from "../services/postService";
+import { normalizePost, normalizePosts } from "../utils/normalizePost";
 import toast from "react-hot-toast";
 
 interface PostStore {
@@ -12,9 +13,17 @@ interface PostStore {
   fetchPosts: (reset?: boolean) => Promise<void>;
   loadMore: () => Promise<void>;
   createPost: (content: string, images?: File[], visibility?: Visibility) => Promise<void>;
-  updatePost: (id: string, content: string, newImages?: File[], removeImages?: string[]) => Promise<void>;
+  updatePost: (
+    id: string,
+    content: string,
+    newImages?: File[],
+    removeImages?: string[],
+    visibility?: Visibility,
+  ) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
   reactToPost: (postId: string, type: ReactionType) => Promise<void>;
+  sharePost: (postId: string, content?: string, visibility?: Visibility) => Promise<void>;
+  ensurePostInFeed: (postId: string) => Promise<Post | null>;
 
   // ─── Images ──────────────────────────────────────────────────
   getPostImages: (postId: string) => Promise<PostImage[]>;
@@ -47,7 +56,7 @@ export const usePostStore = create<PostStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await postService.getPosts(currentPage);
-      let newPosts = res.posts;
+      let newPosts = normalizePosts(res.posts);
       if (reset && newPosts.length > 1) {
         const pivot = Math.floor(Math.random() * newPosts.length);
         newPosts = [...newPosts.slice(pivot), ...newPosts.slice(0, pivot)];
@@ -73,7 +82,7 @@ export const usePostStore = create<PostStore>((set, get) => ({
 
   createPost: async (content, images = [], visibility = "public") => {
     try {
-      const post = await postService.createPost(content, images, visibility);
+      const post = normalizePost(await postService.createPost(content, images, visibility));
       set((state) => ({ posts: [post, ...state.posts] }));
       toast.success("Đã đăng bài viết!");
     } catch {
@@ -82,9 +91,11 @@ export const usePostStore = create<PostStore>((set, get) => ({
     }
   },
 
-  updatePost: async (id, content, newImages = [], removeImages = []) => {
+  updatePost: async (id, content, newImages = [], removeImages = [], visibility) => {
     try {
-      const updated = await postService.updatePost(id, content, newImages, removeImages);
+      const updated = normalizePost(
+        await postService.updatePost(id, content, newImages, removeImages, visibility),
+      );
       set((state) => ({
         posts: state.posts.map((p) => (p._id === id ? updated : p)),
       }));
@@ -108,12 +119,45 @@ export const usePostStore = create<PostStore>((set, get) => ({
 
   reactToPost: async (postId, type) => {
     try {
-      const updated = await postService.reactToPost(postId, type);
+      const updated = normalizePost(await postService.reactToPost(postId, type));
       set((state) => ({
         posts: state.posts.map((p) => (p._id === postId ? updated : p)),
       }));
     } catch {
       toast.error("Không thể thả reaction");
+    }
+  },
+
+  ensurePostInFeed: async (postId) => {
+    const existing = get().posts.find((p) => p._id === postId);
+    if (existing) return existing;
+    try {
+      const post = normalizePost(await postService.getById(postId));
+      set((state) => ({
+        posts: state.posts.some((p) => p._id === postId)
+          ? state.posts
+          : [post, ...state.posts],
+      }));
+      return post;
+    } catch {
+      return null;
+    }
+  },
+
+  sharePost: async (postId, content = "", visibility = "public") => {
+    try {
+      const shared = normalizePost(await postService.sharePost(postId, content, visibility));
+      set((state) => ({
+        posts: [shared, ...state.posts.map((p) =>
+          p._id === postId
+            ? { ...p, sharesCount: (p.sharesCount || 0) + 1 }
+            : p,
+        )],
+      }));
+      toast.success("Đã chia sẻ bài viết");
+    } catch {
+      toast.error("Chia sẻ thất bại");
+      throw new Error("Share post failed");
     }
   },
 

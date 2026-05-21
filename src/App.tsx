@@ -8,7 +8,9 @@ import LandingPage from "./pages/LandingPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import FriendsPage from "./pages/FriendPage";
 import { SocialPage } from "./pages/SocialPage";
+import SearchPage from "./pages/SearchPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import ProfilePage from "./pages/ProfilePage";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
 import { useChatStore } from "./stores/useChatStore";
@@ -50,6 +52,8 @@ function App() {
             <Route path="/chat" element={<ChatAppPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/social" element={<SocialPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/profile/:userId" element={<ProfilePage />} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<LozaAdmin />} />
             </Route>

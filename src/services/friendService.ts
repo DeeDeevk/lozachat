@@ -1,6 +1,18 @@
 import api from "@/lib/axios";
 
+export interface FriendSuggestion {
+  _id: string;
+  displayName: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+}
+
 export const friendService = {
+  async getSuggestions(limit = 8): Promise<{ suggestions: FriendSuggestion[] }> {
+    const res = await api.get("/friends/suggestions", { params: { limit } });
+    return res.data;
+  },
   async searchByUserName(username: string) {
     const res = await api.get(`/users/search?username=${username}`);
     return res.data.user;

@@ -7,6 +7,8 @@ import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
 import { usePostStore } from "../../stores/usePostStore";
 import { CommentInput } from "./Commentinput";
 import toast from "react-hot-toast";
+import { UserProfileLink } from "../UserProfileLink";
+import { VoiceCommentPlayer } from "./VoiceCommentPlayer";
 
 type CommentWithReplies = Comment & { replies?: CommentWithReplies[] };
 
@@ -44,8 +46,6 @@ export const CommentItem = ({
   const isOwner = comment.author?._id === currentUserId;
   const isReply = !!comment.parentId;
   const indent = Math.min(level, 3) * 20;
-  const avatarSize = level === 0 ? "w-9 h-9 text-sm" : "w-7 h-7 text-xs";
-
   const myReaction = comment.reactions?.find((r) => r.userId === currentUserId);
   const totalReactions = comment.reactions?.length ?? 0;
 
@@ -114,24 +114,24 @@ export const CommentItem = ({
     <div style={{ marginLeft: `${indent}px` }}>
       {/* Comment card */}
       <div className="group bg-[#111d30] hover:bg-[#162036] border border-white/[0.07] hover:border-[#3b6ef5]/20 rounded-2xl p-4 transition-all duration-150">
-        <div className="flex gap-3">
-          {/* Avatar */}
-          <div
-            className={`${avatarSize} rounded-full flex-shrink-0 bg-gradient-to-br from-[#3b6ef5] to-[#6a3bf5] flex items-center justify-center text-white font-semibold overflow-hidden`}
-          >
-            {comment.author?.avatarUrl ? (
-              <img src={comment.author.avatarUrl} alt={comment.author.displayName} className="w-full h-full object-cover" />
-            ) : (
-              comment.author?.displayName?.[0]?.toUpperCase() ?? "U"
-            )}
-          </div>
+        <div className="flex gap-3 ">
+          <UserProfileLink
+            userId={comment.author?._id}
+            displayName={comment.author?.displayName ?? "Người dùng"}
+            avatarUrl={comment.author?.avatarUrl}
+            size={level === 0 ? "md" : "sm"}
+            showName={false}
+          />
 
           <div className="flex-1 min-w-0">
-            {/* Header */}
             <div className="flex justify-between items-center gap-2">
-              <span className="text-[#e8eaf0] font-semibold text-sm truncate">
-                {comment.author?.displayName ?? "Người dùng"}
-              </span>
+              {/* <UserProfileLink
+                userId={comment.author?._id}
+                displayName={comment.author?.displayName ?? "Người dùng"}
+                showName={true}
+                size="sm"
+                className="min-w-0"
+              /> */}
               <span className="text-[#4a5a70] text-[11px] flex-shrink-0">
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: vi })}
               </span>
@@ -173,12 +173,7 @@ export const CommentItem = ({
               </div>
             )}
 
-            {/* Voice message */}
-            {comment.audioUrl && (
-              <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-white/5 border border-white/[0.07] max-w-xs">
-                <audio controls src={comment.audioUrl} className="flex-1 h-8" style={{ minWidth: 0 }} />
-              </div>
-            )}
+            {comment.audioUrl ? <VoiceCommentPlayer src={comment.audioUrl} /> : null}
 
             {/* ─── Actions ─────────────────────────────────────────── */}
             <div className="mt-2.5 flex items-center gap-1 flex-wrap">

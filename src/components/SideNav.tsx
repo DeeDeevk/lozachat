@@ -56,6 +56,7 @@ export default function SideNav({
   const isAdmin = (userProfile?.role || user?.role) === "admin";
 
   const myName = userProfile?.displayName || "Bạn";
+  const myUserId = userProfile?._id || user?.userId || "";
   const myUsername =
     userProfile?.username || userProfile?.email?.split("@")[0] || "user";
   const myInitials = getInitials(myName);
@@ -69,6 +70,7 @@ export default function SideNav({
   const isChat = location.pathname === "/chat";
   const isFriends = location.pathname === "/friends";
   const isFeed = location.pathname === "/social";
+  const isSearch = location.pathname === "/search";
   const isAdminPage = location.pathname === "/admin";
 
   const navItems = [
@@ -88,7 +90,7 @@ export default function SideNav({
       icon: <Rss size={22} />,
       label: "Mạng xã hội",
       path: "/social",
-      active: isFeed,
+      active: isFeed || isSearch,
     },
     ...(isAdmin
       ? [
@@ -469,6 +471,23 @@ export default function SideNav({
                       <User size={15} color="#60a5fa" />
                     </div>
                     Thông tin cá nhân
+                  </button>
+                  
+                   <button
+                    className="avatar-modal-item"
+                    disabled={!myUserId}
+                    onClick={() => {
+                      if (!myUserId) return;
+                      navigate("/profile/" + myUserId);
+                    }}
+                  >
+                    <div
+                      className="avatar-modal-icon"
+                      style={{ background: "rgba(59,130,246,.12)" }}
+                    >
+                      <User size={15} color="#60a5fa" />
+                    </div>
+                    Trang cá nhân
                   </button>
 
                   {openProfile && (

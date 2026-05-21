@@ -1,7 +1,7 @@
 import api from "@/lib/axios";
 import type { AdminUser } from "@/types/user";
 
-interface UserProfile {
+export interface UserProfile {
   _id: string;
   username: string;
   email: string;
@@ -59,6 +59,11 @@ export interface AccountUnlockRequest {
 }
 
 export const userService = {
+  getPublicProfileById: async (userId: string): Promise<{ user: UserProfile }> => {
+    const res = await api.get(`/users/${userId}`);
+    return res.data;
+  },
+
   updateMe: async (
     payload: UpdateProfilePayload,
   ): Promise<UpdateProfileResponse> => {
