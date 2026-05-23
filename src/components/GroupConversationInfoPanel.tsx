@@ -305,10 +305,8 @@ export default function GroupConversationInfoPanel({
   const currentParticipant = conversation.participants.find(
     (p) => p._id === currentUserId,
   );
-  const isOwner =
-    currentParticipant?.role === "owner" ||
-    currentParticipant?.role === "admin";
-  const isAdmin = currentParticipant?.role === "admin";
+  const isOwner = currentParticipant?.role === "owner";
+const isAdmin = currentParticipant?.role === "admin";
   const canManage = isOwner || isAdmin;
 
   const getDisplayParticipants = useMemo(() => {
@@ -1205,7 +1203,7 @@ export default function GroupConversationInfoPanel({
                     onMouseEnter={() => setHoveredMemberId(member._id)}
                   >
                     {isOwner &&
-                      (member.role === "member" || !member.role ? (
+                      (member.role === "member" || member.role === "admin" || !member.role ? (
                         <button
                           onClick={() => {
                             onUpdateMemberRole?.(member._id, "admin");
@@ -1748,117 +1746,6 @@ export default function GroupConversationInfoPanel({
                 }}
                 disabled={!onUpdateSettings}
               />
-
-              {/* Pending requests (inside modal) */}
-              {uniquePendingRequests.length > 0 && (
-                <>
-                  <div
-                    style={{
-                      height: 1,
-                      background: "rgba(148,163,184,0.08)",
-                      margin: "4px 0",
-                    }}
-                  />
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#94a3b8",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Đang chờ duyệt ({uniquePendingRequests.length})
-                  </p>
-                  {uniquePendingRequests.map((req) => (
-                    <div
-                      key={req._id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 12px",
-                        borderRadius: 10,
-                        background: "rgba(15,23,42,0.6)",
-                        border: "1px solid rgba(148,163,184,0.12)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: "50%",
-                          background: "#1e293b",
-                          border: "1px solid rgba(148,163,184,0.2)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#94a3b8",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {req.invitedUserId.displayName?.[0]?.toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: 13,
-                            color: "#f1f5f9",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {req.invitedUserId.displayName}
-                        </p>
-                        <p
-                          style={{
-                            margin: "2px 0 0",
-                            fontSize: 11,
-                            color: "#475569",
-                          }}
-                        >
-                          Mời bởi {req.invitedBy.displayName}
-                        </p>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        <button
-                          onClick={() => onReviewRequest?.(req._id, "approved")}
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 7,
-                            border: "1px solid rgba(37,99,235,0.4)",
-                            background: "rgba(37,99,235,0.15)",
-                            color: "#93c5fd",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Duyệt
-                        </button>
-                        <button
-                          onClick={() => onReviewRequest?.(req._id, "rejected")}
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 7,
-                            border: "1px solid rgba(148,163,184,0.2)",
-                            background: "rgba(148,163,184,0.08)",
-                            color: "#64748b",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Từ chối
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
             </div>
           </div>
         </div>
