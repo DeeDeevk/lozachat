@@ -956,7 +956,9 @@ export default function GroupConversationInfoPanel({
                     </div>
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                       <button
-                        onClick={() => onReviewRequest?.(req._id, "approved")}
+                        onClick={async () => {
+                          await onReviewRequest?.(req._id, "approved");
+                        }}
                         style={{
                           padding: "4px 10px",
                           borderRadius: 7,
