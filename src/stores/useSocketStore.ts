@@ -131,6 +131,11 @@ const registerSocketEvents = (
   // ── Thông báo Social realtime (share, comment, reply, react, react_comment) ──
   socket.on("notification", (raw) => {
     const notif = normalizeNotification(raw);
+    const auth = useAuthStore.getState();
+    const myUserId = auth.userProfile?._id || auth.user?.userId || "";
+    if (myUserId && notif.actorId?._id === myUserId) {
+      return;
+    }
     window.dispatchEvent(
       new CustomEvent("loza:notification", { detail: notif }),
     );

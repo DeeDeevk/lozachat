@@ -77,7 +77,7 @@ export const PostActions = ({
         <button
   onClick={() => onReact(postId, "like")}
   onMouseEnter={() => setShowPicker(true)}
-  onMouseLeave={() => setTimeout(() => setShowPicker(false), 300)}
+  onMouseLeave={() => setTimeout(() => setShowPicker(false), 900)}
   className={`
     flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
     border backdrop-blur-md transition-all duration-200 select-none
