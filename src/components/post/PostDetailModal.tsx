@@ -4,9 +4,13 @@ import { UserProfileLink } from "../UserProfileLink";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import type { Post, PostImage, ReactionType } from "../../types/post";
+import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
 import { PostActions } from "./PostActions";
 import { CommentSection } from "./CommentSection";
 import { ReactionCountBadge } from "./ReactionCountBadge";
+
+const REACTION_TYPES: ReactionType[] = ["like", "love", "haha", "wow", "sad", "angry"];
+const isVideoMediaUrl = (url: string) => /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url);
 
 interface Props {
   post: Post;
@@ -18,6 +22,7 @@ interface Props {
   onDelete: (id: string) => void;
   onEdit: () => void;
   onOpenReactionStats?: (focusImageId?: string) => void;
+  onReactMedia?: (imageId: string, type: ReactionType) => Promise<void> | void;
 }
 
 export const PostDetailModal = ({
@@ -30,8 +35,10 @@ export const PostDetailModal = ({
   onDelete,
   onEdit,
   onOpenReactionStats,
+  onReactMedia,
 }: Props) => {
   const [imgIdx, setImgIdx] = useState(initialImageIndex);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const navigate = useNavigate();
 
   const isOwner = post.author._id === currentUserId;
@@ -54,7 +61,13 @@ export const PostDetailModal = ({
     };
   }, [imgIdx, onClose, post.images.length]);
 
+  useEffect(() => {
+    setShowMediaPicker(false);
+  }, [imgIdx]);
+
   const hasImages = post.images.length > 0;
+  const currentMediaDoc = postImages[imgIdx];
+  const myMediaReaction = currentMediaDoc?.reactions?.find((r) => r.userId === currentUserId);
 
   return (
     <div
@@ -99,28 +112,127 @@ export const PostDetailModal = ({
               maxHeight: "92vh",
             }}
           >
-            <img
-              src={post.images[imgIdx]}
-              alt="post"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "92vh",
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
-                userSelect: "none",
-              }}
-            />
+            {isVideoMediaUrl(post.images[imgIdx]) ? (
+              <video
+                src={post.images[imgIdx]}
+                controls
+                playsInline
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "92vh",
+                  width: "auto",
+                  height: "auto",
+                  objectFit: "contain",
+                  display: "block",
+                  userSelect: "none",
+                }}
+              />
+            ) : (
+              <img
+                src={post.images[imgIdx]}
+                alt="post"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "92vh",
+                  width: "auto",
+                  height: "auto",
+                  objectFit: "contain",
+                  display: "block",
+                  userSelect: "none",
+                }}
+              />
+            )}
 
-            {postImages[imgIdx]?.reactions?.length ? (
+            {currentMediaDoc ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "12px",
+                  left: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowMediaPicker((v) => !v)}
+                  style={{
+                    background: "rgba(0,0,0,0.6)",
+                    color: "#fff",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "999px",
+                    padding: "6px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span className="leading-none">{myMediaReaction ? REACTION_EMOJI[myMediaReaction.type] : "👍"}</span>
+                  <span style={{ whiteSpace: "nowrap" }}>{myMediaReaction ? REACTION_LABEL[myMediaReaction.type] : "React media"}</span>
+                  {/** Show media reaction count on the button (match stats modal) */}
+                  {currentMediaDoc && (currentMediaDoc.reactionsCount ?? currentMediaDoc.reactions?.length) > 0 && (
+                    <span
+                      className="px-1.5 py-0.5 rounded-full text-[11px] font-bold min-w-[18px] text-center leading-none"
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        color: "#e6eef8",
+                      }}
+                    >
+                      {currentMediaDoc.reactionsCount ?? currentMediaDoc.reactions?.length}
+                    </span>
+                  )}
+                </button>
+
+                {showMediaPicker && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "4px",
+                      background: "rgba(0,0,0,0.75)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      borderRadius: "12px",
+                      padding: "4px",
+                      backdropFilter: "blur(4px)",
+                    }}
+                  >
+                    {REACTION_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={async () => {
+                          if (!currentMediaDoc?._id) return;
+                          await onReactMedia?.(currentMediaDoc._id, type);
+                          setShowMediaPicker(false);
+                        }}
+                        title={REACTION_LABEL[type]}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "22px",
+                          borderRadius: "8px",
+                          padding: "2px 6px",
+                        }}
+                      >
+                        {REACTION_EMOJI[type]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {currentMediaDoc?.reactions?.length ? (
               <div className="absolute bottom-4 left-4 z-10">
                 <ReactionCountBadge
-                  reactions={postImages[imgIdx].reactions}
-                  onClick={() =>
-                    onOpenReactionStats?.(postImages[imgIdx]._id)
-                  }
-                  label={`Ảnh ${imgIdx + 1}`}
+                  reactions={currentMediaDoc.reactions}
+                  onClick={() => onOpenReactionStats?.(currentMediaDoc._id)}
+                  label={`Media ${imgIdx + 1}`}
                 />
               </div>
             ) : null}
@@ -453,16 +565,30 @@ export const PostDetailModal = ({
                       transition: "outline 0.15s",
                     }}
                   >
-                    <img
-                      src={src}
-                      alt=""
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        display: "block",
-                      }}
-                    />
+                    {isVideoMediaUrl(src) ? (
+                      <video
+                        src={src}
+                        muted
+                        playsInline
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={src}
+                        alt=""
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

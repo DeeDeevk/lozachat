@@ -34,7 +34,18 @@ function Section({
   reactions: ReactionDetailItem[];
   onUserClick: (userId: string) => void;
 }) {
-  if (reactions.length === 0) return null;
+  if (reactions.length === 0) {
+    return (
+      <div className="mb-5">
+        <h4 className="text-sm font-bold text-slate-200 mb-2 flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+          {title}
+          <span className="text-xs font-normal text-slate-500">(0)</span>
+        </h4>
+        <p className="text-xs text-slate-500 pl-4">Chưa có cảm xúc</p>
+      </div>
+    );
+  }
   const groups = groupByType(reactions);
 
   return (
@@ -111,17 +122,11 @@ export function ReactionStatsModal({ postId, focusImageId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+      className="fixed inset-0 z-2147483647 flex items-center justify-center p-4 bg-black/75 backdrop-blur-[6px]"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="w-full max-w-md max-h-[85vh] rounded-2xl overflow-hidden flex flex-col"
-        style={{
-          background: "var(--loza-bg-elevated, #0d1425)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
-        }}
+        className="w-full max-w-md max-h-[85vh] rounded-2xl overflow-hidden flex flex-col bg-(--loza-bg-elevated,#0d1425) border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <h3 className="text-base font-bold text-white">{title}</h3>
@@ -151,36 +156,18 @@ export function ReactionStatsModal({ postId, focusImageId, onClose }: Props) {
               }
               return (
                 <Section
-                  title={`Ảnh ${img.index}`}
+                  title={`Media ${img.index}`}
                   reactions={img.reactions}
                   onUserClick={goProfile}
                 />
               );
             })()
           ) : (
-            <>
-              <Section
-                title="Bài viết"
-                reactions={data.post.reactions}
-                onUserClick={goProfile}
-              />
-              {data.images.map((img) =>
-                img.reactions.length > 0 ? (
-                  <Section
-                    key={img.imageId}
-                    title={`Ảnh ${img.index}`}
-                    reactions={img.reactions}
-                    onUserClick={goProfile}
-                  />
-                ) : null,
-              )}
-              {data.post.reactions.length === 0 &&
-                data.images.every((i) => i.reactions.length === 0) && (
-                  <p className="text-center text-slate-400 text-sm py-8">
-                    Chưa có cảm xúc nào
-                  </p>
-                )}
-            </>
+            <Section
+              title="Bài viết"
+              reactions={data.post.reactions}
+              onUserClick={goProfile}
+            />
           )}
         </div>
       </div>
