@@ -114,36 +114,69 @@ export const useChatStore = create<ChatState>()(
           // không thì mới lấy activeConversationId từ store
           const targetConvId = conversationId ?? get().activeConversationId;
 
-          await chatService.sendDirecrMessages(
+          const sentMessage = await chatService.sendDirecrMessages(
             recipientId,
             payload?.content || "",
             payload?.imgUrl || "",
             targetConvId || undefined, // Truyền ID chuẩn vào đây
           );
 
+          if (sentMessage?.conversationId) {
+            await get().addMessage(sentMessage);
+            get().updateConversation({
+              _id: sentMessage.conversationId,
+              lastMessage: {
+                _id: sentMessage._id,
+                content: sentMessage.content || "",
+                createdAt: sentMessage.createdAt,
+              },
+              lastMessageAt: sentMessage.createdAt,
+            } as any);
+          }
+
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === targetConvId ? { ...c, seenBy: [] } : c,
             ),
           }));
+
+          return sentMessage;
         } catch (error) {
           console.error("Lỗi xảy ra khi gửi direct message", error);
+          throw error;
         }
       },
       sendGroupMessage: async (conversationId, payload) => {
         try {
-          await chatService.sendGroupMessages(
+          const sentMessage = await chatService.sendGroupMessages(
             conversationId,
             payload?.content || "",
             payload?.imgUrl,
           );
+
+          if (sentMessage?.conversationId) {
+            await get().addMessage(sentMessage);
+            get().updateConversation({
+              _id: sentMessage.conversationId,
+              lastMessage: {
+                _id: sentMessage._id,
+                content: sentMessage.content || "",
+                createdAt: sentMessage.createdAt,
+              },
+              lastMessageAt: sentMessage.createdAt,
+            } as any);
+          }
+
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === get().activeConversationId ? { ...c, seenBy: [] } : c,
             ),
           }));
+
+          return sentMessage;
         } catch (error) {
           console.error("Lỗi xảy ra khi gửi group message", error);
+          throw error;
         }
       },
       uploadAttachment: async (file) => {
@@ -157,16 +190,10 @@ export const useChatStore = create<ChatState>()(
       addMessage: async (message) => {
         try {
           const { user } = useAuthStore.getState();
-          const { fetchMessages } = get();
           message.isOwn = message.senderId === user?.userId;
 
           const convoId = message.conversationId;
-
-          let prevItems = get().messages[convoId]?.items ?? [];
-          if (prevItems.length === 0) {
-            await fetchMessages(message.conversationId);
-            prevItems = get().messages[convoId]?.items ?? [];
-          }
+          const prevItems = get().messages[convoId]?.items ?? [];
 
           set((state) => {
             const existingItems = state.messages[convoId]?.items ?? prevItems;
@@ -194,6 +221,47 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           console.error("Lỗi xảy ra khi add message: ", error);
         }
+      },
+      replaceMessage: (conversationId, tempMessageId, message) => {
+        set((state) => {
+          const convo = state.messages[conversationId];
+          if (!convo) return state;
+
+          const updatedItems = convo.items.map((item) =>
+            item._id === tempMessageId ? { ...message, isOwn: item.isOwn } : item,
+          );
+
+          const hasReplacement = updatedItems.some((item) => item._id === message._id);
+          const finalItems = hasReplacement
+            ? updatedItems.filter((item) => item._id !== tempMessageId)
+            : updatedItems;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...convo,
+                items: dedupeMessages(finalItems),
+              },
+            },
+          };
+        });
+      },
+      removeMessage: (conversationId, messageId) => {
+        set((state) => {
+          const convo = state.messages[conversationId];
+          if (!convo) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...convo,
+                items: convo.items.filter((item) => item._id !== messageId),
+              },
+            },
+          };
+        });
       },
       updateConversation: (conversation) => {
         set((state) => {

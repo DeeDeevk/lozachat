@@ -19,6 +19,7 @@ interface Props {
   style?: React.CSSProperties;
   highlighted?: boolean;
   openComments?: boolean;
+  openDetail?: boolean;
 }
 
 const getVisibilityInfo = (v: Visibility) => {
@@ -187,6 +188,7 @@ export const PostCard = ({
   style,
   highlighted = false,
   openComments = false,
+  openDetail = false,
 }: Props) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -221,6 +223,12 @@ export const PostCard = ({
   useEffect(() => {
     if (openComments) setShowComments(true);
   }, [openComments]);
+
+  useEffect(() => {
+    if (openDetail) {
+      setDetailImg(0);
+    }
+  }, [openDetail]);
 
   useEffect(() => {
     if (post.images.length === 0) {
