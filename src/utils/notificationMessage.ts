@@ -19,7 +19,8 @@ export function getNotifMessage(n: NotificationItem): string {
   switch (n.type) {
     case "react": {
       const { label, emoji } = reactionText(n.meta?.reactionType);
-      return `${name} đã ${label} ${emoji} bài viết của bạn`;
+      const target = n.meta?.target === "media" ? "media trong bài viết" : "bài viết";
+      return `${name} đã ${label} ${emoji} ${target} của bạn`;
     }
     case "comment": {
       const preview = clip(n.commentId?.content || "");
@@ -66,5 +67,5 @@ export const NOTIF_TOAST_ICON: Record<NotificationType, string> = {
   comment: "💬",
   reply: "↩️",
   share: "🔁",
-  react_comment: "💗",
+  react_comment: "👍🏻",
 };

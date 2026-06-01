@@ -7,10 +7,7 @@ import { useFriendStore } from "./useFriendStore";
 import { useQuickMessageStore } from "./useQuickMessageStore";
 import { getDeviceId } from "@/utils/device";
 import { normalizeNotification } from "@/utils/normalizeNotification";
-import {
-  getNotifMessage,
-  NOTIF_TOAST_ICON,
-} from "@/utils/notificationMessage";
+import { getNotifMessage, NOTIF_TOAST_ICON } from "@/utils/notificationMessage";
 import toast from "react-hot-toast";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
@@ -129,10 +126,16 @@ const registerSocketEvents = (
   socket.off("quick-message-updated");
   socket.off("quick-message-deleted");
   socket.off("notification");
+  socket.off("join-request-resolved");
 
   // ── Thông báo Social realtime (share, comment, reply, react, react_comment) ──
   socket.on("notification", (raw) => {
     const notif = normalizeNotification(raw);
+    const auth = useAuthStore.getState();
+    const myUserId = auth.userProfile?._id || auth.user?.userId || "";
+    if (myUserId && notif.actorId?._id === myUserId) {
+      return;
+    }
     window.dispatchEvent(
       new CustomEvent("loza:notification", { detail: notif }),
     );
@@ -446,6 +449,9 @@ const registerSocketEvents = (
       }));
     },
   );
+  socket.on("join-request-resolved", ({ requestId }) => {
+    useChatStore.getState().removeJoinRequest(requestId);
+  });
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({

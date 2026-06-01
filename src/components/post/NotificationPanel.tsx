@@ -99,6 +99,7 @@ export function NotificationPanel({ open, onClose, unreadCount, onUnreadChange }
       onClose();
       const params = new URLSearchParams();
       params.set("post", n.postId._id);
+      params.set("detail", "1");
       if (
         n.type === "comment" ||
         n.type === "reply" ||

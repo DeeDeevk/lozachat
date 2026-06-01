@@ -242,6 +242,30 @@ const miniButtonPrimaryStyle: React.CSSProperties = {
   color: "white",
 };
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function getBoundedPopupPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  if (typeof window === "undefined") {
+    return { left: x, top: y };
+  }
+
+  const padding = 8;
+  const maxLeft = Math.max(padding, window.innerWidth - width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - height - padding);
+
+  return {
+    left: clamp(x, padding, maxLeft),
+    top: clamp(y, padding, maxTop),
+  };
+}
+
 // --- HELPERS ---
 function createPollId() {
   return `poll_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -277,6 +301,17 @@ function formatCallDuration(totalSeconds: number) {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function isVideoAttachment(
+  name?: string,
+  mimeType?: string,
+  url?: string,
+): boolean {
+  const mime = (mimeType || "").toLowerCase();
+  if (mime.startsWith("video/")) return true;
+  const target = `${name || ""} ${url || ""}`.toLowerCase();
+  return /\.(mp4|webm|ogg|mov|m4v|avi|mkv)(\?|$)/i.test(target);
 }
 
 type IconBtnVariant = "ghost" | "danger" | "success" | "primary" | "active";
@@ -818,6 +853,9 @@ export default function ChatPage() {
   const [callParticipantIds, setCallParticipantIds] = useState<string[]>([]);
   const [callParticipantCameraTracks, setCallParticipantCameraTracks] =
     useState<Record<string, MediaStreamTrack | null>>({});
+  const [callParticipantAudioTracks, setCallParticipantAudioTracks] = useState<
+    Record<string, MediaStreamTrack | null>
+  >({});
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStreamState, setLocalStreamState] = useState<MediaStream | null>(
     null,
@@ -829,6 +867,7 @@ export default function ChatPage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const participantVideoRefs = useRef<Record<string, HTMLVideoElement | null>>(
     {},
   );
@@ -1025,6 +1064,13 @@ export default function ChatPage() {
     [activeConversation?.pinnedMessages],
   );
 
+  const pinnedBannerPreview = useMemo(() => {
+    const preview = getSafeMessagePreview(
+      pinnedMessages[0]?.content || "Tin nhắn",
+    );
+    return preview.length > 180 ? `${preview.slice(0, 180)}...` : preview;
+  }, [pinnedMessages]);
+
   const getUserDisplayNameById = useCallback(
     (targetUserId?: string) => {
       if (!targetUserId) return "Người dùng";
@@ -1146,13 +1192,21 @@ export default function ChatPage() {
     () =>
       callParticipantsInRoom.map((participant) => {
         const cameraTrack = callParticipantCameraTracks[participant.id] || null;
+        const audioTrack = callParticipantAudioTracks[participant.id] || null;
         return {
           ...participant,
           hasVideo: Boolean(cameraTrack),
-          videoStream: cameraTrack ? new MediaStream([cameraTrack]) : null,
+          videoStream:
+            cameraTrack || audioTrack
+              ? new MediaStream(
+                  [cameraTrack, audioTrack].filter(
+                    (track): track is MediaStreamTrack => Boolean(track),
+                  ),
+                )
+              : null,
         };
       }),
-    [callParticipantCameraTracks, callParticipantsInRoom],
+    [callParticipantAudioTracks, callParticipantCameraTracks, callParticipantsInRoom],
   );
 
   const otherAvatar = otherUser?.avatarUrl || "/miku.png";
@@ -1201,6 +1255,7 @@ export default function ChatPage() {
       setRemoteStream(null);
       setCallParticipantIds([]);
       setCallParticipantCameraTracks({});
+      setCallParticipantAudioTracks({});
       return;
     }
 
@@ -1231,6 +1286,7 @@ export default function ChatPage() {
     setCallParticipantIds(Array.from(new Set(participantIds)));
 
     const participantCameraTracks: Record<string, MediaStreamTrack | null> = {};
+    const participantAudioTracks: Record<string, MediaStreamTrack | null> = {};
     const localCamPub = Array.from(
       room.localParticipant.trackPublications.values(),
     ).find(
@@ -1240,6 +1296,15 @@ export default function ChatPage() {
     );
     participantCameraTracks[room.localParticipant.identity] =
       localCamPub?.track?.mediaStreamTrack || null;
+    const localMicPub = Array.from(
+      room.localParticipant.trackPublications.values(),
+    ).find(
+      (pub) =>
+        pub.source === Track.Source.Microphone &&
+        Boolean(pub.track?.mediaStreamTrack),
+    );
+    participantAudioTracks[room.localParticipant.identity] =
+      localMicPub?.track?.mediaStreamTrack || null;
 
     room.remoteParticipants.forEach((participant, identity) => {
       const remoteCamPub = Array.from(
@@ -1251,9 +1316,19 @@ export default function ChatPage() {
       );
       participantCameraTracks[identity] =
         remoteCamPub?.track?.mediaStreamTrack || null;
+      const remoteMicPub = Array.from(
+        participant.trackPublications.values(),
+      ).find(
+        (pub) =>
+          pub.source === Track.Source.Microphone &&
+          Boolean(pub.track?.mediaStreamTrack),
+      );
+      participantAudioTracks[identity] =
+        remoteMicPub?.track?.mediaStreamTrack || null;
     });
 
     setCallParticipantCameraTracks(participantCameraTracks);
+    setCallParticipantAudioTracks(participantAudioTracks);
     setRemoteStream(
       remoteTracks.length > 0 ? new MediaStream(remoteTracks) : null,
     );
@@ -1289,6 +1364,7 @@ export default function ChatPage() {
     setCallElapsedSeconds(0);
     setCallParticipantIds([]);
     setCallParticipantCameraTracks({});
+    setCallParticipantAudioTracks({});
   }, []);
 
   // Play ringtone when incoming, stop otherwise
@@ -1861,6 +1937,13 @@ export default function ChatPage() {
   }, [remoteStream, callKind, isCallMinimized]);
 
   useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 72)}px`;
+  }, [input, activeConversationId]);
+
+  useEffect(() => {
     if (!(callKind === "video" && isCurrentCallGroup)) {
       participantVideoRefs.current = {};
       return;
@@ -2235,13 +2318,13 @@ export default function ChatPage() {
       if (!activeConversationId) return;
       const encoded = encodeChatPayload(payload);
       if (activeConversation?.group) {
-        await sendGroupMessage(activeConversationId, {
+        return await sendGroupMessage(activeConversationId, {
           content: encoded,
           imgUrl,
         });
       } else {
         if (!otherUser?._id) return;
-        await sendDirectMessage(otherUser._id, { content: encoded, imgUrl });
+        return await sendDirectMessage(otherUser._id, { content: encoded, imgUrl });
       }
     },
     [
@@ -2277,28 +2360,51 @@ export default function ChatPage() {
 
   const sendTextMessage = useCallback(async () => {
     if (!input.trim() || !activeConversationId || sending) return;
+    const draftInput = input;
+    const draftReplyingTo = replyingTo;
+    const normalizedInput = input.replace(/\r\n/g, "\n");
+    const trimmedInput = normalizedInput.trim();
+    const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     try {
       setSending(true);
-      const trimmedInput = input.trim();
+      setInput("");
+      setReplyingTo(null);
       const botMatch = trimmedInput.match(LOZA_BOT_COMMAND_REGEX);
       const isBotMention = LOZA_BOT_MENTION_REGEX.test(trimmedInput);
       const payload: ChatStructuredPayload = {
         version: 1,
-        kind: replyingTo ? "reply" : "text",
-        text: trimmedInput,
-        reply: replyingTo
+        kind: draftReplyingTo ? "reply" : "text",
+        text: normalizedInput,
+        reply: draftReplyingTo
           ? {
-              messageId: replyingTo._id,
+              messageId: draftReplyingTo._id,
               senderName: getSenderName(
-                replyingTo,
+                draftReplyingTo,
                 user?.userId,
                 activeConversation?.participants || [],
               ),
-              preview: getSafeMessagePreview(replyingTo.content),
+              preview: getSafeMessagePreview(draftReplyingTo.content),
             }
           : undefined,
       };
-      await sendStructuredMessage(payload);
+      const encodedPayload = encodeChatPayload(payload);
+      useChatStore.getState().addMessage({
+        _id: tempMessageId,
+        conversationId: activeConversationId,
+        senderId: user?.userId || "",
+        content: encodedPayload,
+        createdAt: new Date().toISOString(),
+        isOwn: true,
+      } as Message);
+
+      const sentMessage = await sendStructuredMessage(payload);
+      if (sentMessage) {
+        useChatStore.getState().replaceMessage(
+          activeConversationId,
+          tempMessageId,
+          sentMessage,
+        );
+      }
 
       if (isBotMention && !botMatch?.[2]) {
         toast("Thêm yêu cầu sau @LozaBot, ví dụ: @LozaBot tóm tắt đoạn chat");
@@ -2371,12 +2477,13 @@ export default function ChatPage() {
         }
       }
 
-      setInput("");
-      setReplyingTo(null);
       if (socket?.connected)
         socket.emit("stop-typing", { conversationId: activeConversationId });
     } catch (error) {
       console.error("Send message error", error);
+      useChatStore.getState().removeMessage(activeConversationId, tempMessageId);
+      setInput(draftInput);
+      setReplyingTo(draftReplyingTo);
       alert("Không thể gửi tin nhắn");
     } finally {
       setSending(false);
@@ -2828,7 +2935,9 @@ export default function ChatPage() {
                 {payload.reply?.preview || "Tin nhắn"}
               </div>
             </div>
-            <span>{renderLinks(payload.text || "")}</span>
+            <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {renderLinks(payload.text || "")}
+            </span>
           </div>
         );
       }
@@ -2895,6 +3004,31 @@ export default function ChatPage() {
       }
 
       if (payload.kind === "file" && payload.attachment?.url) {
+        if (
+          isVideoAttachment(
+            payload.attachment.name,
+            payload.attachment.mimeType,
+            payload.attachment.url,
+          )
+        ) {
+          return (
+            <div style={{ display: "flex", maxWidth: 320 }}>
+              <video
+                src={payload.attachment.url}
+                controls
+                playsInline
+                preload="metadata"
+                style={{
+                  width: "100%",
+                  borderRadius: 12,
+                  background: "#020617",
+                  display: "block",
+                }}
+              />
+            </div>
+          );
+        }
+
         return (
           <a
             href={payload.attachment.url}
@@ -2921,15 +3055,32 @@ export default function ChatPage() {
         return (
           <div style={{ display: "grid", gap: 6 }}>
             {(payload.attachments ?? []).map((file, index) => (
-              <a
-                key={file.url || index}
-                href={file.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: "#e2e8f0", textDecoration: "underline" }}
-              >
-                {file.name}
-              </a>
+              isVideoAttachment(file.name, file.mimeType, file.url) ? (
+                <video
+                  key={file.url || index}
+                  src={file.url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{
+                    width: "100%",
+                    maxWidth: 320,
+                    borderRadius: 12,
+                    background: "#020617",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <a
+                  key={file.url || index}
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#e2e8f0", textDecoration: "underline" }}
+                >
+                  {file.name}
+                </a>
+              )
             ))}
           </div>
         );
@@ -2939,22 +3090,70 @@ export default function ChatPage() {
         return (
           <div
             style={{
+              minWidth: 240,
+              maxWidth: 340,
+              borderRadius: 16,
+              border: "1px solid rgba(96,165,250,.2)",
+              background:
+                "linear-gradient(145deg, rgba(15,23,42,.96) 0%, rgba(30,41,59,.96) 100%)",
+              boxShadow: "0 10px 24px rgba(0,0,0,.28)",
+              padding: 12,
               display: "grid",
-              gap: 6,
-              background: "rgba(148,163,184,0.1)",
-              border: "1px solid rgba(148,163,184,0.3)",
-              borderRadius: 10,
-              padding: "8px 10px",
-              minWidth: 220,
+              gap: 10,
             }}
           >
-            <div style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>
-              Ghi âm
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(34,197,94,.14)",
+                  color: "#4ade80",
+                  flexShrink: 0,
+                }}
+              >
+                <Mic size={18} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ color: "#f8fafc", fontSize: 13, fontWeight: 700 }}>
+                  Ghi âm
+                </div>
+                <div
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: 11,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {payload.attachment.name || "Voice message"}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, height: 16 }}>
+              {[10, 16, 8, 18, 12, 14, 9].map((height, index) => (
+                <span
+                  key={index}
+                  style={{
+                    width: 4,
+                    height,
+                    borderRadius: 999,
+                    background:
+                      index % 2 === 0 ? "#60a5fa" : "rgba(96,165,250,.45)",
+                    display: "inline-block",
+                  }}
+                />
+              ))}
             </div>
             <audio
               controls
               src={payload.attachment.url}
-              style={{ width: "100%" }}
+              style={{ width: "100%", accentColor: "#60a5fa" }}
             />
           </div>
         );
@@ -3330,7 +3529,7 @@ export default function ChatPage() {
         return <span style={{ color: "#cbd5e1" }}>Đã cập nhật bình chọn</span>;
 
       return (
-        <div>
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {renderLinks(
             payload?.text || payload?.emoji || message.content || "",
           )}
@@ -4033,14 +4232,16 @@ export default function ChatPage() {
                       style={{
                         color: "#dbeafe",
                         fontSize: 12,
-                        whiteSpace: "nowrap",
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 3,
                         overflow: "hidden",
-                        textOverflow: "ellipsis",
+                        whiteSpace: "normal",
+                        wordBreak: "break-word",
+                        lineHeight: 1.35,
                       }}
                     >
-                      {getSafeMessagePreview(
-                        pinnedMessages[0].content || "Tin nhắn",
-                      )}
+                      {pinnedBannerPreview}
                     </span>
                   </div>
                   <button
@@ -4976,7 +5177,7 @@ export default function ChatPage() {
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-end",
                         gap: 10,
                         border: "1px solid rgba(148,163,184,.25)",
                         background: "rgba(8,15,35,.85)",
@@ -5047,7 +5248,8 @@ export default function ChatPage() {
                         </button>
                       </div>
 
-                      <input
+                      <textarea
+                        ref={composerRef}
                         value={input}
                         onChange={(event) => {
                           const value = event.target.value;
@@ -5133,8 +5335,11 @@ export default function ChatPage() {
                             }
                           }
 
-                          // SEND MESSAGE
-                          if (event.key === "Enter") {
+                          // SEND MESSAGE: Ctrl+Enter / Cmd+Enter
+                          if (
+                            event.key === "Enter" &&
+                            !event.shiftKey
+                          ) {
                             event.preventDefault();
                             void sendTextMessage();
                           }
@@ -5147,7 +5352,13 @@ export default function ChatPage() {
                           color: "#f8fafc",
                           padding: "0 8px",
                           fontSize: 15,
+                          resize: "none",
+                          minHeight: 22,
+                          maxHeight: 72,
+                          overflowY: "auto",
+                          lineHeight: 1.45,
                         }}
+                        rows={1}
                       />
                       {showQuickPopup && (
                         <div
@@ -6730,20 +6941,32 @@ export default function ChatPage() {
       {/* Context menu */}
       {contextMenu && (
         <div
-          ref={contextMenuRef}
           style={{
             position: "fixed",
-            top: contextMenu.y,
-            left: contextMenu.x,
+            inset: 0,
             zIndex: 40,
-            width: 220,
-            borderRadius: 16,
-            border: "0.5px solid rgba(148,163,184,.22)",
-            background: "linear-gradient(165deg, #0f172a 0%, #1e293b 100%)",
-            boxShadow: "0 20px 42px rgba(0,0,0,.55)",
-            padding: 7,
+            background: "transparent",
           }}
+          onClick={() => setContextMenu(null)}
         >
+          <div
+            ref={contextMenuRef}
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: "fixed",
+              ...getBoundedPopupPosition(contextMenu.x, contextMenu.y, 236, 320),
+              zIndex: 41,
+              width: 236,
+              maxWidth: "calc(100vw - 16px)",
+              maxHeight: "calc(100vh - 16px)",
+              overflowY: "auto",
+              borderRadius: 16,
+              border: "0.5px solid rgba(148,163,184,.22)",
+              background: "linear-gradient(165deg, #0f172a 0%, #1e293b 100%)",
+              boxShadow: "0 20px 42px rgba(0,0,0,.55)",
+              padding: 7,
+            }}
+          >
           {!contextMenu.message.isRecalled && (
             <button
               onClick={() => {
@@ -6834,6 +7057,7 @@ export default function ChatPage() {
               <Trash2 size={15} /> Xóa phía tôi
             </button>
           )}
+          </div>
         </div>
       )}
 
@@ -6908,17 +7132,29 @@ export default function ChatPage() {
         <div
           style={{
             position: "fixed",
-            top: reactionViewer.y,
-            left: reactionViewer.x,
+            inset: 0,
             zIndex: 47,
-            width: 300,
-            borderRadius: 14,
-            border: "1px solid rgba(148,163,184,.3)",
-            background: "rgba(15,23,42,.96)",
-            boxShadow: "0 20px 42px rgba(0,0,0,.6)",
+            background: "rgba(2,6,23,.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             padding: 12,
           }}
+          onClick={() => setReactionViewer(null)}
         >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(340px, 100%)",
+              maxHeight: "min(72vh, calc(100vh - 24px))",
+              overflowY: "auto",
+              borderRadius: 16,
+              border: "1px solid rgba(148,163,184,.3)",
+              background: "rgba(15,23,42,.96)",
+              boxShadow: "0 20px 42px rgba(0,0,0,.6)",
+              padding: 12,
+            }}
+          >
           <div
             style={{
               display: "flex",
@@ -6977,6 +7213,7 @@ export default function ChatPage() {
                 ),
               )
             )}
+          </div>
           </div>
         </div>
       )}
@@ -7040,35 +7277,48 @@ export default function ChatPage() {
               ) : (
                 pinnedMessages.map((item) => (
                   <button
-                    key={item.messageId}
-                    onClick={() => {
-                      setIsPinnedModalOpen(false);
-                      const target = document.getElementById(
-                        `msg-${item.messageId}`,
-                      );
-                      target?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      });
-                    }}
-                    style={{
-                      border: "1px solid rgba(148,163,184,.25)",
-                      background: "rgba(30,41,59,.5)",
-                      color: "#e2e8f0",
-                      borderRadius: 10,
-                      padding: "10px 12px",
-                      textAlign: "left",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div
-                      style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}
-                    >
-                      {getSafeMessagePreview(item.content || "Tin nhắn")}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                      Ghim lúc {formatMessageDateTime(item.pinnedAt)}
-                    </div>
+  key={item.messageId}
+  onClick={() => {
+    setIsPinnedModalOpen(false);
+    const target = document.getElementById(
+      `msg-${item.messageId}`,
+    );
+    target?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }}
+  style={{
+    border: "1px solid rgba(148,163,184,.25)",
+    background: "rgba(30,41,59,.5)",
+    color: "#e2e8f0",
+    borderRadius: 10,
+    padding: "10px 12px",
+    textAlign: "left",
+    cursor: "pointer",
+  }}
+>
+  <div
+    style={{
+      fontSize: 13,
+      fontWeight: 600,
+      marginBottom: 4,
+      // Bạn vẫn nên giữ các thuộc tính CSS này để đảm bảo layout không bị vỡ trên các màn hình nhỏ
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {/* XỬ LÝ GIỚI HẠN KÝ TỰ Ở ĐÂY */}
+    {(() => {
+      const text = getSafeMessagePreview(item.content || "Tin nhắn");
+      const maxLength = 40; // Đặt số lượng ký tự tối đa bạn muốn hiển thị
+      return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+    })()}
+  </div>
+  <div style={{ fontSize: 11, color: "#94a3b8" }}>
+    Ghim lúc {formatMessageDateTime(item.pinnedAt)}
+  </div>
                   </button>
                 ))
               )}
@@ -7082,84 +7332,99 @@ export default function ChatPage() {
         <div
           style={{
             position: "fixed",
-            top: voteViewer.y,
-            left: voteViewer.x,
+            inset: 0,
             zIndex: 45,
-            width: 300,
-            borderRadius: 16,
-            border: "0.5px solid rgba(96,165,250,.3)",
-            background: "rgba(15,23,42,0.95)",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 20px 42px rgba(0,0,0,.6)",
-            padding: 14,
+            background: "rgba(2,6,23,.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 12,
           }}
+          onClick={() => setVoteViewer(null)}
         >
           <div
+            onClick={(event) => event.stopPropagation()}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: 14,
+              width: "min(340px, 100%)",
+              maxHeight: "min(72vh, calc(100vh - 24px))",
+              overflowY: "auto",
+              borderRadius: 16,
+              border: "0.5px solid rgba(96,165,250,.3)",
+              background: "rgba(15,23,42,0.95)",
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 20px 42px rgba(0,0,0,.6)",
+              padding: 14,
             }}
           >
-            <div>
-              <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14 }}>
-                {voteViewer.optionLabel}
-              </div>
-              <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                {voteViewer.totalVotes} lượt bình chọn
-              </div>
-            </div>
-            <button
-              onClick={() => setVoteViewer(null)}
+            <div
               style={{
-                border: "none",
-                background: "transparent",
-                color: "#94a3b8",
-                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 12,
+                marginBottom: 14,
               }}
             >
-              <X size={18} />
-            </button>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {voteViewer.users.map((person, i) => (
-              <div
-                key={i}
+              <div>
+                <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14 }}>
+                  {voteViewer.optionLabel}
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                  {voteViewer.totalVotes} lượt bình chọn
+                </div>
+              </div>
+              <button
+                onClick={() => setVoteViewer(null)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  background: "rgba(255,255,255,.03)",
-                  borderRadius: 12,
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
                 }}
               >
-                {person.avatarUrl ? (
-                  <img
-                    src={person.avatarUrl}
-                    style={{ width: 28, height: 28, borderRadius: "50%" }}
-                    alt=""
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "50%",
-                      background: "#1e293b",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <UserIcon size={14} />
-                  </div>
-                )}
-                <span style={{ fontSize: 13, color: "#e2e8f0" }}>
-                  {person.name}
-                </span>
-              </div>
-            ))}
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {voteViewer.users.map((person, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    background: "rgba(255,255,255,.03)",
+                    borderRadius: 12,
+                  }}
+                >
+                  {person.avatarUrl ? (
+                    <img
+                      src={person.avatarUrl}
+                      style={{ width: 28, height: 28, borderRadius: "50%" }}
+                      alt=""
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "#1e293b",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <UserIcon size={14} />
+                    </div>
+                  )}
+                  <span style={{ fontSize: 13, color: "#e2e8f0" }}>
+                    {person.name}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

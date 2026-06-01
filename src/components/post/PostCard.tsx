@@ -9,7 +9,6 @@ import { PostActions } from "./PostActions";
 import { CommentSection } from "./CommentSection";
 import { UserProfileLink } from "../UserProfileLink";
 import { ReactionStatsModal } from "./ReactionStatsModal";
-import { ReactionCountBadge } from "./ReactionCountBadge";
 import { postService } from "../../services/postService";
 
 interface Props {
@@ -20,6 +19,7 @@ interface Props {
   style?: React.CSSProperties;
   highlighted?: boolean;
   openComments?: boolean;
+  openDetail?: boolean;
 }
 
 const getVisibilityInfo = (v: Visibility) => {
@@ -31,33 +31,48 @@ const getVisibilityInfo = (v: Visibility) => {
   }
 };
 
+const isVideoMediaUrl = (url: string) => /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url);
+
 // ─── ImageGrid ────────────────────────────────────────────────
 const ImageGrid = ({
   images,
-  postImages = [],
   onClickImage,
-  onImageStatsClick,
 }: {
   images: string[];
-  postImages?: PostImage[];
   onClickImage: (idx: number) => void;
-  onImageStatsClick?: (imageId: string) => void;
 }) => {
-  const imageBadge = (idx: number) => {
-    const doc = postImages[idx];
-    if (!doc?.reactions?.length) return null;
-    return (
-      <div
-        className="absolute bottom-2 right-2 z-10"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ReactionCountBadge
-          reactions={doc.reactions}
-          onClick={() => onImageStatsClick?.(doc._id)}
+  const renderMedia = (src: string, idx: number, style: React.CSSProperties) => {
+    if (isVideoMediaUrl(src)) {
+      return (
+        <video
+          src={src}
+          style={style}
+          muted
+          playsInline
+          preload="metadata"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "scale(1.03)";
+            void e.currentTarget.play().catch(() => {});
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+            e.currentTarget.pause();
+          }}
         />
-      </div>
+      );
+    }
+
+    return (
+      <img
+        src={src}
+        alt={`img-${idx}`}
+        style={style}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      />
     );
   };
+
   const n = images.length;
 
   const cellBase: React.CSSProperties = {
@@ -78,14 +93,7 @@ const ImageGrid = ({
 
   const cell = (src: string, idx: number, extra?: React.CSSProperties) => (
     <div key={idx} style={{ ...cellBase, ...extra }} onClick={() => onClickImage(idx)}>
-      <img
-        src={src}
-        alt={`img-${idx}`}
-        style={imgStyle}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      />
-      {imageBadge(idx)}
+      {renderMedia(src, idx, imgStyle)}
     </div>
   );
 
@@ -95,22 +103,15 @@ const ImageGrid = ({
         style={{ background: "var(--loza-bg-base)", cursor: "pointer", position: "relative" }}
         onClick={() => onClickImage(0)}
       >
-        <img
-          src={images[0]}
-          alt="img-0"
-          style={{
-            width: "100%",
-            maxHeight: "520px",
-            objectFit: "contain",
-            objectPosition: "center",
-            display: "block",
-            background: "var(--loza-bg-base)",
-            transition: "transform 0.2s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.01)")}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        />
-        {imageBadge(0)}
+        {renderMedia(images[0], 0, {
+          width: "100%",
+          maxHeight: "520px",
+          objectFit: "contain",
+          objectPosition: "center",
+          display: "block",
+          background: "var(--loza-bg-base)",
+          transition: "transform 0.2s ease",
+        })}
       </div>
     );
 
@@ -155,7 +156,7 @@ const ImageGrid = ({
       {cell(visible[2], 2)}
       {cell(visible[3], 3)}
       <div style={{ ...cellBase }} onClick={() => onClickImage(4)}>
-        <img src={visible[4]} alt="more" style={{ ...imgStyle, filter: "brightness(0.4)" }} />
+        {renderMedia(visible[4], 4, { ...imgStyle, filter: "brightness(0.4)" })}
         {remaining > 0 && (
           <div
             style={{
@@ -187,6 +188,7 @@ export const PostCard = ({
   style,
   highlighted = false,
   openComments = false,
+  openDetail = false,
 }: Props) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -196,9 +198,37 @@ export const PostCard = ({
   const [statsModal, setStatsModal] = useState<{ focusImageId?: string } | null>(null);
   const navigate = useNavigate();
 
+  const handleReactToMedia = async (imageId: string, type: ReactionType) => {
+    try {
+      const updated = await postService.reactToImage(post._id, imageId, type);
+      setPostImages((prev) =>
+        prev.map((img) =>
+          img._id === imageId
+            ? {
+                ...img,
+                reactions: (updated.reactions || []).map((r) => ({
+                  ...r,
+                  userId: typeof r.userId === "string" ? r.userId : String(r.userId),
+                })),
+                reactionsCount: updated.reactionsCount ?? updated.reactions?.length ?? 0,
+              }
+            : img,
+        ),
+      );
+    } catch {
+      // toast handled in service/store layer if needed
+    }
+  };
+
   useEffect(() => {
     if (openComments) setShowComments(true);
   }, [openComments]);
+
+  useEffect(() => {
+    if (openDetail) {
+      setDetailImg(0);
+    }
+  }, [openDetail]);
 
   useEffect(() => {
     if (post.images.length === 0) {
@@ -436,7 +466,10 @@ export const PostCard = ({
                 </p>
               ) : null}
               {sharedImages.length > 0 ? (
-                <ImageGrid images={sharedImages} onClickImage={(idx) => setDetailImg(idx)} />
+                <ImageGrid
+                  images={sharedImages}
+                  onClickImage={(idx) => setDetailImg(idx)}
+                />
               ) : null}
             </div>
           </div>
@@ -446,9 +479,7 @@ export const PostCard = ({
         {!showSharedBlock && post.images.length > 0 && (
           <ImageGrid
             images={post.images}
-            postImages={postImages}
             onClickImage={(idx) => setDetailImg(idx)}
-            onImageStatsClick={(imageId) => setStatsModal({ focusImageId: imageId })}
           />
         )}
 
@@ -495,6 +526,7 @@ export const PostCard = ({
             setShowEdit(true);
           }}
           onOpenReactionStats={(focusImageId) => setStatsModal({ focusImageId })}
+          onReactMedia={handleReactToMedia}
         />
       )}
 
