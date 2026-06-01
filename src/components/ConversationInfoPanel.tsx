@@ -148,11 +148,13 @@ const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelPr
     [conversation.participants, currentUserId],
   );
 
-  const { friends, getFriends } = useFriendStore();
+  // ✅ Sau — subscribe riêng, reactive realtime
+  const friends = useFriendStore((state) => state.friends);
+  const getFriends = useFriendStore((state) => state.getFriends);
 
   useEffect(() => {
     getFriends();
-  }, []);
+  }, [conversation._id]);
 
   const isStranger =
     !!otherUser && !friends.some((f) => f._id === otherUser._id);
@@ -161,7 +163,6 @@ const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelPr
     const media: Array<{
       type: "image" | "audio";
       url: string;
-      name?: string;
       timestamp: string;
     }> = [];
 
@@ -179,7 +180,6 @@ const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelPr
         media.push({
           type: "audio",
           url: payload.attachment.url,
-          name: payload.attachment.name,
           timestamp: msg.createdAt,
         });
       } else if (payload.kind === "file" && payload.attachment) {
@@ -192,13 +192,14 @@ const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelPr
         }
       }
 
+      // ✅ Xử lý gửi nhiều ảnh 1 lượt (attachments array)
       if (payload.kind === "image" && payload.attachments?.length) {
-        payload.attachments.forEach((att) => {
+        payload.attachments.forEach((att: { url: string }) => {
           media.push({ type: "image", url: att.url, timestamp: msg.createdAt });
         });
       }
       if (payload.kind === "file" && payload.attachments?.length) {
-        payload.attachments.forEach((att) => {
+        payload.attachments.forEach((att: { url: string; name: string }) => {
           if (isImageFile(att.name)) {
             media.push({
               type: "image",
@@ -233,8 +234,9 @@ const ConversationInfoPanel = forwardRef<HTMLDivElement, ConversationInfoPanelPr
         }
       }
 
+      // ✅ Thêm vào đây — ngay sau block trên
       if (payload.kind === "file" && payload.attachments?.length) {
-        payload.attachments.forEach((att) => {
+        payload.attachments.forEach((att: { url: string; name: string }) => {
           if (!isImageFile(att.name)) {
             files.push({
               url: att.url,

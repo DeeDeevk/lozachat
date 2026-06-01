@@ -197,6 +197,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
         friends: state.friends.filter((f) => f._id !== targetId),
         friendStatus: "none",
       }));
+      
     } catch (error) {
       console.error("Lỗi khi huỷ kết bạn", error);
     } finally {

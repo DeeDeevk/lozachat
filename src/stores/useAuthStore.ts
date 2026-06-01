@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthState>()(
 
       clearForceLogout: () => set({ forceLogoutMessage: null }),
 
-      signIn: async (data: SignInData, forceLogin = false) => {
+      signIn: async (data: SignInData, forceLogin = true) => {
         set({ loading: true, error: null });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
@@ -205,13 +205,24 @@ export const useAuthStore = create<AuthState>()(
           const accessToken = await authService.refresh();
 
           setAccessToken(accessToken);
-
           if (!user) {
             await fetchMe();
           }
         } catch (error) {
-          console.error(error);
-          // toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          const axiosError = error as AxiosError<{ message: string }>;
+          const status = axiosError.response?.status;
+
+          // ✅ Session bị xóa (thiết bị khác đăng nhập) → redirect signin
+          if (status === 403) {
+            get().clearState();
+            // Set message để có thể hiển thị thông báo nếu muốn
+            set({
+              forceLogoutMessage:
+                "Phiên đăng nhập đã hết hạn hoặc bị thay thế bởi thiết bị khác.",
+            });
+            return;
+          }
+
           get().clearState();
         } finally {
           set({ loading: false });
