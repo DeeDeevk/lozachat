@@ -40,7 +40,7 @@ const handleWrapperLeave = () => {
   if (showTimer.current) {
     clearTimeout(showTimer.current);
   }
-  hideTimer.current = setTimeout(() => setShowPicker(false), 150);
+  hideTimer.current = setTimeout(() => setShowPicker(false), 350);
 };
 
   const handleMainClick = () => {
@@ -57,13 +57,13 @@ const handleWrapperLeave = () => {
     <div className="flex items-center gap-4">
       <div
         className="relative inline-block"
-        onMouseEnter={handleWrapperEnter}
-        onMouseLeave={handleWrapperLeave}
       >
         {/* ─── Reaction picker ──────────────────────────────────── */}
         {showPicker && (
           <div
             className="absolute bottom-full left-0 mb-1"
+            onMouseEnter={handleWrapperEnter}   // ← thêm dòng này
+            onMouseLeave={handleWrapperLeave}   // ← thêm dòng này
             style={{
               background: "var(--loza-bg-elevated)",
               border: "1px solid var(--loza-border-bright)",

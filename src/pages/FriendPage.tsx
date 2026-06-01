@@ -49,6 +49,7 @@ const randomColor = (str: string) => {
 
 type Tab = "friends" | "received" | "sent";
 
+
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({
   name,
@@ -101,9 +102,11 @@ function Avatar({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 import { useSocketStore } from "@/stores/useSocketStore";
+import useFriendsTutorial from "@/components/FriendTutorial";
 
 export default function FriendsPage() {
   const navigate = useNavigate();
+  const { startTutorial } = useFriendsTutorial();
   const {
     loading,
     friends,
@@ -580,7 +583,7 @@ export default function FriendsPage() {
 
       <div className="fp-page">
         {/* ── SideNav ── */}
-        <SideNav />
+        <SideNav onHelpClick={startTutorial} data-tour="sidenav"/>
 
         {/* ── Left sidebar (desktop) ── */}
         <div className="fp-sidebar">
@@ -589,6 +592,7 @@ export default function FriendsPage() {
             <div className="fp-topicons">
               <button
                 className="fp-icon-btn"
+                data-tour="open-search-user"
                 title="Tìm kiếm người dùng"
                 onClick={() => setShowSearchModal(true)}
               >
@@ -597,11 +601,18 @@ export default function FriendsPage() {
             </div>
           </div>
 
-          <div className="fp-tabs">
+          <div className="fp-tabs" data-tour="friend-tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 className={`fp-tab fp-tab-${tab.key} ${activeTab === tab.key ? "active" : ""}`}
+                data-tour={
+                  tab.key === "friends"
+                    ? "tab-friends"
+                    : tab.key === "received"
+                      ? "tab-received"
+                      : "tab-sent"
+                }
                 onClick={() => {
                   setActiveTab(tab.key);
                   if (tab.key === "friends") {
@@ -639,6 +650,7 @@ export default function FriendsPage() {
             </div>
             <button
               className="fp-mobile-search-btn"
+              data-tour="mobile-open-search-user"
               onClick={() => setShowSearchModal(true)}
               title="Tìm người dùng"
             >
@@ -669,6 +681,7 @@ export default function FriendsPage() {
                     />
                     <input
                       className="fp-search-input"
+                      data-tour="friend-search-input"
                       placeholder="Tìm trong danh sách bạn bè..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -699,7 +712,7 @@ export default function FriendsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="fp-friends-grid">
+                    <div className="fp-friends-grid" data-tour="friend-list">
                       {filteredFriends.map((friend, idx: number) => {
                         const name =
                           friend.displayName || friend.username || "Người dùng";
@@ -707,6 +720,7 @@ export default function FriendsPage() {
                           <div
                             key={friend._id}
                             className="fp-friend-card"
+                            data-tour="friend-card"
                             style={{ animationDelay: `${idx * 0.04}s` }}
                           >
                             <Avatar
@@ -766,6 +780,7 @@ export default function FriendsPage() {
                               <button
                                 className="fp-card-btn fp-card-btn-chat"
                                 data-tip="Nhắn tin"
+                                data-tour="friend-chat"
                                 onClick={async () => {
                                   try {
                                     const convo =
@@ -789,6 +804,7 @@ export default function FriendsPage() {
                               </button>
                               <button
                                 className="fp-card-btn fp-card-btn-info"
+                                data-tour="friend-profile"
                                 data-tip="Xem hồ sơ"
                               >
                                 <Info size={15} />
@@ -886,6 +902,7 @@ export default function FriendsPage() {
                             <div className="fp-request-actions">
                               <button
                                 className="fp-req-btn fp-req-btn-accept"
+                                data-tour="accept-friend-request"
                                 onClick={() => handleAccept(req._id, name)}
                                 disabled={isActing}
                               >
@@ -898,6 +915,7 @@ export default function FriendsPage() {
                               </button>
                               <button
                                 className="fp-req-btn fp-req-btn-decline"
+                                data-tour="decline-friend-request"
                                 onClick={() => handleDecline(req._id, name)}
                                 disabled={isActing}
                               >
@@ -971,6 +989,7 @@ export default function FriendsPage() {
                             <div className="fp-request-actions">
                               <button
                                 className="fp-req-btn fp-req-btn-cancel"
+                                data-tour="cancel-sent-friend-request"
                                 onClick={() => handleCancel(req._id, name)}
                                 disabled={isActing}
                               >
@@ -1095,6 +1114,7 @@ export default function FriendsPage() {
               </button>
               <button
                 onClick={confirmUnfriendAction}
+                data-tour="friend-unfriend"
                 disabled={actionId === confirmUnfriend.friendId}
                 style={{
                   flex: 1,

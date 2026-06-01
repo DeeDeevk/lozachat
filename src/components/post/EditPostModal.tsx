@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { usePostStore } from "../../stores/usePostStore";
-import type { Post } from "../../types/post";
+import type { Post, Visibility } from "../../types/post";
 
 interface Props {
   post: Post;
@@ -32,6 +32,7 @@ const compressImage = (file: File, maxPx = 1200, quality = 0.82): Promise<File> 
 
 export const EditPostModal = ({ post, onClose }: Props) => {
   const [content,       setContent]       = useState(post.content);
+  const [visibility,    setVisibility]    = useState<Visibility>(post.visibility || "public");
   const [keepImages,    setKeepImages]     = useState<string[]>(post.images);   
   const [removedImages, setRemovedImages]  = useState<string[]>([]);            
   const [newFiles,      setNewFiles]       = useState<File[]>([]);              
@@ -68,7 +69,7 @@ export const EditPostModal = ({ post, onClose }: Props) => {
   const handleSave = async () => {
     setSubmitting(true);
     try {
-      await updatePost(post._id, content.trim(), newFiles, removedImages);
+      await updatePost(post._id, content.trim(), newFiles, removedImages, visibility);
       onClose();
     } finally {
       setSubmitting(false);
@@ -129,6 +130,40 @@ export const EditPostModal = ({ post, onClose }: Props) => {
           />
           <div style={{ textAlign: "right", fontSize: "11px", color: "var(--loza-muted)", marginTop: "4px" }}>
             {content.length}/5000
+          </div>
+
+          <div style={{ marginTop: "12px" }}>
+            <label
+              style={{
+                fontSize: "11px",
+                color: "var(--loza-muted)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Quyền riêng tư
+            </label>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as Visibility)}
+              style={{
+                width: "100%",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                background: "var(--loza-bg-elevated)",
+                border: "1px solid var(--loza-border)",
+                color: "var(--loza-text)",
+                fontSize: "14px",
+                outline: "none",
+              }}
+            >
+              <option value="public">🌎 Mọi người</option>
+              <option value="friends">👥 Bạn bè</option>
+              <option value="private">🔒 Chỉ mình tôi</option>
+            </select>
           </div>
 
           {keepImages.length > 0 && (

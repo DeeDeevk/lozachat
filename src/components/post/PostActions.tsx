@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { REACTION_EMOJI, REACTION_LABEL } from "../../types/post";
-import type { ReactionType, Reaction } from "../../types/post";
+import type { ReactionType, Reaction, Visibility } from "../../types/post";
+import toast from "react-hot-toast";
 
 const REACTION_TYPES: ReactionType[] = [
   "like",
@@ -15,25 +16,58 @@ interface Props {
   postId: string;
   reactions: Reaction[];
   commentsCount: number;
+  sharesCount?: number;
   currentUserId: string;
   onReact: (postId: string, type: ReactionType) => void;
   onCommentClick: () => void;
-  showComments?: boolean; // thêm prop này để biết đang mở/đóng
+  showComments?: boolean;
+  onOpenReactionStats?: () => void;
 }
 
 export const PostActions = ({
   postId,
   reactions,
   commentsCount,
+  sharesCount = 0,
   currentUserId,
   onReact,
   onCommentClick,
   showComments = false,
+  onOpenReactionStats,
 }: Props) => {
   const [showPicker, setShowPicker] = useState(false);
+  const [openShare, setOpenShare] = useState(false);
+  const [shareText, setShareText] = useState("");
+  const [shareVisibility, setShareVisibility] = useState<Visibility>("public");
+  const [sharing, setSharing] = useState(false);
 
   const myReaction = reactions.find((r) => r.userId === currentUserId);
   const totalReactions = reactions.length;
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/social?post=${postId}`;
+    navigator.clipboard.writeText(url).then(
+      () => toast.success("Đã sao chép liên kết bài viết!"),
+      () => toast.error("Không thể sao chép liên kết"),
+    );
+  };
+
+  const handleShareToFeed = async () => {
+    setSharing(true);
+    try {
+      const { usePostStore } = await import("../../stores/usePostStore");
+      await usePostStore
+        .getState()
+        .sharePost(postId, shareText.trim(), shareVisibility);
+      setOpenShare(false);
+      setShareText("");
+      setShareVisibility("public");
+    } catch {
+      // Toast handled in store
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06]">
@@ -165,13 +199,33 @@ export const PostActions = ({
     </span>
   )}
 </button>
+
+{/* ── Nút Chia sẻ ── */}
+<button
+  onClick={() => setOpenShare(true)}
+  className="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold border bg-transparent text-[color:var(--loza-sub)] hover:bg-[color:var(--loza-bg-hover)]"
+>
+  <span>🔁</span>
+  <span>Chia sẻ</span>
+  {sharesCount > 0 && (
+    <span
+      className="px-1.5 py-0.5 rounded-full text-[11px] font-bold min-w-[18px] text-center leading-none bg-[color:var(--loza-bg-hover)] text-[color:var(--loza-sub)]"
+    >
+      {sharesCount}
+    </span>
+  )}
+</button>
       </div>
 
-      {/* Right: tổng reaction */}
+      {/* Right: thống kê react của bài viết (không gộp ảnh) */}
       {totalReactions > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-[#4a5a70]">
+        <button
+          type="button"
+          onClick={() => onOpenReactionStats?.()}
+          className="flex items-center gap-1.5 text-xs text-[#94a3b8] hover:text-indigo-300 transition-colors cursor-pointer rounded-lg px-2 py-1 hover:bg-white/5"
+          title="Xem thống kê cảm xúc bài viết"
+        >
           <div className="flex -space-x-1">
-            {/* Hiện top 3 emoji reaction unique */}
             {[...new Set(reactions.map((r) => r.type))]
               .slice(0, 3)
               .map((type) => (
@@ -180,8 +234,129 @@ export const PostActions = ({
                 </span>
               ))}
           </div>
-          <span>{totalReactions}</span>
-        </div>
+          <span className="font-semibold">{totalReactions}</span>
+        </button>
+      )}
+
+      {/* ── Share Modal ── */}
+      {openShare && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => !sharing && setOpenShare(false)} />
+          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
+            <div
+              className="w-full max-w-md rounded-2xl border p-5"
+              style={{
+                background: "var(--loza-bg-elevated)",
+                borderColor: "var(--loza-border)",
+                boxShadow: "0 22px 60px rgba(0,0,0,0.55)",
+              }}
+            >
+              <h3 className="text-base font-bold" style={{ color: "var(--loza-text)" }}>
+                Chia sẻ bài viết
+              </h3>
+              <p className="text-xs mt-1" style={{ color: "var(--loza-muted)" }}>
+                Chọn cách bạn muốn chia sẻ bài viết này
+              </p>
+
+              {/* ── Share options ── */}
+              <div
+                className="flex gap-2 mt-4"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "12px" }}
+              >
+                {/* Copy link */}
+                <button
+                  onClick={() => {
+                    handleCopyLink();
+                    setOpenShare(false);
+                  }}
+                  className="flex-1 flex flex-col items-center gap-2 py-3 rounded-xl transition-colors"
+                  style={{
+                    background: "var(--loza-bg-base)",
+                    border: "1px solid var(--loza-border)",
+                    color: "var(--loza-text)",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--loza-bg-hover)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "var(--loza-bg-base)")}
+                >
+                  <span className="text-xl">🔗</span>
+                  <span className="text-xs font-medium">Sao chép liên kết</span>
+                </button>
+              </div>
+
+              {/* ── Share to feed ── */}
+              <p
+                className="text-xs font-semibold mt-4 mb-2"
+                style={{ color: "var(--loza-sub)" }}
+              >
+                Chia sẻ lên trang cá nhân
+              </p>
+
+              <textarea
+                value={shareText}
+                onChange={(e) => setShareText(e.target.value)}
+                maxLength={500}
+                placeholder="Viết gì đó về bài chia sẻ này..."
+                className="w-full rounded-xl p-3 text-sm outline-none"
+                style={{
+                  minHeight: "80px",
+                  resize: "vertical",
+                  background: "var(--loza-bg-base)",
+                  border: "1px solid var(--loza-border)",
+                  color: "var(--loza-text)",
+                }}
+              />
+
+              <label className="block text-xs mt-3 mb-1" style={{ color: "var(--loza-muted)" }}>
+                Quyền riêng tư
+              </label>
+              <select
+                value={shareVisibility}
+                onChange={(e) => setShareVisibility(e.target.value as Visibility)}
+                className="w-full rounded-xl px-3 py-2 text-sm"
+                style={{
+                  background: "var(--loza-bg-base)",
+                  border: "1px solid var(--loza-border)",
+                  color: "var(--loza-text)",
+                }}
+              >
+                <option value="public">🌎 Mọi người</option>
+                <option value="friends">👥 Bạn bè</option>
+                <option value="private">🔒 Riêng tư (chỉ mình tôi)</option>
+              </select>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  disabled={sharing}
+                  onClick={() => setOpenShare(false)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--loza-border)",
+                    color: "var(--loza-sub)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  disabled={sharing}
+                  onClick={handleShareToFeed}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity"
+                  style={{
+                    background: "var(--loza-accent)",
+                    color: "white",
+                    border: "none",
+                    cursor: "pointer",
+                    opacity: sharing ? 0.7 : 1,
+                  }}
+                >
+                  {sharing ? "Đang chia sẻ..." : "Đăng chia sẻ"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

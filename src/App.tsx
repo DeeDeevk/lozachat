@@ -8,7 +8,9 @@ import LandingPage from "./pages/LandingPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import FriendsPage from "./pages/FriendPage";
 import { SocialPage } from "./pages/SocialPage";
+import SearchPage from "./pages/SearchPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import ProfilePage from "./pages/ProfilePage";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
 import { useChatStore } from "./stores/useChatStore";
@@ -19,6 +21,7 @@ import ForceLogoutDialog from "./components/ForceLogoutDialog"; // ← thêm imp
 import LozaAdmin from "./pages/Admin";
 import AdminRoute from "./components/AdminRoute";
 import AppInit from "./components/AppInit";
+import { Toaster as HotToaster } from "react-hot-toast";
 function App() {
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
@@ -37,6 +40,7 @@ function App() {
   return (
     <>
       <Toaster position="top-right" richColors />
+      <HotToaster />
       <BrowserRouter>
       <AppInit />  
         <ForceLogoutDialog /> {/* ← thay ForceLogoutHandler bằng cái này */}
@@ -50,6 +54,8 @@ function App() {
             <Route path="/chat" element={<ChatAppPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/social" element={<SocialPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/profile/:userId" element={<ProfilePage />} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<LozaAdmin />} />
             </Route>

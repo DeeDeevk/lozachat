@@ -76,6 +76,11 @@ export const postService = {
     return data;
   },
 
+  getReactionsDetail: async (postId: string) => {
+    const { data } = await axiosInstance.get(`/posts/${postId}/reactions-detail`);
+    return data;
+  },
+
   reactToImage: async (
     postId: string,
     imageId: string,
@@ -85,6 +90,12 @@ export const postService = {
       `/posts/${postId}/images/${imageId}/react`,
       { type },
     );
+    return data;
+  },
+
+  // ─── Share ─────────────────────────────────────────────────
+  sharePost: async (postId: string, content = "", visibility: Visibility = "public"): Promise<Post> => {
+    const { data } = await axiosInstance.post(`/posts/${postId}/share`, { content, visibility });
     return data;
   },
 

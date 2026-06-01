@@ -4,7 +4,14 @@ import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
 import { useFriendStore } from "./useFriendStore";
+import { useQuickMessageStore } from "./useQuickMessageStore";
 import { getDeviceId } from "@/utils/device";
+import { normalizeNotification } from "@/utils/normalizeNotification";
+import {
+  getNotifMessage,
+  NOTIF_TOAST_ICON,
+} from "@/utils/notificationMessage";
+import toast from "react-hot-toast";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
@@ -14,7 +21,6 @@ const registerSocketEvents = (
 ) => {
   socket.off("connect");
   socket.off("online-users");
-  socket.off("new-message");
   socket.off("message-recalled");
   socket.off("message-read");
   socket.off("message-edited");
@@ -33,6 +39,7 @@ const registerSocketEvents = (
   socket.off("member-left");
   socket.off("removed-from-group");
   socket.off("force-logout");
+  socket.off("conversation_stranger_updated");
   socket.on("removed-from-group", ({ conversationId }) => {
     useChatStore.setState((state) => ({
       conversations: state.conversations.filter(
@@ -118,6 +125,22 @@ const registerSocketEvents = (
   socket.off("conversation:theme-updated");
   socket.off("account:locked");
   socket.off("force-logout");
+  socket.off("quick-message-created");
+  socket.off("quick-message-updated");
+  socket.off("quick-message-deleted");
+  socket.off("notification");
+
+  // ── Thông báo Social realtime (share, comment, reply, react, react_comment) ──
+  socket.on("notification", (raw) => {
+    const notif = normalizeNotification(raw);
+    window.dispatchEvent(
+      new CustomEvent("loza:notification", { detail: notif }),
+    );
+    toast(getNotifMessage(notif), {
+      icon: NOTIF_TOAST_ICON[notif.type] || "🔔",
+      duration: 4500,
+    });
+  });
   socket.on("connect", () => {
     console.log("Đã kết nối với socket");
   });
@@ -154,6 +177,19 @@ const registerSocketEvents = (
   socket.on("online-users", (userIds) => {
     set({ onlineUsers: userIds });
   });
+
+  socket.on("quick-message-created", ({ quickMessage }) => {
+    useQuickMessageStore.getState().addMessage(quickMessage);
+  });
+
+  socket.on("quick-message-updated", ({ quickMessage }) => {
+    useQuickMessageStore.getState().updateMessage(quickMessage);
+  });
+
+  socket.on("quick-message-deleted", ({ quickMessageId }) => {
+    useQuickMessageStore.getState().deleteMessage(quickMessageId);
+  });
+
   socket.on("user-typing", (payload) => {
     console.log("🔥 typing event:", payload);
     useChatStore
@@ -400,6 +436,16 @@ const registerSocketEvents = (
       ),
     }));
   });
+  socket.on(
+    "conversation_stranger_updated",
+    ({ conversationId, isStranger, strangerStatus }) => {
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.map((c) =>
+          c._id === conversationId ? { ...c, isStranger, strangerStatus } : c,
+        ),
+      }));
+    },
+  );
 };
 
 export const useSocketStore = create<SocketState>((set, get) => ({

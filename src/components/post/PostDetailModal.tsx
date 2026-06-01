@@ -1,42 +1,44 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
+import { UserProfileLink } from "../UserProfileLink";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
-import type { Post, ReactionType } from "../../types/post";
+import type { Post, PostImage, ReactionType } from "../../types/post";
 import { PostActions } from "./PostActions";
 import { CommentSection } from "./CommentSection";
+import { ReactionCountBadge } from "./ReactionCountBadge";
+
 interface Props {
   post: Post;
+  postImages?: PostImage[];
   initialImageIndex?: number;
   currentUserId: string;
   onClose: () => void;
   onReact: (postId: string, type: ReactionType) => void;
   onDelete: (id: string) => void;
   onEdit: () => void;
+  onOpenReactionStats?: (focusImageId?: string) => void;
 }
 
 export const PostDetailModal = ({
   post,
+  postImages = [],
   initialImageIndex = 0,
   currentUserId,
   onClose,
   onReact,
   onDelete,
   onEdit,
+  onOpenReactionStats,
 }: Props) => {
   const [imgIdx, setImgIdx] = useState(initialImageIndex);
+  const navigate = useNavigate();
 
   const isOwner = post.author._id === currentUserId;
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), {
     addSuffix: true,
     locale: vi,
   });
-  const initials = post.author.displayName
-    .split(" ")
-    .map((w) => w[0])
-    .slice(-2)
-    .join("")
-    .toUpperCase();
-
   useEffect(() => {
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
@@ -110,6 +112,18 @@ export const PostDetailModal = ({
                 userSelect: "none",
               }}
             />
+
+            {postImages[imgIdx]?.reactions?.length ? (
+              <div className="absolute bottom-4 left-4 z-10">
+                <ReactionCountBadge
+                  reactions={postImages[imgIdx].reactions}
+                  onClick={() =>
+                    onOpenReactionStats?.(postImages[imgIdx]._id)
+                  }
+                  label={`Ảnh ${imgIdx + 1}`}
+                />
+              </div>
+            ) : null}
 
             {imgIdx > 0 && (
               <button
@@ -250,43 +264,13 @@ export const PostDetailModal = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {post.author.avatarUrl ? (
-                <img
-                  src={post.author.avatarUrl}
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    flexShrink: 0,
-                    outline:
-                      "2px solid color-mix(in srgb, var(--loza-accent) 30%, transparent)",
-                    outlineOffset: "2px",
-                  }}
-                  alt={post.author.displayName}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    borderRadius: "50%",
-                    background: "var(--loza-accent)",
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: "14px",
-                    outline:
-                      "2px solid color-mix(in srgb, var(--loza-accent) 30%, transparent)",
-                    outlineOffset: "2px",
-                  }}
-                >
-                  {initials}
-                </div>
-              )}
+              <UserProfileLink
+                userId={post.author._id}
+                displayName={post.author.displayName}
+                avatarUrl={post.author.avatarUrl}
+                size="md"
+                showName={false}
+              />
               <div>
                 <p
                   style={{
@@ -294,7 +278,9 @@ export const PostDetailModal = ({
                     fontWeight: 700,
                     fontSize: "14px",
                     color: "var(--loza-text)",
+                    cursor: "pointer",
                   }}
+                  onClick={() => navigate(`/profile/${post.author._id}`)}
                 >
                   {post.author.displayName}
                 </p>
@@ -497,6 +483,7 @@ export const PostDetailModal = ({
               currentUserId={currentUserId}
               onReact={onReact}
               onCommentClick={() => {}}
+              onOpenReactionStats={() => onOpenReactionStats?.()}
             />
 
             <CommentSection

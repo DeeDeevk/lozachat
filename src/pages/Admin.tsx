@@ -11,13 +11,13 @@ import {
   MessageSquare,
   RefreshCw,
   Search,
-  Settings,
   Shield,
   TrendingDown,
   TrendingUp,
   UserX,
   Users,
   X,
+  ChartColumnBig,
 } from "lucide-react";
 import { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -28,8 +28,11 @@ import type {
 } from "@/services/userService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import UsersTab from "@/components/admin/UserTab";
+import ActivityChart from "@/components/admin/ActivityChart";
+import MessageStatsChart from "@/components/admin/MessageStatsChart";
 
-type AdminTab = "dashboard" | "users" | "lock" | "settings" | "unlock";
+type AdminTab = "dashboard" | "users" | "lock" | "statistics" | "unlock";
 type RequestFilter = AccountLockRequestStatus | "all";
 type ReviewAction = "approved" | "rejected";
 
@@ -465,10 +468,10 @@ export default function LozaAdmin() {
             label="Mở khóa tài khoản"
           />
           <NavItem
-            active={activeTab === "settings"}
-            onClick={() => setActiveTab("settings")}
-            icon={Settings}
-            label="Cài đặt"
+            active={activeTab === "statistics"}
+            onClick={() => setActiveTab("statistics")}
+            icon={ChartColumnBig}
+            label="Thống kê"
           />
         </nav>
         <div className="relative border-t border-white/5 p-4" ref={userMenuRef}>
@@ -580,19 +583,44 @@ export default function LozaAdmin() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center gap-4 border-b border-blue-500/15 bg-[#040c1a] px-6">
+        <header className="flex h-16 items-center gap-4 border-b border-blue-500/15 bg-[#040c1a] px-6 p-8">
           <h2 className="flex-1 font-bold capitalize text-white">
-            {activeTab === "lock" ? "Khóa tài khoản" : activeTab}
+            {activeTab === "lock"
+              ? "Khóa tài khoản"
+              : activeTab === "users"
+                ? "Người dùng"
+                : activeTab === "dashboard"
+                  ? "Bảng điều khiển"
+                  : activeTab === "statistics"
+                    ? "Thống kê"
+                    : activeTab === "unlock"
+                      ? "Mở khóa"
+                      : "Không xác định"}
           </h2>
-          <div className="flex w-64 items-center gap-2 rounded-xl border-2 border-white/5 bg-[#0d1526] px-3 py-1.5 transition-all focus-within:border-blue-400/40">
-            <Search size={14} className="text-slate-500" />
+          <div className="flex w-72 items-center gap-2 rounded-xl border border-white/8 bg-[#0d1526] px-3.5 py-2 shadow-inner transition-all focus-within:border-blue-400/50 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.08)]">
+            <Search size={14} className="shrink-0 text-slate-500" />
             <input
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm tên, email, lý do..."
-              className="w-full border-none bg-transparent text-xs text-white outline-none"
+              placeholder={
+                activeTab === "users"
+                  ? "Tìm tên, username, email..."
+                  : activeTab === "lock"
+                    ? "Tìm tên, email, lý do..."
+                    : "Tìm kiếm..."
+              }
+              className="w-full border-none bg-transparent text-xs text-white outline-none placeholder:text-slate-600"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="shrink-0 rounded-md p-0.5 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
           <button
             className="relative rounded-xl bg-blue-500/10 p-2 text-blue-300 hover:bg-blue-500/20"
@@ -854,18 +882,27 @@ export default function LozaAdmin() {
               )}
 
               {activeTab === "users" && (
-                <Placeholder
-                  icon={Users}
-                  title="Quản lý người dùng"
-                  text="Phần này có thể nối tiếp danh sách user, tìm kiếm và mở khóa tài khoản nếu backend bổ sung API unlock."
-                />
+                <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-5 shadow-xl">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        Danh sách người dùng
+                      </h3>
+
+                      <p className="mt-1 text-xs text-slate-400">
+                        Quản lý tài khoản người dùng trong hệ thống
+                      </p>
+                    </div>
+                  </div>
+
+                  <UsersTab searchQuery={query} />
+                </section>
               )}
-              {activeTab === "settings" && (
-                <Placeholder
-                  icon={Settings}
-                  title="Cài đặt"
-                  text="Các cấu hình admin sẽ nằm ở đây."
-                />
+              {activeTab === "statistics" && (
+                <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-5 shadow-xl">
+                  <MessageStatsChart />
+                  <ActivityChart />
+                </section>
               )}
             </>
           )}
@@ -1082,25 +1119,25 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function Placeholder({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: ComponentType<{ size?: number; className?: string }>;
-  title: string;
-  text: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-6 shadow-xl">
-      <div className="mb-2 flex items-center gap-2 font-bold text-white">
-        <Icon size={18} className="text-blue-300" />
-        {title}
-      </div>
-      <p className="text-sm text-slate-400">{text}</p>
-    </section>
-  );
-}
+// function Placeholder({
+//   icon: Icon,
+//   title,
+//   text,
+// }: {
+//   icon: ComponentType<{ size?: number; className?: string }>;
+//   title: string;
+//   text: string;
+// }) {
+//   return (
+//     <section className="rounded-2xl border border-[#3b82f62e] bg-[#0d1526] p-6 shadow-xl">
+//       <div className="mb-2 flex items-center gap-2 font-bold text-white">
+//         <Icon size={18} className="text-blue-300" />
+//         {title}
+//       </div>
+//       <p className="text-sm text-slate-400">{text}</p>
+//     </section>
+//   );
+// }
 
 function NavItem({
   active,

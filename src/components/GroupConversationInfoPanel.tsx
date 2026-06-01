@@ -13,7 +13,6 @@ import {
   UserMinus,
   UserPlus,
   X,
-  Image,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
 import { decodeChatPayload } from "@/utils/chatMessageCodec";
@@ -241,7 +240,6 @@ export default function GroupConversationInfoPanel({
   onReviewRequest,
   isAdminOrOwner,
   onUpdateSettings,
-  onUpdateGroupInfo,
   isPinned,
   onTogglePin,
 }: GroupConversationInfoPanelProps) {

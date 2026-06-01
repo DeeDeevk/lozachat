@@ -10,6 +10,14 @@ export interface User {
   updatedAt?: string;
 }
 
+export interface AdminUser extends User {
+  role: string;
+  isLocked?: boolean;
+  lockedAt?: string;
+  lockedReason?: string;
+  lastLoginAt?: string;
+}
+
 export interface Friend {
   _id: string;
   username: string;
@@ -19,12 +27,7 @@ export interface Friend {
   isNew?: boolean;
 }
 
-export type RequestStatus =
-  | "none"
-  | "sent" // current user đã gửi → chờ họ phản hồi
-  | "received" // họ đã gửi cho current user → cần phản hồi
-  | "friend" // đã là bạn bè
-  | "self"; // chính mình
+export type RequestStatus = "none" | "sent" | "received" | "friend" | "self";
 
 export interface FriendRequest {
   _id: string;
@@ -34,12 +37,14 @@ export interface FriendRequest {
     displayName: string;
     avatarUrl?: string;
   };
+
   to?: {
     _id: string;
     username: string;
     displayName: string;
     avatarUrl?: string;
   };
+
   message: string;
   createdAt: string;
   updatedAt: string;

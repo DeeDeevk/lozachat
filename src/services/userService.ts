@@ -1,6 +1,7 @@
 import api from "@/lib/axios";
+import type { AdminUser } from "@/types/user";
 
-interface UserProfile {
+export interface UserProfile {
   _id: string;
   username: string;
   email: string;
@@ -34,7 +35,9 @@ export interface AccountLockRequest {
   userId: string | UserProfile;
   reason: string;
   status: AccountLockRequestStatus;
-  reviewedBy?: string | Pick<UserProfile, "_id" | "username" | "displayName" | "avatarUrl">;
+  reviewedBy?:
+    | string
+    | Pick<UserProfile, "_id" | "username" | "displayName" | "avatarUrl">;
   reviewedAt?: string;
   adminNote?: string;
   createdAt: string;
@@ -46,10 +49,9 @@ export interface AccountUnlockRequest {
   userId: string | UserProfile;
   reason: string;
   status: AccountLockRequestStatus;
-  reviewedBy?: string | Pick<
-    UserProfile,
-    "_id" | "username" | "displayName" | "avatarUrl"
-  >;
+  reviewedBy?:
+    | string
+    | Pick<UserProfile, "_id" | "username" | "displayName" | "avatarUrl">;
   reviewedAt?: string;
   adminNote?: string;
   createdAt: string;
@@ -57,17 +59,26 @@ export interface AccountUnlockRequest {
 }
 
 export const userService = {
-  updateMe: async (payload: UpdateProfilePayload): Promise<UpdateProfileResponse> => {
+  getPublicProfileById: async (userId: string): Promise<{ user: UserProfile }> => {
+    const res = await api.get(`/users/${userId}`);
+    return res.data;
+  },
+
+  updateMe: async (
+    payload: UpdateProfilePayload,
+  ): Promise<UpdateProfileResponse> => {
     const res = await api.put("/users/me", payload);
     return res.data;
   },
 
-  uploadAvatar: async (file: File): Promise<{ message: string; user: UserProfile }> => {
+  uploadAvatar: async (
+    file: File,
+  ): Promise<{ message: string; user: UserProfile }> => {
     const formData = new FormData();
     formData.append("avatar", file);
 
     const res = await api.post("/users/avatar", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
   },
@@ -84,7 +95,9 @@ export const userService = {
     return res.data;
   },
 
-  getMyAccountLockRequests: async (): Promise<{ requests: AccountLockRequest[] }> => {
+  getMyAccountLockRequests: async (): Promise<{
+    requests: AccountLockRequest[];
+  }> => {
     const res = await api.get("/users/lock-requests/me");
     return res.data;
   },
@@ -115,13 +128,10 @@ export const userService = {
     message: string;
     request: AccountUnlockRequest;
   }> => {
-    const res = await api.post(
-      "/users/unlock-requests",
-      {
-        username,
-        reason,
-      }
-    );
+    const res = await api.post("/users/unlock-requests", {
+      username,
+      reason,
+    });
 
     return res.data;
   },
@@ -137,11 +147,58 @@ export const userService = {
     requestId: string,
     action: "approved" | "rejected",
   ) => {
-    const res = await api.patch(
-      `/users/unlock-requests/${requestId}/review`,
-      { action }
-    );
+    const res = await api.patch(`/users/unlock-requests/${requestId}/review`, {
+      action,
+    });
 
+    return res.data;
+  },
+  getUsers: async (
+    page = 1,
+    limit = 10,
+    search = "",
+  ): Promise<{
+    users: AdminUser[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> => {
+    const res = await api.get("/admin/users", {
+      params: {
+        page,
+        limit,
+        search,
+      },
+    });
+    return res.data;
+  },
+
+  adminLockAccount: async (targetUserId: string, reason: string) => {
+    const res = await api.post(`/users/${targetUserId}/lock`, { reason });
+    return res.data;
+  },
+
+  adminUnlockAccount: async (targetUserId: string) => {
+    const res = await api.post(`/users/${targetUserId}/unlock`);
+    return res.data;
+  },
+  getActivityStats: async (
+    period: "7d" | "30d" | "12m",
+    date?: string,
+  ): Promise<{
+    data: Array<{ _id: string; count: number }>;
+    period: string;
+  }> => {
+    const params = new URLSearchParams();
+    if (date) {
+      params.set("date", date);
+    } else {
+      params.set("period", period);
+    }
+    const res = await api.get(`/admin/stats/activity?${params.toString()}`);
     return res.data;
   },
 };

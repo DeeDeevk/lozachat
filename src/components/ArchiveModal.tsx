@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { File, Link as LinkIcon, X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { File, Link as LinkIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface ArchiveModalProps {
   isOpen: boolean;

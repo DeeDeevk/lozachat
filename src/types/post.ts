@@ -7,10 +7,39 @@ export interface Author {
   avatarUrl?: string;
 }
 
+export interface SharedPostRef {
+  _id: string;
+  author?: Author;
+  content: string;
+  images: string[];
+  visibility: Visibility;
+  createdAt: string;
+}
+
 export interface Reaction {
   userId: string;
   type: ReactionType;
   createdAt?: string;
+}
+
+export interface ReactionDetailItem {
+  userId: string;
+  type: ReactionType;
+  displayName: string;
+  avatarUrl?: string;
+  createdAt?: string;
+}
+
+export interface PostReactionsDetailResponse {
+  postId: string;
+  post: { reactions: ReactionDetailItem[] };
+  images: Array<{
+    imageId: string;
+    order: number;
+    index: number;
+    url: string;
+    reactions: ReactionDetailItem[];
+  }>;
 }
 
 export interface Post {
@@ -18,8 +47,15 @@ export interface Post {
   author: Author;
   content: string;
   images: string[];
+  sharedFrom?: SharedPostRef | null;
+  sharedFromAuthorName?: string;
+  sharedFromAuthorAvatarUrl?: string;
+  sharedFromAuthorId?: string;
+  sharedOriginalContent?: string;
+  sharedOriginalImages?: string[];
   reactions: Reaction[];
   commentsCount: number;
+  sharesCount?: number;
   reactionsCount?: number; // virtual từ backend
   visibility: Visibility;
   createdAt: string;
@@ -91,3 +127,20 @@ export const REACTION_LABEL: Record<ReactionType, string> = {
 };
 
 export const COMMENT_PLACEHOLDER = "Viết bình luận...";
+
+// ─── Notification Types ─────────────────────────────────────
+
+export type NotificationType = "react" | "comment" | "reply" | "share" | "react_comment";
+
+export interface NotificationItem {
+  _id: string;
+  userId: string;
+  actorId: { _id: string; displayName: string; avatarUrl?: string };
+  type: NotificationType;
+  postId?: { _id: string; content: string; author: string; images?: string[] };
+  commentId?: { _id: string; content: string };
+  read: boolean;
+  meta?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
