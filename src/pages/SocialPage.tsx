@@ -24,6 +24,7 @@ export const SocialPage = () => {
 
   const targetPostId = searchParams.get("post");
   const wantComments = searchParams.get("comments") === "1";
+  const wantDetail = searchParams.get("detail") === "1";
 
   const userProfile = useAuthStore((s) => s.userProfile);
   const user = useAuthStore((s) => s.user);
@@ -185,6 +186,10 @@ export const SocialPage = () => {
                     highlighted={focusPostId === post._id || targetPostId === post._id}
                     openComments={
                       openCommentsFor &&
+                      (targetPostId === post._id || focusPostId === post._id)
+                    }
+                    openDetail={
+                      wantDetail &&
                       (targetPostId === post._id || focusPostId === post._id)
                     }
                     style={{ animation: `fp-fadein 0.4s ease-out ${i * 0.05}s both` }}

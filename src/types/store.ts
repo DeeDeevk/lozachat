@@ -48,17 +48,23 @@ export interface ChatState {
       imgUrl?: string;
     },
     conversationId?: string,
-  ) => Promise<void>;
+  ) => Promise<Message | void>;
   sendGroupMessage: (
     conversationId: string,
     payload: {
       content?: string;
       imgUrl?: string;
     },
-  ) => Promise<void>;
+  ) => Promise<Message | void>;
   uploadAttachment: (file: File) => Promise<UploadAttachmentResponse>;
   // add message
   addMessage: (message: Message) => Promise<void>;
+  replaceMessage: (
+    conversationId: string,
+    tempMessageId: string,
+    message: Message,
+  ) => void;
+  removeMessage: (conversationId: string, messageId: string) => void;
   // update convo
   updateConversation: (conversation: Conversation) => void;
   //xoa
