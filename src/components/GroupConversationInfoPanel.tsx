@@ -4,7 +4,6 @@ import {
   File,
   Link as LinkIcon,
   Trash2,
-  Bell,
   LogOut,
   Pin,
   Search,
@@ -304,7 +303,7 @@ export default function GroupConversationInfoPanel({
     (p) => p._id === currentUserId,
   );
   const isOwner = currentParticipant?.role === "owner";
-const isAdmin = currentParticipant?.role === "admin";
+  const isAdmin = currentParticipant?.role === "admin";
   const canManage = isOwner || isAdmin;
 
   const getDisplayParticipants = useMemo(() => {
@@ -750,41 +749,6 @@ const isAdmin = currentParticipant?.role === "admin";
             <span>{isPinned ? "Bỏ ghim" : "Ghim hội thoại"}</span>
           </button>
 
-          {/* Bell */}
-          <button
-            title="Tắt thông báo"
-            onClick={() => {}}
-            style={{
-              flex: 1,
-              padding: "10px 6px",
-              borderRadius: 10,
-              border: "1px solid rgba(148,163,184,0.2)",
-              background: "rgba(148,163,184,0.05)",
-              color: "#94a3b8",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              cursor: "pointer",
-              fontSize: 10,
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.1)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#f1f5f9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(148,163,184,0.05)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
-            }}
-          >
-            <Bell size={16} />
-            <span>Tắt thông báo</span>
-          </button>
-
           {/* Manage Group — same style always, disabled if not admin/owner */}
           <button
             title={
@@ -1203,7 +1167,9 @@ const isAdmin = currentParticipant?.role === "admin";
                     onMouseEnter={() => setHoveredMemberId(member._id)}
                   >
                     {isOwner &&
-                      (member.role === "member" || member.role === "admin" || !member.role ? (
+                      (member.role === "member" ||
+                      member.role === "admin" ||
+                      !member.role ? (
                         <button
                           onClick={() => {
                             onUpdateMemberRole?.(member._id, "admin");

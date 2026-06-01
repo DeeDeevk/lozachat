@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { File, Link as LinkIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  File,
+  Link as LinkIcon,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 interface ArchiveModalProps {
   isOpen: boolean;
@@ -26,7 +32,9 @@ export default function ArchiveModal({
   fileList,
   links,
 }: ArchiveModalProps) {
-  const [activeTab, setActiveTab] = useState<"media" | "files" | "links">("media");
+  const [activeTab, setActiveTab] = useState<"media" | "files" | "links">(
+    "media",
+  );
   const [lightbox, setLightbox] = useState<LightboxState>({
     isOpen: false,
     currentIndex: 0,
@@ -56,13 +64,19 @@ export default function ArchiveModal({
   const goPrev = useCallback(() => {
     setLightbox((prev) => ({
       ...prev,
-      currentIndex: (prev.currentIndex - 1 + imageFiles.length) % imageFiles.length,
+      currentIndex:
+        (prev.currentIndex - 1 + imageFiles.length) % imageFiles.length,
       scale: 1,
     }));
   }, [imageFiles.length]);
 
-  const zoomIn = () => setLightbox((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.5, 4) }));
-  const zoomOut = () => setLightbox((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.5, 0.5) }));
+  const zoomIn = () =>
+    setLightbox((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.5, 4) }));
+  const zoomOut = () =>
+    setLightbox((prev) => ({
+      ...prev,
+      scale: Math.max(prev.scale - 0.5, 0.5),
+    }));
 
   // Keyboard navigation
   useEffect(() => {
@@ -121,7 +135,9 @@ export default function ArchiveModal({
               alignItems: "center",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Kho lưu trữ</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+              Kho lưu trữ
+            </h2>
             <button
               onClick={onClose}
               style={{
@@ -153,7 +169,9 @@ export default function ArchiveModal({
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as "media" | "files" | "links")}
+                onClick={() =>
+                  setActiveTab(tab.id as "media" | "files" | "links")
+                }
                 style={{
                   padding: "16px 0",
                   marginRight: 32,
@@ -163,7 +181,8 @@ export default function ArchiveModal({
                   fontSize: 14,
                   fontWeight: activeTab === tab.id ? 600 : 500,
                   cursor: "pointer",
-                  borderBottom: activeTab === tab.id ? "3px solid #2563eb" : "none",
+                  borderBottom:
+                    activeTab === tab.id ? "3px solid #2563eb" : "none",
                   transition: "all 0.2s",
                 }}
               >
@@ -177,14 +196,24 @@ export default function ArchiveModal({
             {activeTab === "media" && (
               <div>
                 {mediaFiles.length === 0 ? (
-                  <p style={{ color: "#94a3b8", textAlign: "center" }}>Chưa có ảnh/video</p>
+                  <p style={{ color: "#94a3b8", textAlign: "center" }}>
+                    Chưa có ảnh/video
+                  </p>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 20,
+                    }}
+                  >
                     {[...mediaFiles]
                       .reverse()
                       .reduce(
                         (acc, media) => {
-                          const date = new Date(media.timestamp).toLocaleDateString("vi-VN");
+                          const date = new Date(
+                            media.timestamp,
+                          ).toLocaleDateString("vi-VN");
                           const lastGroup = acc[acc.length - 1];
                           if (lastGroup && lastGroup.date === date) {
                             lastGroup.items.push(media);
@@ -217,27 +246,44 @@ export default function ArchiveModal({
                             {group.items.map((media, idx) => (
                               <div
                                 key={idx}
-                                onClick={() => media.type === "image" && openLightbox(media.url)}
+                                onClick={() =>
+                                  media.type === "image" &&
+                                  openLightbox(media.url)
+                                }
                                 style={{
                                   width: "100%",
                                   paddingBottom: "100%",
                                   position: "relative",
                                   borderRadius: 10,
                                   overflow: "hidden",
-                                  background: media.type === "image" ? "#3b82f6" : "#f59e0b",
-                                  cursor: media.type === "image" ? "pointer" : "default",
+                                  background:
+                                    media.type === "image"
+                                      ? "#3b82f6"
+                                      : "#f59e0b",
+                                  cursor:
+                                    media.type === "image"
+                                      ? "pointer"
+                                      : "default",
                                   transition: "transform 0.2s, box-shadow 0.2s",
                                 }}
                                 onMouseEnter={(e) => {
                                   if (media.type === "image") {
-                                    (e.currentTarget as HTMLDivElement).style.transform = "scale(1.05)";
-                                    (e.currentTarget as HTMLDivElement).style.boxShadow =
+                                    (
+                                      e.currentTarget as HTMLDivElement
+                                    ).style.transform = "scale(1.05)";
+                                    (
+                                      e.currentTarget as HTMLDivElement
+                                    ).style.boxShadow =
                                       "0 8px 24px rgba(0,0,0,0.5)";
                                   }
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLDivElement).style.transform = "scale(1)";
-                                  (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+                                  (
+                                    e.currentTarget as HTMLDivElement
+                                  ).style.transform = "scale(1)";
+                                  (
+                                    e.currentTarget as HTMLDivElement
+                                  ).style.boxShadow = "none";
                                 }}
                               >
                                 {media.type === "image" && (
@@ -264,14 +310,24 @@ export default function ArchiveModal({
             {activeTab === "files" && (
               <div>
                 {fileList.length === 0 ? (
-                  <p style={{ color: "#94a3b8", textAlign: "center" }}>Chưa có file</p>
+                  <p style={{ color: "#94a3b8", textAlign: "center" }}>
+                    Chưa có file
+                  </p>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 20,
+                    }}
+                  >
                     {[...fileList]
                       .reverse()
                       .reduce(
                         (acc, file) => {
-                          const date = new Date(file.timestamp).toLocaleDateString("vi-VN");
+                          const date = new Date(
+                            file.timestamp,
+                          ).toLocaleDateString("vi-VN");
                           const lastGroup = acc[acc.length - 1];
                           if (lastGroup && lastGroup.date === date) {
                             lastGroup.items.push(file);
@@ -284,10 +340,23 @@ export default function ArchiveModal({
                       )
                       .map((group) => (
                         <div key={group.date}>
-                          <p style={{ color: "#94a3b8", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+                          <p
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              marginBottom: 12,
+                            }}
+                          >
                             {group.date}
                           </p>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 8,
+                            }}
+                          >
                             {group.items.map((file, idx) => (
                               <a
                                 key={idx}
@@ -307,15 +376,20 @@ export default function ArchiveModal({
                                   transition: "background 0.2s",
                                 }}
                                 onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLAnchorElement).style.background =
-                                    "rgba(148,163,184,0.15)";
+                                  (
+                                    e.currentTarget as HTMLAnchorElement
+                                  ).style.background = "rgba(148,163,184,0.15)";
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLAnchorElement).style.background =
-                                    "rgba(148,163,184,0.08)";
+                                  (
+                                    e.currentTarget as HTMLAnchorElement
+                                  ).style.background = "rgba(148,163,184,0.08)";
                                 }}
                               >
-                                <File size={16} style={{ color: "#8b5cf6", flexShrink: 0 }} />
+                                <File
+                                  size={16}
+                                  style={{ color: "#8b5cf6", flexShrink: 0 }}
+                                />
                                 <span
                                   style={{
                                     flex: 1,
@@ -339,14 +413,24 @@ export default function ArchiveModal({
             {activeTab === "links" && (
               <div>
                 {links.length === 0 ? (
-                  <p style={{ color: "#94a3b8", textAlign: "center" }}>Chưa có link</p>
+                  <p style={{ color: "#94a3b8", textAlign: "center" }}>
+                    Chưa có link
+                  </p>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 20,
+                    }}
+                  >
                     {[...links]
                       .reverse()
                       .reduce(
                         (acc, link) => {
-                          const date = new Date(link.timestamp).toLocaleDateString("vi-VN");
+                          const date = new Date(
+                            link.timestamp,
+                          ).toLocaleDateString("vi-VN");
                           const lastGroup = acc[acc.length - 1];
                           if (lastGroup && lastGroup.date === date) {
                             lastGroup.items.push(link);
@@ -359,10 +443,23 @@ export default function ArchiveModal({
                       )
                       .map((group) => (
                         <div key={group.date}>
-                          <p style={{ color: "#94a3b8", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+                          <p
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              marginBottom: 12,
+                            }}
+                          >
                             {group.date}
                           </p>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 8,
+                            }}
+                          >
                             {group.items.map((link, idx) => (
                               <a
                                 key={idx}
@@ -382,15 +479,20 @@ export default function ArchiveModal({
                                   transition: "background 0.2s",
                                 }}
                                 onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLAnchorElement).style.background =
-                                    "rgba(148,163,184,0.15)";
+                                  (
+                                    e.currentTarget as HTMLAnchorElement
+                                  ).style.background = "rgba(148,163,184,0.15)";
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLAnchorElement).style.background =
-                                    "rgba(148,163,184,0.08)";
+                                  (
+                                    e.currentTarget as HTMLAnchorElement
+                                  ).style.background = "rgba(148,163,184,0.08)";
                                 }}
                               >
-                                <LinkIcon size={16} style={{ color: "#f59e0b", flexShrink: 0 }} />
+                                <LinkIcon
+                                  size={16}
+                                  style={{ color: "#f59e0b", flexShrink: 0 }}
+                                />
                                 <span
                                   style={{
                                     overflow: "hidden",
@@ -456,20 +558,24 @@ export default function ArchiveModal({
               transition: "background 0.15s",
             }}
             onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.22)")
+              ((e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(255,255,255,0.22)")
             }
             onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)")
+              ((e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(255,255,255,0.12)")
             }
           >
             <X size={18} />
           </button>
 
-
           {/* Prev button */}
           {imageFiles.length > 1 && (
             <button
-              onClick={(e) => { e.stopPropagation(); goPrev(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                goPrev();
+              }}
               style={{
                 position: "fixed",
                 left: 16,
@@ -490,10 +596,12 @@ export default function ArchiveModal({
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.25)")
+                ((e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(255,255,255,0.25)")
               }
               onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)")
+                ((e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(255,255,255,0.12)")
               }
             >
               <ChevronLeft size={22} />
@@ -503,7 +611,10 @@ export default function ArchiveModal({
           {/* Next button */}
           {imageFiles.length > 1 && (
             <button
-              onClick={(e) => { e.stopPropagation(); goNext(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                goNext();
+              }}
               style={{
                 position: "fixed",
                 right: 16,
@@ -524,10 +635,12 @@ export default function ArchiveModal({
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.25)")
+                ((e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(255,255,255,0.25)")
               }
               onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.12)")
+                ((e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(255,255,255,0.12)")
               }
             >
               <ChevronRight size={22} />
@@ -551,6 +664,7 @@ export default function ArchiveModal({
             <img
               src={currentImage.url}
               alt=""
+              draggable={false}
               style={{
                 display: "block",
                 maxWidth: lightbox.scale === 1 ? "95vw" : "none",
@@ -561,7 +675,6 @@ export default function ArchiveModal({
                 objectFit: "contain",
                 transition: "transform 0.2s ease, width 0.2s ease",
                 userSelect: "none",
-                draggable: false,
               }}
             />
           </div>
