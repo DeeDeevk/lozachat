@@ -383,7 +383,7 @@ export default function LandingPage() {
           <button
             className="btn-primary"
             style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}
-            onClick={() => navigate("/register")}
+            onClick={() => navigate("/signup")}
           >
             Bắt đầu miễn phí
           </button>
@@ -517,7 +517,7 @@ export default function LandingPage() {
             >
               <button
                 className="btn-primary"
-                onClick={() => navigate("/register")}
+                onClick={() => navigate("/signup")}
               >
                 Dùng thử miễn phí
                 <svg
@@ -531,7 +531,7 @@ export default function LandingPage() {
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
               </button>
-              <button className="btn-ghost" onClick={() => navigate("/login")}>
+              <button className="btn-ghost" onClick={() => navigate("/signin")}>
                 Đăng nhập
               </button>
             </div>
@@ -1297,7 +1297,7 @@ export default function LandingPage() {
               <button
                 className="btn-primary"
                 style={{ padding: "15px 36px", fontSize: 16, borderRadius: 16 }}
-                onClick={() => navigate("/register")}
+                onClick={() => navigate("/signup")}
               >
                 Tạo tài khoản miễn phí
                 <svg
@@ -1314,7 +1314,7 @@ export default function LandingPage() {
               <button
                 className="btn-ghost"
                 style={{ padding: "15px 36px", fontSize: 16, borderRadius: 16 }}
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/signin")}
               >
                 Đăng nhập ngay
               </button>
@@ -1344,18 +1344,15 @@ export default function LandingPage() {
               width: 28,
               height: 28,
               borderRadius: 8,
-              background: "linear-gradient(135deg,#2563eb,#3b82f6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                fill="white"
-              />
-            </svg>
+            <img
+              src="/logo.png"
+              alt="Loza Logo"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
           </div>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Loza</span>
           <span style={{ color: "#475569", fontSize: 13, marginLeft: 8 }}>

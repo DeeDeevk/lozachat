@@ -5,7 +5,6 @@ import {
   Link as LinkIcon,
   Trash2,
   Pin,
-  Bell,
   MessageSquare,
 } from "lucide-react";
 import type { Conversation, Message } from "@/types/chat";
@@ -151,11 +150,13 @@ const ConversationInfoPanel = forwardRef<
       [conversation.participants, currentUserId],
     );
 
-    const { friends, getFriends } = useFriendStore();
+    // ✅ Sau — subscribe riêng, reactive realtime
+    const friends = useFriendStore((state) => state.friends);
+    const getFriends = useFriendStore((state) => state.getFriends);
 
     useEffect(() => {
       getFriends();
-    }, []);
+    }, [conversation._id]);
 
     const isStranger =
       !!otherUser && !friends.some((f) => f._id === otherUser._id);
@@ -164,7 +165,6 @@ const ConversationInfoPanel = forwardRef<
       const media: Array<{
         type: "image" | "audio";
         url: string;
-        name?: string;
         timestamp: string;
       }> = [];
 
@@ -182,7 +182,6 @@ const ConversationInfoPanel = forwardRef<
           media.push({
             type: "audio",
             url: payload.attachment.url,
-            name: payload.attachment.name,
             timestamp: msg.createdAt,
           });
         } else if (payload.kind === "file" && payload.attachment) {
@@ -195,8 +194,9 @@ const ConversationInfoPanel = forwardRef<
           }
         }
 
+        // ✅ Xử lý gửi nhiều ảnh 1 lượt (attachments array)
         if (payload.kind === "image" && payload.attachments?.length) {
-          payload.attachments.forEach((att) => {
+          payload.attachments.forEach((att: { url: string }) => {
             media.push({
               type: "image",
               url: att.url,
@@ -205,7 +205,7 @@ const ConversationInfoPanel = forwardRef<
           });
         }
         if (payload.kind === "file" && payload.attachments?.length) {
-          payload.attachments.forEach((att) => {
+          payload.attachments.forEach((att: { url: string; name: string }) => {
             if (isImageFile(att.name)) {
               media.push({
                 type: "image",
@@ -240,8 +240,9 @@ const ConversationInfoPanel = forwardRef<
           }
         }
 
+        // ✅ Thêm vào đây — ngay sau block trên
         if (payload.kind === "file" && payload.attachments?.length) {
-          payload.attachments.forEach((att) => {
+          payload.attachments.forEach((att: { url: string; name: string }) => {
             if (!isImageFile(att.name)) {
               files.push({
                 url: att.url,
@@ -415,40 +416,6 @@ const ConversationInfoPanel = forwardRef<
                   style={{ fill: isPinned ? "#f59e0b" : "none" }}
                 />
                 <span>{isPinned ? "Bỏ ghim" : "Ghim hội thoại"}</span>
-              </button>
-              <button
-                title="Tắt thông báo"
-                style={{
-                  flex: 1,
-                  padding: "10px 6px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(148,163,184,0.2)",
-                  background: "rgba(148,163,184,0.05)",
-                  color: "#94a3b8",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                  cursor: "pointer",
-                  fontSize: 10,
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(148,163,184,0.1)";
-                  (e.currentTarget as HTMLButtonElement).style.color =
-                    "#f1f5f9";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(148,163,184,0.05)";
-                  (e.currentTarget as HTMLButtonElement).style.color =
-                    "#94a3b8";
-                }}
-              >
-                <Bell size={16} />
-                <span>Tắt thông báo</span>
               </button>
               <button
                 title="Tạo nhóm chat"
