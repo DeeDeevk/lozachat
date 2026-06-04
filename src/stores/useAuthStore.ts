@@ -217,10 +217,7 @@ export const useAuthStore = create<AuthState>()(
           if (status === 403) {
             get().clearState();
             // Set message để có thể hiển thị thông báo nếu muốn
-            set({
-              forceLogoutMessage:
-                "Phiên đăng nhập đã hết hạn hoặc bị thay thế bởi thiết bị khác.",
-            });
+          
             return;
           }
 
@@ -240,7 +237,6 @@ export const useAuthStore = create<AuthState>()(
           loading: false,
           error: null,
           errorCode: null,
-          forceLogoutMessage: null,
         });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
