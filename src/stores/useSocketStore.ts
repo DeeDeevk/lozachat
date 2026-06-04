@@ -167,6 +167,10 @@ const registerSocketEvents = (
 
   // ✅ Sửa thành: chỉ set message, để dialog tự xử lý logout
   socket.on("force-logout", ({ message }) => {
+    // ✅ Nếu đã có message rồi thì không set lại (tránh loop)
+    const current = useAuthStore.getState().forceLogoutMessage;
+    if (current) return;
+
     useAuthStore.setState({
       forceLogoutMessage:
         message || "Phiên đăng nhập của bạn đã bị thay thế trên thiết bị khác.",
