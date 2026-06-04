@@ -2708,25 +2708,56 @@ export default function ChatPage() {
   );
 
   const handleOpenContextMenu = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, message: Message) => {
-      event.stopPropagation();
-      event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
-      const isMine = message.senderId === user?.userId;
-      const menuWidth = 220;
-      const menuHeight = 172;
-      let x = isMine ? rect.left - menuWidth - 6 : rect.right + 6;
-      let y = rect.bottom + 4;
-      if (x + menuWidth > window.innerWidth - 6)
-        x = window.innerWidth - menuWidth - 6;
-      if (x < 6) x = 6;
-      if (y + menuHeight > window.innerHeight - 6)
-        y = window.innerHeight - menuHeight - 6;
-      if (y < 6) y = 6;
-      setContextMenu({ x, y, message });
-    },
-    [user?.userId],
-  );
+  (event: React.MouseEvent<HTMLButtonElement>, message: Message) => {
+    event.stopPropagation();
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const isMine = message.senderId === user?.userId;
+
+    const menuWidth = 230;
+    const estimatedMenuHeight = isMine ? 200 : 160; // ít options hơn khi không phải của mình
+
+    const MARGIN = 8;
+
+    // ==================== TÍNH VỊ TRÍ NGANG ====================
+    let x: number;
+
+    if (isMine) {
+      // Tin nhắn của mình → hiện bên TRÁI nút
+      x = rect.left - menuWidth - MARGIN;
+      // Nếu tràn trái → flip sang phải
+      if (x < MARGIN) {
+        x = rect.right + MARGIN;
+      }
+    } else {
+      // Tin nhắn người khác → hiện bên PHẢI nút
+      x = rect.right + MARGIN;
+      // Nếu tràn phải → flip sang trái
+      if (x + menuWidth > window.innerWidth - MARGIN) {
+        x = rect.left - menuWidth - MARGIN;
+      }
+    }
+
+    // Clamp cuối cùng để không vượt biên màn hình
+    x = Math.max(MARGIN, Math.min(x, window.innerWidth - menuWidth - MARGIN));
+
+    // ==================== TÍNH VỊ TRÍ DỌC ====================
+    // Ưu tiên: căn theo cạnh trên của nút, rồi flip xuống nếu tràn
+    let y = rect.top;
+
+    if (y + estimatedMenuHeight > window.innerHeight - MARGIN) {
+      // Tràn xuống → đẩy lên, căn cạnh dưới menu với cạnh dưới nút
+      y = rect.bottom - estimatedMenuHeight;
+    }
+
+    // Clamp dọc
+    y = Math.max(MARGIN, Math.min(y, window.innerHeight - estimatedMenuHeight - MARGIN));
+
+    setContextMenu({ x, y, message });
+  },
+  [user?.userId],
+);
 
   const handleOpenReactionMenu = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>, message: Message) => {
