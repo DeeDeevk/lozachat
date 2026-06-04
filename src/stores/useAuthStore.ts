@@ -240,6 +240,7 @@ export const useAuthStore = create<AuthState>()(
           loading: false,
           error: null,
           errorCode: null,
+          forceLogoutMessage: null,
         });
         localStorage.removeItem("accessToken");
         useChatStore.getState().reset();
