@@ -174,6 +174,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             userProfile: null,
             error: null,
+            forceLogoutMessage: null, // ✅ thêm dòng này
           });
           // Broadcast đăng xuất tới các tab khác
           broadcastLogout();
